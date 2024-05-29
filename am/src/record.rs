@@ -10,13 +10,16 @@ use std::fmt::Formatter;
 use std::fmt::Result;
 use std::time::Duration;
 
+#[derive(Clone)]
 pub struct Record {
-    pub duration: u64,
+    pub name: String,
+    pub duration: Duration,
     pub request: Request,
     pub response: Response,
     pub asserts: Vec<Assert>,
 }
 
+#[derive(Clone)]
 pub struct Request {
     pub method: String,
     pub url: String,
@@ -26,6 +29,7 @@ pub struct Request {
     pub content: String,
 }
 
+#[derive(Clone)]
 pub struct Response {
     pub version: String,
     pub status: u16,
@@ -34,6 +38,7 @@ pub struct Response {
     pub body: String,
 }
 
+#[derive(Clone)]
 pub struct Assert {
     pub expression: Expr,
     pub left: Value,
@@ -45,7 +50,11 @@ pub struct Assert {
 impl Record {
     pub fn to_value(&self) -> Value {
         let mut map = HashMap::new();
-        map.insert(String::from("duration"), Value::Integer(self.duration as i64));
+        map.insert(String::from("name"), Value::String(self.name.clone()));
+        map.insert(
+            String::from("duration"),
+            Value::Integer(self.duration.as_nanos() as i64),
+        );
         map.insert(String::from("request"), self.request.to_value());
         map.insert(String::from("response"), self.response.to_value());
         map.insert(
@@ -58,9 +67,9 @@ impl Record {
     pub fn to_record<'a>(&'a self, schema: &'a apache_avro::Schema) -> apache_avro::types::Record {
         let mut record = apache_avro::types::Record::new(schema).unwrap();
         record.put("trace_id", String::from("98765"));
-        record.put("start_time", self.duration as i64);
-        record.put("end_time", self.duration as i64);
-        record.put("duration", self.duration as i64);
+        record.put("start_time", self.duration.as_nanos() as i64);
+        record.put("end_time", self.duration.as_nanos() as i64);
+        record.put("duration", self.duration.as_nanos() as i64);
         record.put("request_method", self.request.method.clone());
         record.put("request_url", self.request.url.clone());
         record.put("request_version", self.request.version.clone());
@@ -174,9 +183,10 @@ impl Response {
 
 impl Display for Record {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        writeln!(f, "duration:{:?}", Duration::from_nanos(self.duration as u64))?;
-        writeln!(f, "request:\n{}", self.request)?;
-        writeln!(f, "response:\n{}", self.response)?;
+        writeln!(f, "name:{}", self.name)?;
+        writeln!(f, "duration:{:?}", self.duration)?;
+        write!(f, "request:\n{}", self.request)?;
+        write!(f, "response:\n{}", self.response)?;
         writeln!(f, "asserts:")?;
         for assert in &self.asserts {
             writeln!(f, "{}", assert)?;
@@ -214,7 +224,11 @@ impl Display for Response {
 
 impl Display for Assert {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "")
+        write!(
+            f,
+            "{} => ({} {} {}) => {}",
+            self.expression, self.left, self.comparison, self.right, self.result
+        )
     }
 }
 
@@ -276,7 +290,8 @@ pub const RECORD_SCHEMA: &str = r#"
 #[test]
 fn test_record_to_record() {
     let record = Record {
-        duration: 1234567,
+        name: String::from("name"),
+        duration: Duration::from_nanos(1_000_000_123),
         request: Request {
             method: String::from("GET"),
             url: String::from("http://httpbin.org/get"),

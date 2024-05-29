@@ -1,4 +1,5 @@
 use super::native;
+use super::record::Record;
 use super::syntax::Expr;
 use reqwest::Client;
 use std::borrow::BorrowMut;
@@ -6,6 +7,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
+use std::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq)]
 pub enum Value {
@@ -20,7 +22,7 @@ pub enum Value {
     Return(Box<Value>),
     Function(Vec<String>, Vec<Expr>),
     Native(fn(Vec<Value>) -> Value),
-    Request(Vec<Expr>, Vec<Expr>),
+    Request(String, Vec<Expr>, Vec<Expr>),
 }
 
 impl Value {
@@ -30,7 +32,7 @@ impl Value {
             _ => false,
         }
     }
-    
+
     pub fn kind(&self) -> &str {
         match self {
             Value::None => "None",
@@ -86,9 +88,10 @@ impl Display for Value {
                 )
             }
             Value::Native(function) => write!(f, "{:?}", function),
-            Value::Request(pieces, asserts) => write!(
+            Value::Request(name, pieces, asserts) => write!(
                 f,
-                "{}[{}]",
+                "{} {}[{}]",
+                name,
                 pieces
                     .iter()
                     .map(|e| {
@@ -114,6 +117,7 @@ pub struct Context {
     // TODO inner use Arc
     inner: HashMap<String, Value>,
     client: Client,
+    sender: Option<Sender<Record>>,
 }
 
 impl Default for Context {
@@ -121,16 +125,30 @@ impl Default for Context {
         let mut inner = HashMap::default();
         inner.insert(String::from("len"), Value::Native(native::len));
         let client = Client::new();
-        Context { inner, client }
+        Context {
+            inner,
+            client,
+            sender: None,
+        }
     }
 }
 
 impl Context {
-    pub fn from(parent: Context) -> Context {
+    pub fn clone(parent: &Context) -> Context {
+        let clone = parent.clone();
         Context {
-            inner: parent.inner,
-            client: parent.client,
+            inner: clone.inner,
+            client: clone.client,
+            sender: clone.sender,
         }
+    }
+
+    pub fn set_sender(&mut self, sender: Sender<Record>) {
+        self.sender = Some(sender);
+    }
+
+    pub fn sender(&mut self) -> Option<Sender<Record>> {
+        self.sender.clone()
     }
 
     pub fn set(&mut self, name: String, value: Value) {

@@ -17,7 +17,7 @@ pub fn eval(script: &Script, context: &mut Context) -> Value {
     }
     for request in &script.requests {
         if let Expr::Request(_, _, name, pieces, asserts) = request {
-            context.set(name.clone(), eval_request_literal(pieces, asserts))
+            context.set(name.clone(), eval_request_literal(name, pieces, asserts))
         }
     }
     eval_block_expression(&script.expressions, context)
@@ -44,7 +44,7 @@ pub fn eval_expression(expression: &Expr, context: &mut Context) -> Value {
         Expr::Map(_, pairs) => eval_map_literal(pairs, context),
         Expr::Index(_, left, index) => eval_index_expression(left, index, context),
         Expr::Field(_, object, field) => eval_field_expression(object, field, context),
-        Expr::Request(_, _, _, pieces, asserts) => eval_request_expression(pieces, asserts, context),
+        Expr::Request(_, _, name, pieces, asserts) => eval_request_expression(name, pieces, asserts, context),
     }
 }
 
@@ -290,7 +290,7 @@ fn eval_call_expression(invoke: &Option<Box<Expr>>, arguments: &Vec<Expr>, conte
         }
     }
     if let Value::Function(parameters, body) = invoke {
-        let mut context = Context::from(context.clone());
+        let mut context = Context::clone(context);
         if arguments.len() != parameters.len() {
             Value::Error(format!(
                 "expect {} parameters but {}",
@@ -305,9 +305,9 @@ fn eval_call_expression(invoke: &Option<Box<Expr>>, arguments: &Vec<Expr>, conte
         }
     } else if let Value::Native(function) = invoke {
         function(arguments)
-    } else if let Value::Request(pieces, asserts) = invoke {
-        let mut context = Context::from(context.clone());
-        eval_request_expression(&pieces, &asserts, &mut context)
+    } else if let Value::Request(name, pieces, asserts) = invoke {
+        let mut context = Context::clone(context);
+        eval_request_expression(&name, &pieces, &asserts, &mut context)
     } else {
         Value::Error(String::from("not a function or block is none"))
     }
@@ -423,11 +423,12 @@ fn eval_block_expression(expressions: &Vec<Expr>, context: &mut Context) -> Valu
     result
 }
 
-fn eval_request_literal(pieces: &Vec<Expr>, asserts: &Vec<Expr>) -> Value {
-    Value::Request(pieces.clone(), asserts.clone())
+fn eval_request_literal(name: &String, pieces: &Vec<Expr>, asserts: &Vec<Expr>) -> Value {
+    Value::Request(name.clone(), pieces.clone(), asserts.clone())
 }
 
-fn eval_request_expression(pieces: &Vec<Expr>, expressions: &Vec<Expr>, context: &mut Context) -> Value {
+fn eval_request_expression(name: &String, pieces: &Vec<Expr>, expressions: &Vec<Expr>, context: &mut Context) -> Value {
+    let name = name.clone();
     let message = pieces
         .iter()
         .map(|p| eval_expression(p, context).to_string())
@@ -465,13 +466,17 @@ fn eval_request_expression(pieces: &Vec<Expr>, expressions: &Vec<Expr>, context:
             })
         }
     }
-    Record {
+    let record = Record {
+        name,
         duration,
         request,
         response,
         asserts,
+    };
+    if let Some(sender) = context.sender() {
+        let _ = sender.send(record.clone());
     }
-    .to_value()
+    record.to_value()
 }
 
 // TODO test error handling
@@ -981,7 +986,8 @@ fn test_eval_request_literal() {
     let mut context = Context::default();
     let evaluated = eval(&script, &mut context);
     println!("evaluated:{}", evaluated);
-    if let Value::Request(pieces, asserts) = evaluated {
+    if let Value::Request(name, pieces, asserts) = evaluated {
+        assert!(name == "request");
         assert!(pieces.len() == 3);
         assert!(pieces[0].to_string() == "\"GET http://\"");
         assert!(pieces[1].to_string() == "host");
@@ -1007,4 +1013,28 @@ fn test_eval_request_expression() {
     let evaluated = eval(&script, &mut context);
     println!("evaluated:{}", evaluated);
     assert!(evaluated == Value::Integer(200));
+}
+
+#[test]
+fn test_send_record() {
+    let input = r#"
+    rq request`
+      GET http://${host}/get
+      Host: ${host}
+    `[status == 200];
+    let host = "httpbin.org";
+    let response = request().response;
+    response.status"#;
+    let script = crate::parser::Parser::new(input).parse();
+    let mut context = Context::default();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    context.set_sender(sender);
+    std::thread::spawn(move || {
+        let evaluated = eval(&script, &mut context);
+        println!("evaluated:{}", evaluated);
+        assert!(evaluated == Value::Integer(200));
+    });
+    for record in receiver {
+        println!("{}", record);
+    }
 }

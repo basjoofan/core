@@ -1,15 +1,15 @@
-use crate::syntax::Expr;
-use crate::token::Kind;
-use crate::token::Token;
-use crate::value::Value;
-
 use super::evaluator::eval;
 use super::evaluator::eval_expression;
 use super::parser::Parser;
+use super::syntax::Expr;
+use super::token::Kind;
+use super::token::Token;
 use super::value::Context;
+use super::value::Value;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
+use std::sync::mpsc;
 
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -39,12 +39,39 @@ pub fn run(path: Option<PathBuf>) {
 }
 
 pub fn call(name: String) {
+    let (sender, receiver) = mpsc::channel();
     let input = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
+    context.set_sender(sender);
     let script = Parser::new(&input).parse();
     eval(&script, &mut context);
-    let evaluated = eval_callable(&name, &mut context);
-    println!("{}", evaluated)
+    std::thread::spawn(move || {
+        let value = eval_callable(&name, &mut context);
+        if value.is_error() {
+            println!("{}", value)
+        }
+    });
+    for record in receiver {
+        println!("=== TEST  {}", record.name);
+        let mut result = true;
+        record.asserts.iter().for_each(|assert| {
+            result &= assert.result;
+            println!("{}", assert);
+        });
+        if result {
+            println!(
+                "--- PASS  {} ({:?})",
+                record.name,
+                record.duration
+            );
+        } else {
+            println!(
+                "--- FAIL  {} ({:?})",
+                record.name,
+                record.duration
+            );
+        }
+    }
 }
 
 pub fn test(tag: String) {

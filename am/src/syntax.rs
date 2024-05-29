@@ -1,5 +1,4 @@
 use super::token::Token;
-use super::May;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
@@ -179,6 +178,17 @@ impl Display for Expr {
                         .join(", ")
                 )
             }
+        }
+    }
+}
+
+struct May<'a, T>(pub &'a Option<T>);
+
+impl<'a, T: std::fmt::Display> std::fmt::Display for May<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0 {
+            Some(ref t) => write!(f, "{}", t),
+            None => write!(f, "?"),
         }
     }
 }

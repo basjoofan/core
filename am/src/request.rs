@@ -10,11 +10,12 @@ use reqwest::Version;
 use std::error::Error;
 use std::path::Path;
 use std::time;
+use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::codec::BytesCodec;
 use tokio_util::codec::FramedRead;
 
-pub async fn send(client: Client, message: &str) -> Result<(u64, Request, Response), Box<dyn Error>> {
+pub async fn send(client: Client, message: &str) -> Result<(Duration, Request, Response), Box<dyn Error>> {
     let mut lines = message.trim().lines();
     let (method, url, version) = from_line(lines.next());
     let mut builder = client.request(method, url).version(version);
@@ -90,7 +91,7 @@ pub async fn send(client: Client, message: &str) -> Result<(u64, Request, Respon
         .collect();
     let body = response.text().await?;
     let end_instant = time::Instant::now();
-    let duration = (end_instant - start_instant).as_nanos() as u64;
+    let duration = end_instant - start_instant;
     Ok((
         duration,
         request_clone,
