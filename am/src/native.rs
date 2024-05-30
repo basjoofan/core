@@ -1,6 +1,20 @@
 use super::value::Value;
 
-pub fn len(objects: Vec<Value>) -> Value {
+pub fn println(objects: Vec<Value>) -> Value {
+    if let Some(object) = objects.first() {
+        println!("{}", object)
+    }
+    Value::None
+}
+
+pub fn print(objects: Vec<Value>) -> Value {
+    if let Some(object) = objects.first() {
+        print!("{}", object)
+    }
+    Value::None
+}
+
+pub fn length(objects: Vec<Value>) -> Value {
     if objects.len() != 1 {
         Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
     } else {
@@ -12,7 +26,7 @@ pub fn len(objects: Vec<Value>) -> Value {
                 _ => Value::Error(format!("function len not supported type {}", object.kind())),
             }
         } else {
-            Value::Error(format!("function len need a parameter"))
+            Value::Error(format!("function length need a parameter"))
         }
     }
 }

@@ -1,6 +1,7 @@
 use super::evaluator::eval;
 use super::evaluator::eval_expression;
 use super::parser::Parser;
+use super::record::Record;
 use super::syntax::Expr;
 use super::token::Kind;
 use super::token::Token;
@@ -10,6 +11,7 @@ use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -23,8 +25,7 @@ pub fn start() {
                     break;
                 }
                 let script = Parser::new(&input).parse();
-                let evaluated = eval(&script, &mut context);
-                println!("{}", evaluated)
+                print_error(eval(&script, &mut context));
             }
         }
     }
@@ -34,51 +35,28 @@ pub fn run(path: Option<PathBuf>) {
     let input = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
     let mut context = Context::default();
     let script = Parser::new(&input).parse();
-    let evaluated = eval(&script, &mut context);
-    println!("{}", evaluated)
+    print_error(eval(&script, &mut context));
 }
 
 pub fn call(name: String) {
     let (sender, receiver) = mpsc::channel();
-    let input = read_to_string(std::env::current_dir().unwrap());
+    let input: String = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
     context.set_sender(sender);
     let script = Parser::new(&input).parse();
-    eval(&script, &mut context);
+    print_error(eval(&script, &mut context));
     std::thread::spawn(move || {
-        let value = eval_callable(&name, &mut context);
-        if value.is_error() {
-            println!("{}", value)
-        }
+        print_error(eval_callable(&name, &mut context));
     });
-    for record in receiver {
-        println!("=== TEST  {}", record.name);
-        let mut result = true;
-        record.asserts.iter().for_each(|assert| {
-            result &= assert.result;
-            println!("{}", assert);
-        });
-        if result {
-            println!(
-                "--- PASS  {} ({:?})",
-                record.name,
-                record.duration
-            );
-        } else {
-            println!(
-                "--- FAIL  {} ({:?})",
-                record.name,
-                record.duration
-            );
-        }
-    }
+    print_record(receiver);
 }
 
 pub fn test(tag: String) {
+    let (sender, receiver) = mpsc::channel();
     let input = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
     let script = Parser::new(&input).parse();
-    let mut evaluated = eval(&script, &mut context);
+    print_error(eval(&script, &mut context));
     for callable in script.requests.iter().chain(script.functions.iter()) {
         if let (Some(tags), Some(name)) = match callable {
             Expr::Function(_, Some(tags), Some(name), _, _) => (Some(tags), Some(name)),
@@ -86,11 +64,17 @@ pub fn test(tag: String) {
             _ => (None, None),
         } {
             if tags.contains(&tag) {
-                evaluated = eval_callable(name, &mut context);
+                let mut c = context.clone();
+                c.set_sender(sender.clone());
+                let n = name.clone();
+                std::thread::spawn(move || {
+                    print_error(eval_callable(&n, &mut c));
+                });
             }
         }
     }
-    println!("{}", evaluated)
+    std::mem::drop(sender);
+    print_record(receiver);
 }
 
 fn eval_callable(name: &String, context: &mut Context) -> Value {
@@ -104,6 +88,28 @@ fn eval_callable(name: &String, context: &mut Context) -> Value {
         Vec::new(),
     );
     eval_expression(&callable, context)
+}
+
+fn print_record(receiver: Receiver<Record>) {
+    for record in receiver {
+        println!("=== TEST  {}", record.name);
+        let mut result = true;
+        record.asserts.iter().for_each(|assert| {
+            result &= assert.result;
+            println!("{}", assert);
+        });
+        if result {
+            println!("--- PASS  {} ({:?})", record.name, record.duration);
+        } else {
+            println!("--- FAIL  {} ({:?})", record.name, record.duration);
+        }
+    }
+}
+
+fn print_error(value: Value) {
+    if value.is_error() {
+        println!("{}", value)
+    }
 }
 
 fn read_to_string(path: PathBuf) -> String {

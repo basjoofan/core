@@ -14,7 +14,7 @@ fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to spawn child process");
     if let Some(mut stdin) = child.stdin.take() {
         stdin
-            .write_all("let add = fn(x, y) { x + y; }; add(5, 5);\n".as_bytes())
+            .write_all("let add = fn(x, y) { x + y; }; println(add(5, 5));\n".as_bytes())
             .expect("Failed to write to stdin");
         stdin.write_all("exit".as_bytes()).expect("Failed to write to stdin");
     }
@@ -38,7 +38,7 @@ fn test_command_run_closure() -> Result<(), Box<dyn std::error::Error>> {
     first + second + third;
     };
     
-    ourFunction(20) + first + second;
+    println(ourFunction(20) + first + second);
     "#;
     file.write_str(input)?;
 
@@ -63,7 +63,7 @@ fn test_command_run_fibonacci() -> Result<(), Box<dyn std::error::Error>> {
           }
         }
       };  
-    fibonacci(10);
+    println(fibonacci(10));
     "#;
     file.write_str(input)?;
 
@@ -79,7 +79,7 @@ fn test_command_run_dir() -> Result<(), Box<dyn std::error::Error>> {
     let function = temp.child("function.am");
     function.write_str("fn add(a, b){ a + b }")?;
     let call = temp.child("call.am");
-    call.write_str("add(1, 1);")?;
+    call.write_str("println(add(1, 1));")?;
     let mut cmd = Command::cargo_bin(NAME)?;
     assert!(function.path().parent() == Some(temp.path()));
     cmd.arg("run").arg(function.path().parent().unwrap());
@@ -108,7 +108,7 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.current_dir(temp.to_path_buf());
     cmd.arg("test");
-    cmd.assert().success().stdout(predicate::str::contains("200"));
+    cmd.assert().success().stdout(predicate::str::contains("--- PASS  request ("));
     Ok(())
 }
 

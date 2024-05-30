@@ -123,7 +123,9 @@ pub struct Context {
 impl Default for Context {
     fn default() -> Self {
         let mut inner = HashMap::default();
-        inner.insert(String::from("len"), Value::Native(native::len));
+        inner.insert(String::from("print"), Value::Native(native::print));
+        inner.insert(String::from("println"), Value::Native(native::println));
+        inner.insert(String::from("length"), Value::Native(native::length));
         let client = Client::new();
         Context {
             inner,
