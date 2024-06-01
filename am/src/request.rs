@@ -14,8 +14,13 @@ use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::codec::BytesCodec;
 use tokio_util::codec::FramedRead;
+use uuid::Uuid;
 
-pub async fn send(client: Client, message: &str) -> Result<(Duration, Request, Response), Box<dyn Error>> {
+pub async fn send(
+    client: Client,
+    message: &str,
+    name: String,
+) -> Result<(Duration, Request, Response), Box<dyn Error>> {
     let mut lines = message.trim().lines();
     let (method, url, version) = from_line(lines.next());
     let mut builder = client.request(method, url).version(version);
@@ -73,7 +78,7 @@ pub async fn send(client: Client, message: &str) -> Result<(Duration, Request, R
         }
     };
     let request = builder.build()?;
-    let request_clone = clone_request(&request, fields, content);
+    let request_clone = clone_request(&request, fields, content, name);
     let start_instant = time::Instant::now();
     let response = client.execute(request).await?;
     let version = format!("{:?}", response.version());
@@ -105,8 +110,11 @@ pub async fn send(client: Client, message: &str) -> Result<(Duration, Request, R
     ))
 }
 
-fn clone_request(request: &reqwest::Request, fields: Vec<(String, String)>, content: String) -> Request {
+fn clone_request(request: &reqwest::Request, fields: Vec<(String, String)>, content: String, name: String) -> Request {
+    let id = Uuid::now_v7().to_string();
     Request {
+        id,
+        name,
         method: request.method().as_str().to_string(),
         url: request.url().to_string(),
         version: format!("{:?}", request.version()),
@@ -166,27 +174,30 @@ fn version_from_str(str: Option<&str>) -> Version {
 
 #[test]
 fn test_get() {
-    let request = r#"
+    let name = String::from("name");
+    let message = r#"
     GET http://httpbin.org/get
     Host: httpbin.org"#;
     let client = Client::new();
-    let (_, _, response) = tokio_test::block_on(send(client, request)).unwrap();
+    let (_, _, response) = tokio_test::block_on(send(client, message, name)).unwrap();
     println!("body:{}", response.body)
 }
 
 #[test]
 fn test_post() {
-    let request = r#"
+    let name = String::from("name");
+    let message = r#"
     POST http://httpbin.org/post
     Host: httpbin.org"#;
     let client = Client::new();
-    let (_, _, response) = tokio_test::block_on(send(client, request)).unwrap();
+    let (_, _, response) = tokio_test::block_on(send(client, message, name)).unwrap();
     println!("body:{}", response.body)
 }
 
 #[test]
 fn test_post_form() {
-    let request = r#"
+    let name = String::from("name");
+    let message = r#"
     POST http://httpbin.org/post
     Host: httpbin.org
     Content-Type: application/x-www-form-urlencoded
@@ -194,13 +205,14 @@ fn test_post_form() {
     a: b
     "#;
     let client = Client::new();
-    let (_, _, response) = tokio_test::block_on(send(client, request)).unwrap();
+    let (_, _, response) = tokio_test::block_on(send(client, message, name)).unwrap();
     println!("body:{}", response.body)
 }
 
 #[test]
 fn test_post_multipart() {
-    let request = r#"
+    let name = String::from("name");
+    let message = r#"
     POST http://httpbin.org/post
     Host: httpbin.org
     Content-Type: multipart/form-data
@@ -209,13 +221,14 @@ fn test_post_multipart() {
     f: @src/lib.rs
     "#;
     let client = Client::new();
-    let (_, _, response) = tokio_test::block_on(send(client, request)).unwrap();
+    let (_, _, response) = tokio_test::block_on(send(client, message, name)).unwrap();
     println!("body:{}", response.body)
 }
 
 #[test]
 fn test_post_json() {
-    let request = r#"
+    let name = String::from("name");
+    let message = r#"
     POST http://httpbin.org/post
     Host: httpbin.org
     Content-Type: application/json
@@ -234,6 +247,6 @@ fn test_post_json() {
     }
     "#;
     let client = Client::new();
-    let (_, _, response) = tokio_test::block_on(send(client, request)).unwrap();
+    let (_, _, response) = tokio_test::block_on(send(client, message, name)).unwrap();
     println!("body:{}", response.body)
 }

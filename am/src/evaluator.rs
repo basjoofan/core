@@ -44,7 +44,7 @@ pub fn eval_expression(expression: &Expr, context: &mut Context) -> Value {
         Expr::Map(_, pairs) => eval_map_literal(pairs, context),
         Expr::Index(_, left, index) => eval_index_expression(left, index, context),
         Expr::Field(_, object, field) => eval_field_expression(object, field, context),
-        Expr::Request(_, _, name, pieces, asserts) => eval_request_expression(name, pieces, asserts, context),
+        Expr::Request(_, _, name, pieces, asserts) => eval_request_literal(name, pieces, asserts),
     }
 }
 
@@ -274,6 +274,26 @@ fn eval_function_literal(parameters: &Vec<String>, body: &Vec<Expr>) -> Value {
     Value::Function(parameters.clone(), body.clone())
 }
 
+fn eval_function_expression(
+    parameters: Vec<String>,
+    arguments: Vec<Value>,
+    body: Vec<Expr>,
+    context: &mut Context,
+) -> Value {
+    if arguments.len() != parameters.len() {
+        Value::Error(format!(
+            "expect {} parameters but {}",
+            parameters.len(),
+            arguments.len()
+        ))
+    } else {
+        for (parameter, argument) in parameters.into_iter().zip(arguments.into_iter()) {
+            context.set(parameter, argument);
+        }
+        eval_block_expression(&body, context)
+    }
+}
+
 fn eval_call_expression(invoke: &Option<Box<Expr>>, arguments: &Vec<Expr>, context: &mut Context) -> Value {
     let invoke = if let Some(invoke) = invoke {
         eval_expression(invoke, context)
@@ -289,27 +309,20 @@ fn eval_call_expression(invoke: &Option<Box<Expr>>, arguments: &Vec<Expr>, conte
             return last.clone();
         }
     }
+    eval_call_value(invoke, arguments, context)
+}
+
+pub fn eval_call_value(invoke: Value, arguments: Vec<Value>, context: &mut Context) -> Value {
     if let Value::Function(parameters, body) = invoke {
         let mut context = Context::clone(context);
-        if arguments.len() != parameters.len() {
-            Value::Error(format!(
-                "expect {} parameters but {}",
-                parameters.len(),
-                arguments.len()
-            ))
-        } else {
-            for (i, parameter) in parameters.iter().enumerate() {
-                context.set(parameter.clone(), arguments[i].clone())
-            }
-            eval_block_expression(&body, &mut context)
-        }
+        eval_function_expression(parameters, arguments, body, &mut context)
     } else if let Value::Native(function) = invoke {
         function(arguments)
     } else if let Value::Request(name, pieces, asserts) = invoke {
         let mut context = Context::clone(context);
-        eval_request_expression(&name, &pieces, &asserts, &mut context)
+        eval_request_expression(name, pieces, asserts, &mut context)
     } else {
-        Value::Error(String::from("not a function or block is none"))
+        Value::Error(String::from("not a function or request"))
     }
 }
 
@@ -427,21 +440,20 @@ fn eval_request_literal(name: &String, pieces: &Vec<Expr>, asserts: &Vec<Expr>) 
     Value::Request(name.clone(), pieces.clone(), asserts.clone())
 }
 
-fn eval_request_expression(name: &String, pieces: &Vec<Expr>, expressions: &Vec<Expr>, context: &mut Context) -> Value {
-    let name = name.clone();
+fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Expr>, context: &mut Context) -> Value {
     let message = pieces
         .iter()
         .map(|p| eval_expression(p, context).to_string())
         .collect::<String>();
     let client = context.client();
     let runtime = Builder::new_current_thread().enable_all().build().unwrap();
-    let (duration, request, response) = runtime.block_on(request::send(client, &message)).unwrap();
+    let (duration, request, response) = runtime.block_on(request::send(client, &message, name)).unwrap();
     if let Value::Map(map) = response.to_value() {
         map.into_iter().for_each(|(key, value)| context.set(key, value))
     }
     let mut asserts = Vec::new();
     for expression in expressions {
-        if let Expr::Binary(token, left, right) = expression {
+        if let Expr::Binary(token, left, right) = &expression {
             let left = if let Some(left) = left {
                 eval_expression(left, context)
             } else {
@@ -452,30 +464,29 @@ fn eval_request_expression(name: &String, pieces: &Vec<Expr>, expressions: &Vec<
             } else {
                 Value::None
             };
-            let result = if let Value::Boolean(boolean) = eval_binary_operator(token, &left, &right) {
+            let result = if let Value::Boolean(boolean) = eval_binary_operator(&token, &left, &right) {
                 boolean
             } else {
                 false
             };
+            let comparison = token.clone();
             asserts.push(Assert {
-                expression: expression.clone(),
+                expression,
                 left,
-                comparison: token.clone(),
+                comparison,
                 right,
                 result,
             })
         }
     }
     let record = Record {
-        name,
+        group: context.group(),
         duration,
         request,
         response,
         asserts,
     };
-    if let Some(sender) = context.sender() {
-        let _ = sender.send(record.clone());
-    }
+    context.send(&record);
     record.to_value()
 }
 
@@ -486,19 +497,19 @@ fn test_error_handling() {}
 #[test]
 fn test_native_function() {
     let tests = vec![
-        (r#"len("")"#, Value::Integer(0)),
-        (r#"len("four")"#, Value::Integer(4)),
-        (r#"len("hello world")"#, Value::Integer(11)),
+        (r#"length("")"#, Value::Integer(0)),
+        (r#"length("four")"#, Value::Integer(4)),
+        (r#"length("hello world")"#, Value::Integer(11)),
         (
-            r#"len(1)"#,
-            Value::Error(format!("function len not supported type Integer")),
+            r#"length(1)"#,
+            Value::Error(format!("function length not supported type Integer")),
         ),
         (
-            r#"len("one", "two")"#,
+            r#"length("one", "two")"#,
             Value::Error(format!("wrong number of arguments. got=2, want=1")),
         ),
-        (r#"len([1, 2, 3])"#, Value::Integer(3)),
-        (r#"len([])"#, Value::Integer(0)),
+        (r#"length([1, 2, 3])"#, Value::Integer(3)),
+        (r#"length([])"#, Value::Integer(0)),
     ];
     for (input, expected) in tests {
         let script = crate::parser::Parser::new(input).parse();
@@ -1028,12 +1039,13 @@ fn test_send_record() {
     let script = crate::parser::Parser::new(input).parse();
     let mut context = Context::default();
     let (sender, receiver) = std::sync::mpsc::channel();
-    context.set_sender(sender);
+    context.set_sender(&sender);
     std::thread::spawn(move || {
         let evaluated = eval(&script, &mut context);
         println!("evaluated:{}", evaluated);
         assert!(evaluated == Value::Integer(200));
     });
+    std::mem::drop(sender);
     for record in receiver {
         println!("{}", record);
     }

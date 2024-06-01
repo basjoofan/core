@@ -16,13 +16,13 @@ struct Interface {
 enum Commands {
     /// Interpret and run
     Run {
-        /// Source files path
+        /// Source path
         #[command()]
         path: Option<PathBuf>,
     },
     /// Run a request or a function
     Call {
-        /// Callable name
+        /// Call name
         #[command()]
         name: String,
     },

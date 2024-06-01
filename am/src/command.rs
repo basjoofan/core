@@ -1,10 +1,8 @@
 use super::evaluator::eval;
-use super::evaluator::eval_expression;
+use super::evaluator::eval_call_value;
 use super::parser::Parser;
 use super::record::Record;
 use super::syntax::Expr;
-use super::token::Kind;
-use super::token::Token;
 use super::value::Context;
 use super::value::Value;
 use std::io::stdin;
@@ -39,36 +37,39 @@ pub fn run(path: Option<PathBuf>) {
 }
 
 pub fn call(name: String) {
-    let (sender, receiver) = mpsc::channel();
     let input: String = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
-    context.set_sender(sender);
     let script = Parser::new(&input).parse();
     print_error(eval(&script, &mut context));
+    let (sender, receiver) = mpsc::channel();
+    context.set_sender(&sender);
+    context.set_group(&name);
     std::thread::spawn(move || {
-        print_error(eval_callable(&name, &mut context));
+        print_error(eval_call(&name, &mut context));
     });
+    std::mem::drop(sender);
     print_record(receiver);
 }
 
 pub fn test(tag: String) {
-    let (sender, receiver) = mpsc::channel();
     let input = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
     let script = Parser::new(&input).parse();
     print_error(eval(&script, &mut context));
-    for callable in script.requests.iter().chain(script.functions.iter()) {
-        if let (Some(tags), Some(name)) = match callable {
+    let (sender, receiver) = mpsc::channel();
+    for call in script.requests.into_iter().chain(script.functions.into_iter()) {
+        if let (Some(tags), Some(name)) = match call {
             Expr::Function(_, Some(tags), Some(name), _, _) => (Some(tags), Some(name)),
             Expr::Request(_, Some(tags), name, _, _) => (Some(tags), Some(name)),
             _ => (None, None),
         } {
             if tags.contains(&tag) {
-                let mut c = context.clone();
-                c.set_sender(sender.clone());
-                let n = name.clone();
+                let mut context = context.clone();
+                context.set_sender(&sender);
+                context.set_group(&name);
+                //let name = name.clone();
                 std::thread::spawn(move || {
-                    print_error(eval_callable(&n, &mut c));
+                    print_error(eval_call(&name, &mut context));
                 });
             }
         }
@@ -77,31 +78,32 @@ pub fn test(tag: String) {
     print_record(receiver);
 }
 
-fn eval_callable(name: &String, context: &mut Context) -> Value {
-    let token = Token {
-        kind: Kind::Ident,
-        literal: name.clone(),
-    };
-    let callable = Expr::Call(
-        token.clone(),
-        Some(Box::new(Expr::Ident(token, name.clone()))),
-        Vec::new(),
-    );
-    eval_expression(&callable, context)
+fn eval_call(name: &String, context: &mut Context) -> Value {
+    if let Some(value) = context.get(name) {
+        eval_call_value(value, Vec::new(), context)
+    } else {
+        Value::Error(format!("call:{} not found", name))
+    }
 }
 
 fn print_record(receiver: Receiver<Record>) {
     for record in receiver {
-        println!("=== TEST  {}", record.name);
+        println!("=== TEST  {}/{}", record.group.name, record.request.name);
         let mut result = true;
         record.asserts.iter().for_each(|assert| {
             result &= assert.result;
             println!("{}", assert);
         });
         if result {
-            println!("--- PASS  {} ({:?})", record.name, record.duration);
+            println!(
+                "--- PASS  {}/{} ({:?})",
+                record.group.name, record.request.name, record.duration
+            );
         } else {
-            println!("--- FAIL  {} ({:?})", record.name, record.duration);
+            println!(
+                "--- FAIL  {}/{} ({:?})",
+                record.group.name, record.request.name, record.duration
+            );
         }
     }
 }

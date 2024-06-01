@@ -509,8 +509,8 @@ impl Parser {
             let tags = self.parse_ident_list(Kind::Rs);
             if self.peek_token_is(Kind::Fn) || self.peek_token_is(Kind::Rq) {
                 self.next_token();
-                if let Some(callable) = self.parse_expression(LOWEST) {
-                    match *callable {
+                if let Some(call) = self.parse_expression(LOWEST) {
+                    match *call {
                         Expr::Function(token, _, name, parameters, body) => {
                             Some(Box::new(Expr::Function(token, Some(tags), name, parameters, body)))
                         }
@@ -1311,15 +1311,15 @@ fn test_annotation_literal() {
     ];
     for (input, expected_len, expected_tags) in tests {
         let script = Parser::new(input).parse();
-        let mut callables = Vec::new();
-        callables.extend_from_slice(&script.requests);
-        callables.extend_from_slice(&script.functions);
-        if let Some(callable) = callables.get(0) {
-            println!("callable:\n{}", callable);
-            if let Expr::Request(_, tags, _, _, _) = callable.clone() {
+        let mut calls = Vec::new();
+        calls.extend_from_slice(&script.requests);
+        calls.extend_from_slice(&script.functions);
+        if let Some(call) = calls.get(0) {
+            println!("call:\n{}", call);
+            if let Expr::Request(_, tags, _, _, _) = call.clone() {
                 assert!(tags.clone().unwrap_or_default().len() == expected_len);
                 assert!(tags == expected_tags);
-            } else if let Expr::Function(_, tags, _, _, _) = callable.clone() {
+            } else if let Expr::Function(_, tags, _, _, _) = call.clone() {
                 assert!(tags.clone().unwrap_or_default().len() == expected_len);
                 assert!(tags == expected_tags);
             } else {

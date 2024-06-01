@@ -12,15 +12,23 @@ use std::time::Duration;
 
 #[derive(Clone)]
 pub struct Record {
-    pub name: String,
+    pub group: Group,
     pub duration: Duration,
     pub request: Request,
     pub response: Response,
     pub asserts: Vec<Assert>,
 }
 
+#[derive(Clone, Default)]
+pub struct Group {
+    pub id: String,
+    pub name: String,
+}
+
 #[derive(Clone)]
 pub struct Request {
+    pub id: String,
+    pub name: String,
     pub method: String,
     pub url: String,
     pub version: String,
@@ -50,7 +58,7 @@ pub struct Assert {
 impl Record {
     pub fn to_value(&self) -> Value {
         let mut map = HashMap::new();
-        map.insert(String::from("name"), Value::String(self.name.clone()));
+        map.insert(String::from("group"), self.group.to_value());
         map.insert(
             String::from("duration"),
             Value::Integer(self.duration.as_nanos() as i64),
@@ -66,10 +74,13 @@ impl Record {
 
     pub fn to_record<'a>(&'a self, schema: &'a apache_avro::Schema) -> apache_avro::types::Record {
         let mut record = apache_avro::types::Record::new(schema).unwrap();
-        record.put("trace_id", String::from("98765"));
+        record.put("group_id", String::from("98765"));
+        record.put("group_name", String::from("fn"));
         record.put("start_time", self.duration.as_nanos() as i64);
         record.put("end_time", self.duration.as_nanos() as i64);
         record.put("duration", self.duration.as_nanos() as i64);
+        record.put("request_id", String::from("98765"));
+        record.put("request_name", String::from("rq"));
         record.put("request_method", self.request.method.clone());
         record.put("request_url", self.request.url.clone());
         record.put("request_version", self.request.version.clone());
@@ -115,9 +126,20 @@ impl Record {
     }
 }
 
+impl Group {
+    pub fn to_value(&self) -> Value {
+        let mut map = HashMap::new();
+        map.insert(String::from("id"), Value::String(self.id.clone()));
+        map.insert(String::from("name"), Value::String(self.name.clone()));
+        Value::Map(map)
+    }
+}
+
 impl Request {
     pub fn to_value(&self) -> Value {
         let mut map = HashMap::new();
+        map.insert(String::from("id"), Value::String(self.id.clone()));
+        map.insert(String::from("name"), Value::String(self.name.clone()));
         map.insert(String::from("method"), Value::String(self.method.clone()));
         map.insert(String::from("url"), Value::String(self.url.clone()));
         map.insert(String::from("version"), Value::String(self.version.clone()));
@@ -183,7 +205,7 @@ impl Response {
 
 impl Display for Record {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        writeln!(f, "name:{}", self.name)?;
+        writeln!(f, "{}", self.group)?;
         writeln!(f, "duration:{:?}", self.duration)?;
         write!(f, "request:\n{}", self.request)?;
         write!(f, "response:\n{}", self.response)?;
@@ -192,6 +214,12 @@ impl Display for Record {
             writeln!(f, "{}", assert)?;
         }
         Ok(())
+    }
+}
+
+impl Display for Group {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        writeln!(f, "group({}, {})", self.name, self.id)
     }
 }
 
@@ -251,10 +279,13 @@ pub const RECORD_SCHEMA: &str = r#"
     "name": "record",
     "type": "record",
     "fields": [
-        {"name": "trace_id", "type": "string", "logicalType": "uuid"},
+        {"name": "group_id", "type": "string", "logicalType": "uuid"},
+        {"name": "group_name", "type": "string"},
         {"name": "start_time", "type": "long", "logicalType": "timestamp-micros"},
         {"name": "end_time", "type": "long", "logicalType": "timestamp-micros"},
         {"name": "duration", "type": "long"},
+        {"name": "request_id", "type": "string", "logicalType": "uuid"},
+        {"name": "request_name", "type": "string"},
         {"name": "request_method", "type": "string"},
         {"name": "request_url", "type": "string"},
         {"name": "request_version", "type": "string"},
@@ -290,9 +321,14 @@ pub const RECORD_SCHEMA: &str = r#"
 #[test]
 fn test_record_to_record() {
     let record = Record {
-        name: String::from("name"),
+        group: Group {
+            id: String::from("id"),
+            name: String::from("name"),
+        },
         duration: Duration::from_nanos(1_000_000_123),
         request: Request {
+            id: String::from("id"),
+            name: String::from("name"),
             method: String::from("GET"),
             url: String::from("http://httpbin.org/get"),
             version: String::from("HTTP/1.1"),

@@ -23,7 +23,7 @@ pub fn length(objects: Vec<Value>) -> Value {
                 Value::String(string) => Value::Integer(string.len() as i64),
                 Value::Array(elements) => Value::Integer(elements.len() as i64),
                 Value::Map(pairs) => Value::Integer(pairs.len() as i64),
-                _ => Value::Error(format!("function len not supported type {}", object.kind())),
+                _ => Value::Error(format!("function length not supported type {}", object.kind())),
             }
         } else {
             Value::Error(format!("function length need a parameter"))

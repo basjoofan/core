@@ -1,4 +1,5 @@
 use super::native;
+use super::record::Group;
 use super::record::Record;
 use super::syntax::Expr;
 use reqwest::Client;
@@ -8,6 +9,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use std::sync::mpsc::Sender;
+use uuid::Uuid;
 
 #[derive(Clone, PartialEq)]
 pub enum Value {
@@ -118,6 +120,7 @@ pub struct Context {
     inner: HashMap<String, Value>,
     client: Client,
     sender: Option<Sender<Record>>,
+    group: Group,
 }
 
 impl Default for Context {
@@ -127,10 +130,12 @@ impl Default for Context {
         inner.insert(String::from("println"), Value::Native(native::println));
         inner.insert(String::from("length"), Value::Native(native::length));
         let client = Client::new();
+        let group = Group::default();
         Context {
             inner,
             client,
             sender: None,
+            group,
         }
     }
 }
@@ -142,15 +147,18 @@ impl Context {
             inner: clone.inner,
             client: clone.client,
             sender: clone.sender,
+            group: clone.group,
         }
     }
 
-    pub fn set_sender(&mut self, sender: Sender<Record>) {
-        self.sender = Some(sender);
+    pub fn set_sender(&mut self, sender: &Sender<Record>) {
+        self.sender = Some(sender.clone());
     }
 
-    pub fn sender(&mut self) -> Option<Sender<Record>> {
-        self.sender.clone()
+    pub fn send(&mut self, record: &Record) {
+        if let Some(sender) = &self.sender {
+            let _ = sender.send(record.clone());
+        }
     }
 
     pub fn set(&mut self, name: String, value: Value) {
@@ -166,5 +174,15 @@ impl Context {
 
     pub fn client(&self) -> Client {
         self.client.clone()
+    }
+
+    pub fn set_group(&mut self, name: &String) {
+        let id = Uuid::now_v7().to_string();
+        let name = name.clone();
+        self.group = Group { id, name };
+    }
+
+    pub fn group(&self) -> Group {
+        self.group.clone()
     }
 }
