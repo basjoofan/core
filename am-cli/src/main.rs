@@ -1,6 +1,6 @@
 use am::command;
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 #[derive(Parser)]
 #[command(name = command::NAME, version, about, long_about = None)]
@@ -20,11 +20,22 @@ enum Commands {
         #[command()]
         path: Option<PathBuf>,
     },
-    /// Run a request or a function
-    Call {
-        /// Call name
+    /// Blow a test
+    Blow {
+        /// Test name
         #[command()]
         name: String,
+        /// Concurrency
+        #[arg(short, long, default_value_t = 1)]
+        concurrency: u32,
+        /// Duration
+        #[arg(short, long, value_parser = humantime::parse_duration)]
+        duration: Option<Duration>,
+        /// Iterations
+        #[arg(short, long, default_value_t = 1)]
+        iterations: u32,
+        #[arg(short, long)]
+        file: Option<PathBuf>,
     },
     /// Run the tests
     Test {
@@ -32,6 +43,8 @@ enum Commands {
         #[command()]
         #[arg(default_value = "test")]
         tag: String,
+        #[arg(short, long)]
+        file: Option<PathBuf>,
     },
 }
 
@@ -44,11 +57,21 @@ fn main() {
         Some(Commands::Run { path }) => {
             command::run(path);
         }
-        Some(Commands::Call { name }) => {
-            command::call(name);
+        Some(Commands::Blow {
+            name,
+            concurrency,
+            duration,
+            iterations,
+            file,
+        }) => {
+            let (duration, iterations) = match duration {
+                Some(duration) => (duration, u32::MAX),
+                None => (Duration::MAX, iterations),
+            };
+            command::blow(name, concurrency, duration, iterations);
         }
-        Some(Commands::Test { tag }) => {
-            command::test(tag);
+        Some(Commands::Test { tag, file }) => {
+            command::test(tag, file);
         }
         None => {
             command::start();

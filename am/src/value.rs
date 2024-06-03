@@ -120,6 +120,7 @@ pub struct Context {
     inner: HashMap<String, Value>,
     client: Client,
     sender: Option<Sender<Record>>,
+    // TODO group use Arc
     group: Group,
 }
 

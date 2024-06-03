@@ -1,5 +1,5 @@
 use super::evaluator::eval;
-use super::evaluator::eval_call_value;
+use super::evaluator::eval_call_name;
 use super::parser::Parser;
 use super::record::Record;
 use super::syntax::Expr;
@@ -8,8 +8,12 @@ use super::value::Value;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
+use std::time::Duration;
 
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 
@@ -36,22 +40,38 @@ pub fn run(path: Option<PathBuf>) {
     print_error(eval(&script, &mut context));
 }
 
-pub fn call(name: String) {
+pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32) {
     let input: String = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
     let script = Parser::new(&input).parse();
     print_error(eval(&script, &mut context));
     let (sender, receiver) = mpsc::channel();
-    context.set_sender(&sender);
-    context.set_group(&name);
+    let continuous = Arc::new(AtomicBool::new(true));
+    let iterations = iterations / concurrency;
+    for _ in 0..concurrency {
+        let continuous = continuous.clone();
+        let mut context = context.clone();
+        context.set_sender(&sender);
+        context.set_group(&name);
+        let name = name.clone();
+        std::thread::spawn(move || {
+            let mut i = iterations;
+            while continuous.load(Ordering::Relaxed) && i > 0 {
+                print_error(eval_call_name(&name, &mut context));
+                i -= 1;
+            }
+        });
+    }
+    handle_ctrlc(continuous.clone());
     std::thread::spawn(move || {
-        print_error(eval_call(&name, &mut context));
+        std::thread::sleep(duration);
+        continuous.store(false, Ordering::Relaxed)
     });
     std::mem::drop(sender);
     print_record(receiver);
 }
 
-pub fn test(tag: String) {
+pub fn test(tag: String, file: Option<PathBuf>) {
     let input = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
     let script = Parser::new(&input).parse();
@@ -67,23 +87,14 @@ pub fn test(tag: String) {
                 let mut context = context.clone();
                 context.set_sender(&sender);
                 context.set_group(&name);
-                //let name = name.clone();
                 std::thread::spawn(move || {
-                    print_error(eval_call(&name, &mut context));
+                    print_error(eval_call_name(&name, &mut context));
                 });
             }
         }
     }
     std::mem::drop(sender);
     print_record(receiver);
-}
-
-fn eval_call(name: &String, context: &mut Context) -> Value {
-    if let Some(value) = context.get(name) {
-        eval_call_value(value, Vec::new(), context)
-    } else {
-        Value::Error(format!("call:{} not found", name))
-    }
 }
 
 fn print_record(receiver: Receiver<Record>) {
@@ -133,4 +144,10 @@ fn read(path: PathBuf, input: &mut String) -> std::io::Result<()> {
     } else {
     }
     Ok(())
+}
+
+fn handle_ctrlc(continuous: Arc<AtomicBool>) {
+    let _ = ctrlc::set_handler(move || {
+        continuous.store(false, Ordering::Relaxed);
+    });
 }

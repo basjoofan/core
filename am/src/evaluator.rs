@@ -312,7 +312,7 @@ fn eval_call_expression(invoke: &Option<Box<Expr>>, arguments: &Vec<Expr>, conte
     eval_call_value(invoke, arguments, context)
 }
 
-pub fn eval_call_value(invoke: Value, arguments: Vec<Value>, context: &mut Context) -> Value {
+fn eval_call_value(invoke: Value, arguments: Vec<Value>, context: &mut Context) -> Value {
     if let Value::Function(parameters, body) = invoke {
         let mut context = Context::clone(context);
         eval_function_expression(parameters, arguments, body, &mut context)
@@ -324,6 +324,14 @@ pub fn eval_call_value(invoke: Value, arguments: Vec<Value>, context: &mut Conte
     } else {
         Value::Error(String::from("not a function or request"))
     }
+}
+
+pub fn eval_call_name(name: &String, context: &mut Context) -> Value {
+    let invoke = eval_ident_expression(name, context);
+    if invoke.is_error() {
+        return invoke;
+    }
+    eval_call_value(invoke, Vec::new(), context)
 }
 
 fn eval_array_literal(elements: &Vec<Expr>, context: &mut Context) -> Value {
@@ -447,6 +455,7 @@ fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Exp
         .collect::<String>();
     let client = context.client();
     let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+    // TODO unwrap error
     let (duration, request, response) = runtime.block_on(request::send(client, &message, name)).unwrap();
     if let Value::Map(map) = response.to_value() {
         map.into_iter().for_each(|(key, value)| context.set(key, value))
