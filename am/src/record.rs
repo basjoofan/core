@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
+use std::fs::File;
+use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -274,7 +276,32 @@ fn pairs_to_record(pairs: &Vec<(String, String)>) -> apache_avro::types::Value {
     )
 }
 
-pub const RECORD_SCHEMA: &str = r#"
+pub fn writer(schema: &apache_avro::Schema, file: Option<PathBuf>) -> Option<apache_avro::Writer<File>> {
+    match file {
+        Some(file) => {
+            let display = file.display();
+            let file = match File::create(&file) {
+                Err(error) => panic!("couldn't create {}: {:?}", display, error),
+                Ok(file) => file,
+            };
+            Some(apache_avro::Writer::with_codec(
+                schema,
+                file,
+                apache_avro::Codec::Zstandard,
+            ))
+        }
+        None => None,
+    }
+}
+
+pub fn schema() -> apache_avro::Schema {
+    match apache_avro::Schema::parse_str(RECORD_SCHEMA) {
+        Err(error) => panic!("parse schema error: {:?}", error),
+        Ok(schema) => schema,
+    }
+}
+
+const RECORD_SCHEMA: &str = r#"
 {
     "name": "record",
     "type": "record",

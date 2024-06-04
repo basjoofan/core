@@ -1,6 +1,7 @@
 use super::evaluator::eval;
 use super::evaluator::eval_call_name;
 use super::parser::Parser;
+use super::record;
 use super::record::Record;
 use super::syntax::Expr;
 use super::value::Context;
@@ -40,7 +41,7 @@ pub fn run(path: Option<PathBuf>) {
     print_error(eval(&script, &mut context));
 }
 
-pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32) {
+pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
     let input: String = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
     let script = Parser::new(&input).parse();
@@ -68,7 +69,7 @@ pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32)
         continuous.store(false, Ordering::Relaxed)
     });
     std::mem::drop(sender);
-    print_record(receiver);
+    process_record(receiver, file);
 }
 
 pub fn test(tag: String, file: Option<PathBuf>) {
@@ -94,11 +95,14 @@ pub fn test(tag: String, file: Option<PathBuf>) {
         }
     }
     std::mem::drop(sender);
-    print_record(receiver);
+    process_record(receiver, file);
 }
 
-fn print_record(receiver: Receiver<Record>) {
+fn process_record(receiver: Receiver<Record>, file: Option<PathBuf>) {
+    let schema = record::schema();
+    let mut writer = record::writer(&schema, file);
     for record in receiver {
+        // print record
         println!("=== TEST  {}/{}", record.group.name, record.request.name);
         let mut result = true;
         record.asserts.iter().for_each(|assert| {
@@ -116,6 +120,13 @@ fn print_record(receiver: Receiver<Record>) {
                 record.group.name, record.request.name, record.duration
             );
         }
+        // store record
+        if let Some(ref mut writer) = writer {
+            let _ = writer.append(record.to_record(&schema));
+        }
+    }
+    if let Some(ref mut writer) = writer {
+        let _ = writer.flush();
     }
 }
 

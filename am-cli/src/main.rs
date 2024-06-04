@@ -34,6 +34,7 @@ enum Commands {
         /// Iterations
         #[arg(short, long, default_value_t = 1)]
         iterations: u32,
+        /// File
         #[arg(short, long)]
         file: Option<PathBuf>,
     },
@@ -43,6 +44,7 @@ enum Commands {
         #[command()]
         #[arg(default_value = "test")]
         tag: String,
+        /// File
         #[arg(short, long)]
         file: Option<PathBuf>,
     },
@@ -68,7 +70,7 @@ fn main() {
                 Some(duration) => (duration, u32::MAX),
                 None => (Duration::MAX, iterations),
             };
-            command::blow(name, concurrency, duration, iterations);
+            command::blow(name, concurrency, duration, iterations, file);
         }
         Some(Commands::Test { tag, file }) => {
             command::test(tag, file);
