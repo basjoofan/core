@@ -3,6 +3,7 @@ use super::evaluator::eval_call_name;
 use super::parser::Parser;
 use super::record;
 use super::record::Record;
+use super::stat::Stats;
 use super::syntax::Expr;
 use super::value::Context;
 use super::value::Value;
@@ -101,6 +102,7 @@ pub fn test(tag: String, file: Option<PathBuf>) {
 fn process_record(receiver: Receiver<Record>, file: Option<PathBuf>) {
     let schema = record::schema();
     let mut writer = record::writer(&schema, file);
+    let mut stats = Stats::default();
     for record in receiver {
         // print record
         println!("=== TEST  {}/{}", record.group.name, record.request.name);
@@ -124,10 +126,13 @@ fn process_record(receiver: Receiver<Record>, file: Option<PathBuf>) {
         if let Some(ref mut writer) = writer {
             let _ = writer.append(record.to_record(&schema));
         }
+        // stat record
+        stats.add(&record.request.name, record.duration.as_millis())
     }
     if let Some(ref mut writer) = writer {
         let _ = writer.flush();
     }
+    print!("{}", stats);
 }
 
 fn print_error(value: Value) {
