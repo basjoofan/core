@@ -16,42 +16,42 @@ pub enum Kind {
     Template, // `GET http://example.com`
 
     // symbol
-    Well,     // #
+    Well, // #
 
     // operator
-    Assign,   // =
-    Bang,     // !
-    Plus,     // +
-    Minus,    // -
-    Star,     // *
-    Slash,    // /
-    Dot,      // .
+    Assign, // =
+    Bang,   // !
+    Plus,   // +
+    Minus,  // -
+    Star,   // *
+    Slash,  // /
+    Dot,    // .
 
-    Lt,       // <
-    Gt,       // >
-    Eq,       // ==
-    Ne,       // !=
+    Lt, // <
+    Gt, // >
+    Eq, // ==
+    Ne, // !=
 
     // delimiter
-    Comma,    // ,
-    Semi,     // ;
-    Colon,    // :
+    Comma, // ,
+    Semi,  // ;
+    Colon, // :
 
     // couple
-    Lp,       // (
-    Rp,       // )
-    Lb,       // {
-    Rb,       // }
-    Ls,       // [
-    Rs,       // ]
+    Lp, // (
+    Rp, // )
+    Lb, // {
+    Rb, // }
+    Ls, // [
+    Rs, // ]
 
     // keyword
-    Fn,       // fn
-    Rq,       // rq
-    Let,      // let
-    If,       // if
-    Else,     // else
-    Return,   // return
+    Fn,     // fn
+    Rq,     // rq
+    Let,    // let
+    If,     // if
+    Else,   // else
+    Return, // return
 }
 
 #[derive(Clone, PartialEq, Eq)]

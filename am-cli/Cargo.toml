@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 am = { path = "../am" }
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "4.5.7", features = ["derive"] }
 humantime = "2.1.0"
 
 [dev-dependencies]

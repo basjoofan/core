@@ -5,7 +5,7 @@ mod native;
 mod parser;
 mod record;
 mod request;
+mod stat;
 mod syntax;
 mod token;
 mod value;
-mod stat;
