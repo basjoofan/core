@@ -2,25 +2,27 @@ use super::record::Assert;
 use super::record::Record;
 use super::request;
 use super::syntax::Expr;
-use super::syntax::Script;
+use super::syntax::Source;
 use super::token::{Kind, Token};
 use super::value::Context;
 use super::value::Value;
 use std::collections::HashMap;
 use tokio::runtime::Builder;
 
-pub fn eval(script: &Script, context: &mut Context) -> Value {
-    for function in &script.functions {
-        if let Expr::Function(_, _, Some(name), parameters, body) = function {
-            context.set(name.clone(), eval_function_literal(parameters, body))
+impl Source {
+    pub fn eval(&self, context: &mut Context) -> Value {
+        for function in &self.functions {
+            if let Expr::Function(_, _, Some(name), parameters, body) = function {
+                context.set(name.clone(), eval_function_literal(parameters, body))
+            }
         }
-    }
-    for request in &script.requests {
-        if let Expr::Request(_, _, name, pieces, asserts) = request {
-            context.set(name.clone(), eval_request_literal(name, pieces, asserts))
+        for request in &self.requests {
+            if let Expr::Request(_, _, name, pieces, asserts) = request {
+                context.set(name.clone(), eval_request_literal(name, pieces, asserts))
+            }
         }
+        eval_block_expression(&self.expressions, context)
     }
-    eval_block_expression(&script.expressions, context)
 }
 
 pub fn eval_expression(expression: &Expr, context: &mut Context) -> Value {
@@ -520,10 +522,10 @@ fn test_native_function() {
         (r#"length([1, 2, 3])"#, Value::Integer(3)),
         (r#"length([])"#, Value::Integer(0)),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("{} == {}", evaluated, expected);
         assert!(evaluated == expected);
     }
@@ -548,10 +550,10 @@ fn test_eval_integer_expression() {
         ("3 * (3 * 3) + 10", 37),
         ("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("evaluated = {}", evaluated);
         if let Value::Integer(evaluated) = evaluated {
             println!("{} == {}", evaluated, expected);
@@ -576,10 +578,10 @@ fn test_eval_float_expression() {
         ("5 / 0.2", 25.0),
         ("0.5 / 2", 0.25),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("evaluated = {}", evaluated);
         if let Value::Float(evaluated) = evaluated {
             println!("{} == {}", evaluated, expected);
@@ -611,10 +613,10 @@ fn test_eval_boolean_expression() {
         ("(1 > 2) == true", false),
         ("(1 > 2) == false", true),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         if let Value::Boolean(evaluated) = evaluated {
             println!("{} == {}", evaluated, expected);
             assert!(evaluated == expected);
@@ -632,10 +634,10 @@ fn test_eval_bang_operator() {
         ("!!false", false),
         ("!!5", true),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         if let Value::Boolean(evaluated) = evaluated {
             println!("{} == {}", evaluated, expected);
             assert!(evaluated == expected);
@@ -654,10 +656,10 @@ fn test_eval_if_expression() {
         ("if (1 > 2) { 10 } else { 20 }", Value::Integer(20)),
         ("if (1 < 2) { 10 } else { 20 }", Value::Integer(10)),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("evaluated:{}", evaluated);
         assert!(evaluated == expected);
     }
@@ -671,10 +673,10 @@ fn test_eval_let_expression() {
         ("let a = 5; let b = a; b;", 5),
         ("let a = 5; let b = a; let c = a + b + 5; c;", 15),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         if let Value::Integer(evaluated) = evaluated {
             println!("{} == {}", evaluated, expected);
             assert!(evaluated == expected);
@@ -724,10 +726,10 @@ fn test_eval_return_expression() {
             20,
         ),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         if let Value::Return(evaluated) = evaluated {
             if let Value::Integer(evaluated) = *evaluated {
                 println!("{} == {}", evaluated, expected);
@@ -739,10 +741,10 @@ fn test_eval_return_expression() {
 
 #[test]
 fn test_eval_function_object() {
-    let input = "let a = fn(x) { x + 2; };a";
-    let script = crate::parser::Parser::new(input).parse();
+    let text = "let a = fn(x) { x + 2; };a";
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     if let Value::Function(parameters, body) = evaluated {
         assert!(parameters.len() == 1);
         assert!(parameters[0] == "x");
@@ -763,10 +765,10 @@ fn test_eval_function_call() {
         ("fn x(x) { x; }; x(5)", 5),
         ("fn len(x) { x; }; len(10)", 10),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("evaluated:{}:{}", evaluated, evaluated.kind());
         if let Value::Integer(evaluated) = evaluated {
             println!("{} == {}", evaluated, expected);
@@ -777,7 +779,7 @@ fn test_eval_function_call() {
 
 #[test]
 fn test_eval_enclosing_context() {
-    let input = r#"
+    let text = r#"
     let first = 10;
     let second = 10;
     let third = 10;
@@ -790,9 +792,9 @@ fn test_eval_enclosing_context() {
     
     ourFunction(20) + first + second;
     "#;
-    let script = crate::parser::Parser::new(input).parse();
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     if let Value::Integer(evaluated) = evaluated {
         assert!(evaluated == 70);
     }
@@ -800,7 +802,7 @@ fn test_eval_enclosing_context() {
 
 #[test]
 fn test_eval_closure() {
-    let input = r#"
+    let text = r#"
     let newAdder = fn(x) {
         fn(y) { x + y };
     };
@@ -808,9 +810,9 @@ fn test_eval_closure() {
     let addTwo = newAdder(2);
     addTwo(2);
     "#;
-    let script = crate::parser::Parser::new(input).parse();
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     if let Value::Integer(evaluated) = evaluated {
         assert!(evaluated == 4);
     }
@@ -818,7 +820,7 @@ fn test_eval_closure() {
 
 #[test]
 fn test_eval_fibonacci() {
-    let input = r#"
+    let text = r#"
     let fibonacci = fn (x) {
         if (x == 0) {
           0
@@ -832,9 +834,9 @@ fn test_eval_fibonacci() {
       };  
     fibonacci(22);
     "#;
-    let script = crate::parser::Parser::new(input).parse();
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     println!("evaluated:{}", evaluated);
     if let Value::Integer(evaluated) = evaluated {
         assert!(evaluated == 17711);
@@ -855,10 +857,10 @@ fn test_fibonacci() {
 
 #[test]
 fn test_eval_string_literal() {
-    let input = r#""Hello World!""#;
-    let script = crate::parser::Parser::new(input).parse();
+    let text = r#""Hello World!""#;
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     if let Value::String(evaluated) = evaluated {
         assert!(evaluated == "Hello World!");
     }
@@ -866,10 +868,10 @@ fn test_eval_string_literal() {
 
 #[test]
 fn test_eval_string_concat() {
-    let input = r#""Hello" + " " + "World!""#;
-    let script = crate::parser::Parser::new(input).parse();
+    let text = r#""Hello" + " " + "World!""#;
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     if let Value::String(evaluated) = evaluated {
         assert!(evaluated == "Hello World!");
     }
@@ -877,10 +879,10 @@ fn test_eval_string_concat() {
 
 #[test]
 fn test_eval_array_literal() {
-    let input = "[1, 2 * 2, 3 + 3]";
-    let script = crate::parser::Parser::new(input).parse();
+    let text = "[1, 2 * 2, 3 + 3]";
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     if let Value::Array(elements) = evaluated {
         assert!(elements[0] == Value::Integer(1));
         assert!(elements[1] == Value::Integer(4));
@@ -908,10 +910,10 @@ fn test_eval_array_index_expression() {
         ("[1, 2, 3][3]", Value::None),
         ("[1, 2, 3][-1]", Value::None),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("{} == {}", evaluated, expected);
         assert!(evaluated == expected);
     }
@@ -919,7 +921,7 @@ fn test_eval_array_index_expression() {
 
 #[test]
 fn test_eval_map_literal() {
-    let input = r#"
+    let text = r#"
     let two = "two";
 	{
 		"one": 10 - 9,
@@ -938,9 +940,9 @@ fn test_eval_map_literal() {
         (String::from("true"), 5),
         (String::from("false"), 6),
     ];
-    let script = crate::parser::Parser::new(input).parse();
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     if let Value::Map(pairs) = evaluated {
         for (key, expected_value) in expected {
             if let Value::Integer(evaluated_value) = pairs.get(&key).unwrap().clone() {
@@ -962,10 +964,10 @@ fn test_eval_map_index_expression() {
         (r#"{true: 5}[true]"#, Value::Integer(5)),
         (r#"{false: 5}[false]"#, Value::Integer(5)),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("{} == {}", evaluated, expected);
         assert!(evaluated == expected);
     }
@@ -982,10 +984,10 @@ fn test_eval_field_expression() {
         (r#"{true: 5}.true"#, Value::Integer(5)),
         (r#"{false: 5}.false"#, Value::Integer(5)),
     ];
-    for (input, expected) in tests {
-        let script = crate::parser::Parser::new(input).parse();
+    for (text, expected) in tests {
+        let source = crate::parser::Parser::new(text).parse();
         let mut context = Context::default();
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("{} == {}", evaluated, expected);
         assert!(evaluated == expected);
     }
@@ -993,7 +995,7 @@ fn test_eval_field_expression() {
 
 #[test]
 fn test_eval_request_literal() {
-    let input = r#"
+    let text = r#"
     rq request`
       GET http://${host}/api
       Host: example.com
@@ -1002,9 +1004,9 @@ fn test_eval_request_literal() {
       regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22"
     ];
     request"#;
-    let script = crate::parser::Parser::new(input).parse();
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     println!("evaluated:{}", evaluated);
     if let Value::Request(name, pieces, asserts) = evaluated {
         assert!(name == "request");
@@ -1020,7 +1022,7 @@ fn test_eval_request_literal() {
 
 #[test]
 fn test_eval_request_expression() {
-    let input = r#"
+    let text = r#"
     rq request`
       GET http://${host}/get
       Host: ${host}
@@ -1028,16 +1030,16 @@ fn test_eval_request_expression() {
     let host = "httpbin.org";
     let response = request().response;
     response.status"#;
-    let script = crate::parser::Parser::new(input).parse();
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
-    let evaluated = eval(&script, &mut context);
+    let evaluated = source.eval(&mut context);
     println!("evaluated:{}", evaluated);
     assert!(evaluated == Value::Integer(200));
 }
 
 #[test]
 fn test_send_record() {
-    let input = r#"
+    let text = r#"
     rq request`
       GET http://${host}/get
       Host: ${host}
@@ -1045,12 +1047,12 @@ fn test_send_record() {
     let host = "httpbin.org";
     let response = request().response;
     response.status"#;
-    let script = crate::parser::Parser::new(input).parse();
+    let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
     let (sender, receiver) = std::sync::mpsc::channel();
     context.set_sender(&sender);
     std::thread::spawn(move || {
-        let evaluated = eval(&script, &mut context);
+        let evaluated = source.eval(&mut context);
         println!("evaluated:{}", evaluated);
         assert!(evaluated == Value::Integer(200));
     });

@@ -1,4 +1,3 @@
-use super::evaluator::eval;
 use super::parser::Parser;
 use super::syntax::Expr;
 use super::token::Token;
@@ -199,7 +198,7 @@ impl Response {
         }
         map.insert(String::from("headers"), Value::Map(headers));
         map.insert(String::from("body"), Value::String(self.body.clone()));
-        let json = eval(&Parser::new(&self.body).parse(), &mut Context::default());
+        let json = Parser::new(&self.body).parse().eval(&mut Context::default());
         map.insert(String::from("json"), json);
         Value::Map(map)
     }

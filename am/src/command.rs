@@ -1,4 +1,3 @@
-use super::evaluator::eval;
 use super::evaluator::eval_call_name;
 use super::parser::Parser;
 use super::record;
@@ -19,34 +18,40 @@ use std::time::Duration;
 
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 
-pub fn start() {
+pub fn repl() {
     let mut lines = stdin().lock().lines();
     let mut context = Context::default();
     loop {
         if let Some(line) = lines.next() {
-            if let Ok(input) = line {
-                if input == "exit" {
+            if let Ok(text) = line {
+                if text == "exit" {
                     break;
                 }
-                let script = Parser::new(&input).parse();
-                print_error(eval(&script, &mut context));
+                let source = Parser::new(&text).parse();
+                print_error(source.eval(&mut context));
             }
         }
     }
 }
 
-pub fn run(path: Option<PathBuf>) {
-    let input = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
+pub fn eval(text: String) {
     let mut context = Context::default();
-    let script = Parser::new(&input).parse();
-    print_error(eval(&script, &mut context));
+    let source = Parser::new(&text).parse();
+    print_error(source.eval(&mut context));
+}
+
+pub fn run(path: Option<PathBuf>) {
+    let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
+    let mut context = Context::default();
+    let source = Parser::new(&text).parse();
+    print_error(source.eval(&mut context));
 }
 
 pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
-    let input: String = read_to_string(std::env::current_dir().unwrap());
+    let text = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
-    let script = Parser::new(&input).parse();
-    print_error(eval(&script, &mut context));
+    let source = Parser::new(&text).parse();
+    print_error(source.eval(&mut context));
     let (sender, receiver) = mpsc::channel();
     let continuous = Arc::new(AtomicBool::new(true));
     let iterations = iterations / concurrency;
@@ -74,12 +79,12 @@ pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32,
 }
 
 pub fn test(tag: String, file: Option<PathBuf>) {
-    let input = read_to_string(std::env::current_dir().unwrap());
+    let text = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
-    let script = Parser::new(&input).parse();
-    print_error(eval(&script, &mut context));
+    let source = Parser::new(&text).parse();
+    print_error(source.eval(&mut context));
     let (sender, receiver) = mpsc::channel();
-    for call in script.requests.into_iter().chain(script.functions.into_iter()) {
+    for call in source.requests.into_iter().chain(source.functions.into_iter()) {
         if let (Some(tags), Some(name)) = match call {
             Expr::Function(_, Some(tags), Some(name), _, _) => (Some(tags), Some(name)),
             Expr::Request(_, Some(tags), name, _, _) => (Some(tags), Some(name)),
@@ -142,21 +147,21 @@ fn print_error(value: Value) {
 }
 
 fn read_to_string(path: PathBuf) -> String {
-    let mut input = String::new();
-    read(path, &mut input).expect("Could not read script file");
-    input
+    let mut text = String::new();
+    read(path, &mut text).expect("Could not read source file");
+    text
 }
 
-fn read(path: PathBuf, input: &mut String) -> std::io::Result<()> {
+fn read(path: PathBuf, text: &mut String) -> std::io::Result<()> {
     if path.is_dir() {
         for entry in std::fs::read_dir(path)? {
             if let Ok(entry) = entry {
                 let path = entry.path();
-                read(path, input)?;
+                read(path, text)?;
             }
         }
     } else if path.is_file() && path.extension() == Some(std::ffi::OsStr::new(NAME)) {
-        input.push_str(&std::fs::read_to_string(path)?)
+        text.push_str(&std::fs::read_to_string(path)?)
     } else {
     }
     Ok(())

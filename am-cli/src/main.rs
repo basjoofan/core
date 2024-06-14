@@ -14,6 +14,12 @@ struct Interface {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Evaluate source code
+    Eval {
+        /// Source code
+        #[command()]
+        text: String,
+    },
     /// Interpret and run
     Run {
         /// Source path
@@ -56,6 +62,9 @@ fn main() {
         println!("Use verbose output...");
     }
     match interface.command {
+        Some(Commands::Eval { text }) => {
+            command::eval(text);
+        }
         Some(Commands::Run { path }) => {
             command::run(path);
         }
@@ -76,7 +85,7 @@ fn main() {
             command::test(tag, file);
         }
         None => {
-            command::start();
+            command::repl();
         }
     }
 }

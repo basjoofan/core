@@ -25,9 +25,23 @@ fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::cargo_bin(NAME)?;
+    cmd.arg("eval").arg("print( 1 + 1 )");
+    cmd.assert().success().stdout(predicate::str::diff("2"));
+    let mut cmd = Command::cargo_bin(NAME)?;
+    cmd.arg("eval").arg("let add = fn(x, y) { x + y; }; print(add(1, 1));");
+    cmd.assert().success().stdout(predicate::str::diff("2"));
+    let mut cmd = Command::cargo_bin(NAME)?;
+    cmd.arg("eval").arg(r#"println("Hello Am!")"#);
+    cmd.assert().success().stdout(predicate::str::diff("Hello Am!\n"));
+    Ok(())
+}
+
+#[test]
 fn test_command_run_closure() -> Result<(), Box<dyn std::error::Error>> {
     let file = assert_fs::NamedTempFile::new("closure.am")?;
-    let input = r#"
+    let text = r#"
     let first = 10;
     let second = 10;
     let third = 10;
@@ -40,7 +54,7 @@ fn test_command_run_closure() -> Result<(), Box<dyn std::error::Error>> {
     
     println(ourFunction(20) + first + second);
     "#;
-    file.write_str(input)?;
+    file.write_str(text)?;
 
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.arg("run").arg(file.path());
@@ -51,7 +65,7 @@ fn test_command_run_closure() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_command_run_fibonacci() -> Result<(), Box<dyn std::error::Error>> {
     let file = assert_fs::NamedTempFile::new("fibonacci.am")?;
-    let input = r#"
+    let text = r#"
     let fibonacci = fn (x) {
         if (x == 0) {
           0
@@ -65,7 +79,7 @@ fn test_command_run_fibonacci() -> Result<(), Box<dyn std::error::Error>> {
       };  
     println(fibonacci(10));
     "#;
-    file.write_str(input)?;
+    file.write_str(text)?;
 
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.arg("run").arg(file.path());
@@ -91,7 +105,7 @@ fn test_command_run_dir() -> Result<(), Box<dyn std::error::Error>> {
 fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let temp = assert_fs::TempDir::new().unwrap();
     let file = temp.child("request.am");
-    let input = r#"
+    let text = r#"
     #[test, tag]
     rq request`
       GET http://${host}/get
@@ -104,7 +118,7 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
       response.status
     }
     "#;
-    file.write_str(input)?;
+    file.write_str(text)?;
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.current_dir(temp.to_path_buf());
     cmd.arg("test");
@@ -118,7 +132,7 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
 fn test_command_call() -> Result<(), Box<dyn std::error::Error>> {
     let temp = assert_fs::TempDir::new().unwrap();
     let file = temp.child("request.am");
-    let input = r#"
+    let text = r#"
     #[test, tag]
     rq request`
       GET http://${host}/get
@@ -131,7 +145,7 @@ fn test_command_call() -> Result<(), Box<dyn std::error::Error>> {
       response.status
     }
     "#;
-    file.write_str(input)?;
+    file.write_str(text)?;
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.current_dir(temp.to_path_buf());
     cmd.arg("blow").arg("call");

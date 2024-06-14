@@ -1,6 +1,6 @@
 use super::lexer;
 use super::syntax::Expr;
-use super::syntax::Script;
+use super::syntax::Source;
 use super::token::{Kind, Token, LOWEST, STMT, UNARY};
 
 pub struct Parser {
@@ -9,9 +9,9 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(input: &str) -> Parser {
+    pub fn new(text: &str) -> Parser {
         Parser {
-            tokens: lexer::segment(input),
+            tokens: lexer::segment(text),
             index: usize::default(),
         }
     }
@@ -61,7 +61,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Script {
+    pub fn parse(&mut self) -> Source {
         let mut expressions = Vec::new();
         let mut functions = Vec::new();
         let mut requests = Vec::new();
@@ -75,7 +75,7 @@ impl Parser {
             }
             self.next_token();
         }
-        Script {
+        Source {
             expressions,
             functions,
             requests,
@@ -614,10 +614,10 @@ fn test_let_expression() {
         ("let  foobar = y;", 1, "let foobar y"),
         ("let i = 0; [1][i];", 2, "let i 0"),
     ];
-    for (input, len, expected) in tests {
-        let script = Parser::new(input).parse();
-        assert!(script.expressions.len() == len);
-        if let Some(expression) = script.expressions.get(0) {
+    for (text, len, expected) in tests {
+        let source = Parser::new(text).parse();
+        assert!(source.expressions.len() == len);
+        if let Some(expression) = source.expressions.get(0) {
             println!("{}", expression);
             if let Expr::Let(token, Some(name), Some(value)) = expression.clone() {
                 let parsed = format!("{} {} {}", token, name, value);
@@ -626,7 +626,7 @@ fn test_let_expression() {
                 assert!(false, "let expression parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
@@ -639,11 +639,11 @@ fn test_return_expression() {
         ("return foobar;", 1, "foobar"),
         ("return foobar; [1][i];", 2, "foobar"),
     ];
-    for (input, len, expected) in tests {
-        let script = Parser::new(input).parse();
-        println!("script:{}", script);
-        assert!(script.expressions.len() == len);
-        if let Some(expression) = script.expressions.get(0) {
+    for (text, len, expected) in tests {
+        let source = Parser::new(text).parse();
+        println!("source:{}", source);
+        assert!(source.expressions.len() == len);
+        if let Some(expression) = source.expressions.get(0) {
             println!("{}", expression);
             if let Expr::Return(_, Some(value)) = expression.clone() {
                 assert!(expected == value.to_string());
@@ -651,17 +651,17 @@ fn test_return_expression() {
                 assert!(false, "return expression parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
 
 #[test]
 fn test_ident_expression() {
-    let input = "foobar;";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "foobar;";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Ident(_, value) = expression {
             assert!(value == "foobar");
@@ -669,16 +669,16 @@ fn test_ident_expression() {
             assert!(false, "ident expression parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_integer_literal() {
-    let input = "5;";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "5;";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Integer(_, Some(value)) = *expression {
             assert!(value == 5);
@@ -686,16 +686,16 @@ fn test_integer_literal() {
             assert!(false, "integer literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_float_literal() {
-    let input = "3.14159265358979323846264338327950288;";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "3.14159265358979323846264338327950288;";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Float(_, Some(value)) = *expression {
             assert!(value == 3.14159265358979323846264338327950288);
@@ -703,17 +703,17 @@ fn test_float_literal() {
             assert!(false, "float literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_boolean_literal() {
     let tests = vec![("true;", true), ("false;", false)];
-    for (input, expected) in tests {
-        let script = Parser::new(input).parse();
-        assert!(script.expressions.len() == 1);
-        if let Some(expression) = script.expressions.get(0) {
+    for (text, expected) in tests {
+        let source = Parser::new(text).parse();
+        assert!(source.expressions.len() == 1);
+        if let Some(expression) = source.expressions.get(0) {
             println!("{}", expression);
             if let Expr::Boolean(_, Some(value)) = *expression {
                 assert!(value == expected);
@@ -721,17 +721,17 @@ fn test_boolean_literal() {
                 assert!(false, "boolean literal parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
 
 #[test]
 fn test_string_literal() {
-    let input = r#""hello world";"#;
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = r#""hello world";"#;
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::String(_, value) = expression {
             assert!(value == "hello world");
@@ -739,7 +739,7 @@ fn test_string_literal() {
             assert!(false, "string literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
@@ -753,10 +753,10 @@ fn test_unary_expression() {
         ("!true;", "!", "true"),
         ("!false;", "!", "false"),
     ];
-    for (input, expected_operator, expected_right) in tests {
-        let script = Parser::new(input).parse();
-        assert!(script.expressions.len() == 1);
-        if let Some(expression) = script.expressions.get(0) {
+    for (text, expected_operator, expected_right) in tests {
+        let source = Parser::new(text).parse();
+        assert!(source.expressions.len() == 1);
+        if let Some(expression) = source.expressions.get(0) {
             println!("{}", expression);
             if let Expr::Unary(token, Some(right)) = expression {
                 assert!(expected_operator == token.to_string());
@@ -765,7 +765,7 @@ fn test_unary_expression() {
                 assert!(false, "unary expression parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
@@ -793,10 +793,10 @@ fn test_binary_expression() {
         ("true != false", "true", "!=", "false"),
         ("false == false", "false", "==", "false"),
     ];
-    for (input, expected_left, expected_operator, expected_right) in tests {
-        let script = Parser::new(input).parse();
-        assert!(script.expressions.len() == 1);
-        if let Some(expression) = script.expressions.get(0) {
+    for (text, expected_left, expected_operator, expected_right) in tests {
+        let source = Parser::new(text).parse();
+        assert!(source.expressions.len() == 1);
+        if let Some(expression) = source.expressions.get(0) {
             println!("{}", expression);
             if let Expr::Binary(token, Some(left), Some(right)) = expression {
                 assert!(expected_left == left.to_string());
@@ -806,7 +806,7 @@ fn test_binary_expression() {
                 assert!(false, "binary expression parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
@@ -848,19 +848,19 @@ fn test_operator_precedence() {
             "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
         ),
     ];
-    for (input, expected) in tests {
-        let script = Parser::new(input).parse();
-        println!("{}=={}", script.to_string(), expected);
-        assert!(script.to_string() == expected);
+    for (text, expected) in tests {
+        let source = Parser::new(text).parse();
+        println!("{}=={}", source.to_string(), expected);
+        assert!(source.to_string() == expected);
     }
 }
 
 #[test]
 fn test_if_expression() {
-    let input = "if (x < y) { x }";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "if (x < y) { x }";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::If(_, Some(condition), consequence, alternative) = expression {
             assert!(condition.to_string() == "(x < y)");
@@ -870,16 +870,16 @@ fn test_if_expression() {
             assert!(false, "if expression parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_if_else_expression() {
-    let input = "if (x < y) { x } else { y }";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "if (x < y) { x } else { y }";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::If(_, Some(condition), consequence, alternative) = expression {
             assert!(condition.to_string() == "(x < y)");
@@ -889,7 +889,7 @@ fn test_if_else_expression() {
             assert!(false, "if expression parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
@@ -904,11 +904,11 @@ fn test_function_literal() {
             "(x + y)",
         ),
     ];
-    for (input, expected_name, expected_parameters, expected_body) in tests {
-        let script = Parser::new(input).parse();
-        println!("s:{}:{}", script, script.functions.len());
-        assert!(script.functions.len() == 1);
-        if let Some(function) = script.functions.get(0) {
+    for (text, expected_name, expected_parameters, expected_body) in tests {
+        let source = Parser::new(text).parse();
+        println!("source({}):{}", source.functions.len(), source);
+        assert!(source.functions.len() == 1);
+        if let Some(function) = source.functions.get(0) {
             println!("{}", function);
             if let Expr::Function(_, _, name, parameters, body) = function.clone() {
                 assert!(name == expected_name);
@@ -918,7 +918,7 @@ fn test_function_literal() {
                 assert!(false, "function literal parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
@@ -933,10 +933,10 @@ fn test_function_parameter() {
         ("fn one(x) {};", vec!["x"]),
         ("fn multiple(x, y, z) {};", vec!["x", "y", "z"]),
     ];
-    for (input, expected) in tests {
-        let script = Parser::new(input).parse();
-        assert!(script.functions.len() == 1);
-        if let Some(function) = script.functions.get(0) {
+    for (text, expected) in tests {
+        let source = Parser::new(text).parse();
+        assert!(source.functions.len() == 1);
+        if let Some(function) = source.functions.get(0) {
             println!("{}", function);
             if let Expr::Function(_, _, _, parameters, _) = function.clone() {
                 assert!(parameters == expected);
@@ -944,17 +944,17 @@ fn test_function_parameter() {
                 assert!(false, "function literal parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
 
 #[test]
 fn test_call_expression() {
-    let input = "add(1, 2 * 3, 4 + 5);";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "add(1, 2 * 3, 4 + 5);";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Call(_, Some(function), arguments) = expression {
             assert!(function.to_string() == "add");
@@ -965,7 +965,7 @@ fn test_call_expression() {
             assert!(false, "call expression parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
@@ -976,10 +976,10 @@ fn test_call_expression_argument() {
         ("add(1);", "add", vec!["1"]),
         ("add(1, 2 * 3, 4 + 5);", "add", vec!["1", "(2 * 3)", "(4 + 5)"]),
     ];
-    for (input, function_name, expected) in tests {
-        let script = Parser::new(input).parse();
-        assert!(script.expressions.len() == 1);
-        if let Some(expression) = script.expressions.get(0) {
+    for (text, function_name, expected) in tests {
+        let source = Parser::new(text).parse();
+        assert!(source.expressions.len() == 1);
+        if let Some(expression) = source.expressions.get(0) {
             println!("{}", expression);
             if let Expr::Call(_, Some(function), arguments) = expression {
                 assert!(function.to_string() == function_name);
@@ -988,17 +988,17 @@ fn test_call_expression_argument() {
                 assert!(false, "call expression parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
 
 #[test]
 fn test_array_literal_empty() {
-    let input = "[]";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "[]";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Array(_, elements) = expression {
             assert!(elements.len() == 0);
@@ -1006,16 +1006,16 @@ fn test_array_literal_empty() {
             assert!(false, "array literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_array_literal() {
-    let input = "[1, 2 * 2, 3 + 3]";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "[1, 2 * 2, 3 + 3]";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Array(_, elements) = expression {
             assert!(elements.len() == 3);
@@ -1026,16 +1026,16 @@ fn test_array_literal() {
             assert!(false, "array literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_index_expression() {
-    let input = "myArray[1 + 1]";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "myArray[1 + 1]";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Index(_, Some(left), Some(index)) = expression {
             assert!(left.to_string() == "myArray");
@@ -1044,16 +1044,16 @@ fn test_index_expression() {
             assert!(false, "index expression parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_field_expression() {
-    let input = "object.field";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "object.field";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Field(_, Some(object), Some(field)) = expression {
             assert!(object.to_string() == "object");
@@ -1062,16 +1062,16 @@ fn test_field_expression() {
             assert!(false, "field expression parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_map_literal_empty() {
-    let input = "{}";
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let text = "{}";
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Map(_, pairs) = expression {
             assert!(pairs.len() == 0);
@@ -1079,21 +1079,21 @@ fn test_map_literal_empty() {
             assert!(false, "map literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_map_literal_string_key() {
-    let input = r#"{"one": 1, "two": 2, "three": 3}"#;
+    let text = r#"{"one": 1, "two": 2, "three": 3}"#;
     let expected = vec![
         (String::from("\"one\""), String::from("1")),
         (String::from("\"two\""), String::from("2")),
         (String::from("\"three\""), String::from("3")),
     ];
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Map(_, pairs) = expression {
             assert!(
@@ -1107,20 +1107,20 @@ fn test_map_literal_string_key() {
             assert!(false, "map literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_map_literal_boolean_key() {
-    let input = r#"{true: 1, false: 2}"#;
+    let text = r#"{true: 1, false: 2}"#;
     let expected = vec![
         (String::from("true"), String::from("1")),
         (String::from("false"), String::from("2")),
     ];
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Map(_, pairs) = expression {
             assert!(
@@ -1134,21 +1134,21 @@ fn test_map_literal_boolean_key() {
             assert!(false, "map literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_map_literal_integer_key() {
-    let input = r#"{1: 1, 2: 2, 3: 3}"#;
+    let text = r#"{1: 1, 2: 2, 3: 3}"#;
     let expected = vec![
         (String::from("1"), String::from("1")),
         (String::from("2"), String::from("2")),
         (String::from("3"), String::from("3")),
     ];
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Map(_, pairs) = expression {
             assert!(
@@ -1162,21 +1162,21 @@ fn test_map_literal_integer_key() {
             assert!(false, "map literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
 #[test]
 fn test_map_literal_with_expression() {
-    let input = r#"{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}"#;
+    let text = r#"{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}"#;
     let expected = vec![
         (String::from("\"one\""), String::from("(0 + 1)")),
         (String::from("\"two\""), String::from("(10 - 8)")),
         (String::from("\"three\""), String::from("(15 / 5)")),
     ];
-    let script = Parser::new(input).parse();
-    assert!(script.expressions.len() == 1);
-    if let Some(expression) = script.expressions.get(0) {
+    let source = Parser::new(text).parse();
+    assert!(source.expressions.len() == 1);
+    if let Some(expression) = source.expressions.get(0) {
         println!("{}", expression);
         if let Expr::Map(_, pairs) = expression {
             assert!(
@@ -1190,7 +1190,7 @@ fn test_map_literal_with_expression() {
             assert!(false, "map literal parse failed")
         }
     } else {
-        assert!(false, "script expression none")
+        assert!(false, "source expression none")
     }
 }
 
@@ -1228,10 +1228,10 @@ fn test_request_literal() {
         ),
         ("rq request`POST`", 1, "request", vec!["\"POST\n\""]),
     ];
-    for (input, expected_len, expected_name, expected_pieces) in tests {
-        let script = Parser::new(input).parse();
-        assert!(script.requests.len() == expected_len);
-        if let Some(request) = script.requests.get(0) {
+    for (text, expected_len, expected_name, expected_pieces) in tests {
+        let source = Parser::new(text).parse();
+        assert!(source.requests.len() == expected_len);
+        if let Some(request) = source.requests.get(0) {
             println!("request:{}", request);
             if let Expr::Request(_, _, name, pieces, asserts) = request.clone() {
                 assert!(name == expected_name);
@@ -1241,7 +1241,7 @@ fn test_request_literal() {
                 assert!(false, "request literal parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
@@ -1262,9 +1262,9 @@ fn test_request_asserts() {
         ),
         (r#"rq request`POST`[]"#, 0, vec![]),
     ];
-    for (input, expected_len, expected_asserts) in tests {
-        let script = Parser::new(input).parse();
-        if let Some(request) = script.requests.get(0) {
+    for (text, expected_len, expected_asserts) in tests {
+        let source = Parser::new(text).parse();
+        if let Some(request) = source.requests.get(0) {
             println!("request:{}", request);
             if let Expr::Request(_, _, _, _, asserts) = request.clone() {
                 assert!(asserts.len() == expected_len);
@@ -1273,7 +1273,7 @@ fn test_request_asserts() {
                 assert!(false, "request literal parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }
@@ -1309,11 +1309,11 @@ fn test_annotation_literal() {
             Some(vec!["test".to_string(), "tag".to_string()]),
         ),
     ];
-    for (input, expected_len, expected_tags) in tests {
-        let script = Parser::new(input).parse();
+    for (text, expected_len, expected_tags) in tests {
+        let source = Parser::new(text).parse();
         let mut calls = Vec::new();
-        calls.extend_from_slice(&script.requests);
-        calls.extend_from_slice(&script.functions);
+        calls.extend_from_slice(&source.requests);
+        calls.extend_from_slice(&source.functions);
         if let Some(call) = calls.get(0) {
             println!("call:\n{}", call);
             if let Expr::Request(_, tags, _, _, _) = call.clone() {
@@ -1326,7 +1326,7 @@ fn test_annotation_literal() {
                 assert!(false, "annotation literal parse failed")
             }
         } else {
-            assert!(false, "script expression none")
+            assert!(false, "source expression none")
         }
     }
 }

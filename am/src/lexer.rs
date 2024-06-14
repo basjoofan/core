@@ -1,9 +1,9 @@
 use super::token::Kind;
 use super::token::Token;
 
-pub fn segment(input: &str) -> Vec<Token> {
+pub fn segment(text: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
-    let mut chars = input.chars().peekable();
+    let mut chars = text.chars().peekable();
     while let Some(char) = chars.next() {
         if !char.is_whitespace() {
             let (kind, literal) = match char {
@@ -112,7 +112,7 @@ pub fn segment(input: &str) -> Vec<Token> {
 
 #[test]
 fn test_segment() {
-    let input = r#"
+    let text = r#"
             let five = 5;
             let ten = 10;
             let float = 3.14159265358979323846264338327950288;
@@ -270,7 +270,7 @@ fn test_segment() {
         (Kind::Dot, "."),
         (Kind::Ident, "field"),
     ];
-    let tokens = segment(input);
+    let tokens = segment(text);
     tokens
         .iter()
         .enumerate()

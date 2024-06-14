@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 
-pub struct Script {
+pub struct Source {
     pub expressions: Vec<Expr>,
     pub functions: Vec<Expr>,
     pub requests: Vec<Expr>,
@@ -40,7 +40,7 @@ pub enum Expr {
     // TODO While A while loop: while expr { ... }.
 }
 
-impl Display for Script {
+impl Display for Source {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         for expression in self.expressions.iter() {
             write!(f, "{}", expression)?
@@ -195,7 +195,7 @@ impl<'a, T: std::fmt::Display> std::fmt::Display for May<'a, T> {
 
 #[test]
 fn test_program_display() {
-    let p = Script {
+    let p = Source {
         expressions: vec![Expr::Let(
             Token::new(super::token::Kind::Let, String::from("let")),
             Some(String::from("myVar")),
