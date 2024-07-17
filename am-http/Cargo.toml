@@ -1,0 +1,15 @@
+[package]
+name = "am-http"
+version = "0.0.1"
+description = "http request"
+repository = "https://github.com/basjoofan/am"
+license = "MIT license"
+authors = ["Lamb <lambgao@me.com>"]
+keywords = ["test", "continuous"]
+edition = "2021"
+
+[dependencies]
+http = "1"
+url = "2.5.2"
+
+[dev-dependencies]
