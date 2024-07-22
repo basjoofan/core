@@ -1,9 +1,8 @@
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct Headers {
     inner: Vec<Header>,
 }
 
-#[derive(Debug)]
 pub struct Header {
     pub name: String,
     pub value: String,
@@ -12,5 +11,13 @@ pub struct Header {
 impl Headers {
     pub fn insert(&mut self, header: Header) {
         self.inner.push(header)
+    }
+
+    pub fn iter(&mut self) -> std::slice::Iter<'_, Header> {
+        self.inner.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
     }
 }

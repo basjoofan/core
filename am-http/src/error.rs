@@ -17,11 +17,11 @@ macro_rules! http_error {
             )+
         }
         impl std::fmt::Display for Error {
-            fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
-                    Error::InvalidUrl(string) => fmt.write_str(string),
+                    Error::InvalidUrl(string) => f.write_str(string),
                     $(
-                        Error::$name => fmt.write_str($description),
+                        Error::$name => f.write_str($description),
                     )+
                 }
             }
@@ -33,5 +33,19 @@ http_error! {
     EmptyMessage => "empty message",
     InvalidMethod => "invalid method",
     InvalidVersion => "invalid version",
+    InvalidStatus => "invalid status",
     EmptyUrl => "empty url",
+    EmptyUrlHost => "empty url host",
+    InvalidUrlHost => "invalid url host",
+    InvalidUrlPort => "invalid url port",
+    InvalidUrlScheme => "invalid url scheme",
+    HostNotFound => "host not found",
+    TcpConnectFailed => "tcp connect failed",
+    NoConnectionAvailable => "no connection available",
+    TlsHandshakeFailed => "tls handshake failed",
+    WriteFailed => "write failed",
+    WriteFlushFailed => "write flush failed",
+    SetReadTimeoutFailed => "set read timeout failed",
+    MultipartPrepareFailed => "multipart prepare failed",
+    ReadFailed => "read failed",
 }
