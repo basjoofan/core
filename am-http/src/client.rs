@@ -26,13 +26,13 @@ pub struct Time {
 
 impl Client {
     /// Send this request and wait for the result.
-    pub fn send<'a>(&'a self, message: &'a str) -> Result<(Request, Response, Time), Error> {
-        let mut request = Request::try_from(message)?;
+    pub fn send(& self, message: & str) -> Result<(Request, Response, Time), Error> {
+        let (mut request, content) = Request::from(message)?;
         let start = Instant::now();
         let mut stream = Stream::connect(&request.url, self.connect_tiomeout, self.read_tiomeout)?;
         let resolve = stream.resolve();
         let connect = start.elapsed() - resolve;
-        request.write(&mut stream)?;
+        request.write(&mut stream, content)?;
         let read = Instant::now();
         let mut delay = Duration::default();
         let response = Response::from(BufReader::new(stream), Some(|| delay = read.elapsed()))?;
@@ -60,8 +60,8 @@ impl Client {
 #[test]
 fn test_send_message_get() {
     let message = r#"
-    GET https://httpbin.org/get
-    Host: httpbin.org
+    GET https://www.baidu.com
+    Host: www.baidu.com
     Connection: close"#;
     let client = Client::default();
     let (request, response, time) = client.send(message).unwrap();
@@ -72,6 +72,7 @@ fn test_send_message_get() {
         time.resolve + time.connect + time.write + time.delay + time.read
     );
     println!("{:?}", time);
+    println!("{:?}", response.body);
 }
 
 #[test]
@@ -79,6 +80,7 @@ fn test_send_message_post() {
     let message = r#"
     POST https://httpbin.org/post
     Host: httpbin.org
+    Accept-Encoding: gzip, deflate
     Connection: close"#;
     let client = Client::default();
     let (request, response, time) = client.send(message).unwrap();
@@ -89,18 +91,18 @@ fn test_send_message_post() {
         time.resolve + time.connect + time.write + time.delay + time.read
     );
     println!("{:?}", time);
+    println!("{:?}", response.body);
 }
 
 #[test]
 fn test_send_message_post_form() {
     let message = r#"
-    POST http://httpbin.org/post
+    POST https://httpbin.org/post
     Host: httpbin.org
     Content-Type: application/x-www-form-urlencoded
     Connection: close
 
-    a: b
-    "#;
+    a: b"#;
     let client = Client::default();
     let (request, response, time) = client.send(message).unwrap();
     assert_eq!("POST", request.method.as_ref());
@@ -116,14 +118,13 @@ fn test_send_message_post_form() {
 #[test]
 fn test_send_message_post_multipart() {
     let message = r#"
-    POST http://httpbin.org/post
+    POST https://httpbin.org/post
     Host: httpbin.org
     Content-Type: multipart/form-data
     Connection: close
 
     a: b
-    f: @src/lib.rs
-    "#;
+    f: @src/lib.rs"#;
     let client = Client::default();
     let (request, response, time) = client.send(message).unwrap();
     assert_eq!("POST", request.method.as_ref());
@@ -139,7 +140,7 @@ fn test_send_message_post_multipart() {
 #[test]
 fn test_send_message_post_json() {
     let message = r#"
-    POST http://httpbin.org/post
+    POST https://httpbin.org/post
     Host: httpbin.org
     Content-Type: application/json
     Connection: close

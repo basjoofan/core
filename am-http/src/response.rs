@@ -21,14 +21,14 @@ pub struct Response {
     pub body: String,
 }
 
-/// Converts a message to an http request.
 impl Response {
+    /// Converts a stream to an http response.
     pub fn from(mut reader: BufReader<Stream>, f: Option<impl FnMut()>) -> Result<Response, Error> {
         let mut buf = [0; 1];
-        reader.read(&mut buf).map_err(|_e| Error::ReadFailed)?;
+        reader.read(&mut buf).map_err(|e| Error::ReadFailed(e))?;
         f.map(|mut f| f());
         let mut line = String::from_utf8(buf.to_vec()).map_err(|_e| Error::InvalidVersion)?;
-        reader.read_line(&mut line).map_err(|_e| Error::ReadFailed)?;
+        reader.read_line(&mut line).map_err(|e| Error::ReadFailed(e))?;
         let mut splits = line.split_whitespace();
         let version = match splits.next() {
             Some(version) => Version::try_from(version),
@@ -43,7 +43,7 @@ impl Response {
         let mut headers = Headers::default();
         loop {
             let mut line = String::new();
-            reader.read_line(&mut line).map_err(|_e| Error::ReadFailed)?;
+            reader.read_line(&mut line).map_err(|e| Error::ReadFailed(e))?;
             if line.trim().is_empty() {
                 break;
             } else {
@@ -55,10 +55,8 @@ impl Response {
                 }
             }
         }
-        let start = std::time::Instant::now();
         let mut body = String::default();
-        reader.read_to_string(&mut body).map_err(|_e| Error::ReadFailed)?;
-        println!("read body {:?}", start.elapsed());
+        reader.read_to_string(&mut body).map_err(|e| Error::ReadFailed(e))?;
         Ok(Response {
             version,
             status,

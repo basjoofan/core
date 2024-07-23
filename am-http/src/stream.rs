@@ -168,7 +168,23 @@ impl Read for Stream {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
             Stream::Plain { stream, .. } => stream.read(buf),
-            Stream::Cipher { stream, attach, .. } => rustls::Stream::new(attach, stream).read(buf),
+            Stream::Cipher {
+                ref mut stream, attach, ..
+            } => {
+                match rustls::Stream::new(attach, stream).read(buf) {
+                    Err(e) if e.kind() == std::io::ErrorKind::ConnectionAborted => {
+                        attach.send_close_notify();
+                        attach.complete_io(stream)?;
+                        Ok(0)
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                        // In some cases the server does not terminate the connection cleanly
+                        // We just turn that error into EOF.
+                        Ok(0)
+                    }
+                    r => r,
+                }
+            }
             #[cfg(test)]
             Stream::Mock(cursor) => cursor.read(buf),
         }

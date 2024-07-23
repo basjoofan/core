@@ -12,6 +12,8 @@ macro_rules! http_error {
         #[non_exhaustive]
         pub enum Error {
             InvalidUrl(String),
+            ReadFailed(std::io::Error),
+            WriteFailed(std::io::Error),
             $(
                 $name,
             )+
@@ -20,6 +22,8 @@ macro_rules! http_error {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
                     Error::InvalidUrl(string) => f.write_str(string),
+                    Error::ReadFailed(error) => error.fmt(f),
+                    Error::WriteFailed(error) => error.fmt(f),
                     $(
                         Error::$name => f.write_str($description),
                     )+
@@ -43,9 +47,7 @@ http_error! {
     TcpConnectFailed => "tcp connect failed",
     NoConnectionAvailable => "no connection available",
     TlsHandshakeFailed => "tls handshake failed",
-    WriteFailed => "write failed",
     WriteFlushFailed => "write flush failed",
     SetReadTimeoutFailed => "set read timeout failed",
     MultipartPrepareFailed => "multipart prepare failed",
-    ReadFailed => "read failed",
 }
