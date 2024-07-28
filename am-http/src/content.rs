@@ -13,8 +13,6 @@ impl Content<'_> {
             Content::Empty => Ok(()),
             Content::Byte(bytes) => Ok(writer.write_all(bytes).map_err(|e| Error::WriteFailed(e))?),
             Content::Multipart(ref mut prepared) => {
-                // let mut prepared: multipart::client::lazy::PreparedFields =
-                //     parts.prepare().map_err(|_e| Error::MultipartPrepareFailed)?;
                 std::io::copy(prepared, writer).map_err(|e| Error::WriteFailed(e))?;
                 Ok(())
             }

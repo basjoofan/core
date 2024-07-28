@@ -1,4 +1,3 @@
-// use crate::Body;
 use crate::Error;
 use crate::Header;
 use crate::Headers;
@@ -7,6 +6,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 
+#[derive(Default)]
 pub struct Response {
     /// The response's version
     pub version: String,
@@ -20,7 +20,7 @@ pub struct Response {
     pub body: String,
 }
 
-impl Response {
+impl  Response {
     /// Converts a stream to an http response.
     pub fn from(mut reader: BufReader<Stream>, f: Option<impl FnMut()>) -> Result<Response, Error> {
         let mut buf = Vec::with_capacity(1);

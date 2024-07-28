@@ -3,12 +3,13 @@ use crate::Error;
 use crate::Header;
 use crate::Headers;
 use crate::Method;
+use crate::Url;
 use crate::Version;
 use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
-use url::Url;
 
+#[derive(Default)]
 pub struct Request {
     /// The request's method
     pub method: Method,
@@ -24,18 +25,12 @@ pub struct Request {
 
 impl Request {
     /// Converts a message to an http request.
-    pub fn from(message: &str) -> Result<(Request, Content), Error> {
+    pub fn from(message: &str) -> (Request, Content) {
         let mut lines = message.trim().lines();
         if let Some(line) = lines.next() {
             let mut splits = line.split_whitespace();
             let method = Method::from(splits.next());
-            let url = match splits.next() {
-                Some(url) => match Url::parse(url) {
-                    Ok(url) => Ok(url),
-                    Err(error) => Err(Error::from(error)),
-                },
-                None => Err(Error::EmptyUrl),
-            }?;
+            let url = Url::from(splits.next());
             let version = Version::from(splits.next());
             let mut content_type = None;
             let mut headers = Headers::default();
@@ -80,7 +75,10 @@ impl Request {
                             body.push_str(line);
                         }
                     }
-                    content = Content::Multipart(parts.prepare().map_err(|_e| Error::MultipartPrepareFailed)?);
+                    match parts.prepare() {
+                        Ok(parts) => content = Content::Multipart(parts),
+                        Err(_) => content = Content::Empty,
+                    }
                 }
                 _ => {
                     body = String::from_iter(lines);
@@ -91,7 +89,7 @@ impl Request {
                     }
                 }
             }
-            Ok((
+            (
                 Request {
                     method,
                     url,
@@ -100,20 +98,15 @@ impl Request {
                     body,
                 },
                 content,
-            ))
+            )
         } else {
-            Err(Error::EmptyMessage)
+            (Request::default(), Content::Empty)
         }
     }
 
     pub fn write<W: Write>(&mut self, writer: W, mut content: Content) -> Result<(), Error> {
         let mut writer = BufWriter::new(writer);
-        write!(writer, "{} {}", self.method, self.url.path()).map_err(|e| Error::WriteFailed(e))?;
-        if let Some(query) = self.url.query() {
-            write!(writer, "?{}", query).map_err(|e| Error::WriteFailed(e))?;
-        }
-        write!(writer, " {}\r\n", self.version).map_err(|e| Error::WriteFailed(e))?;
-
+        write!(writer, "{} {} {}\r\n", self.method, self.url.path, self.version).map_err(|e| Error::WriteFailed(e))?;
         for header in self.headers.iter() {
             write!(writer, "{}: {}\r\n", header.name, header.value).map_err(|e| Error::WriteFailed(e))?;
         }
@@ -129,6 +122,6 @@ fn test_from_message_get() {
     let message = r#"
     GET http://httpbin.org/get
     Host: httpbin.org"#;
-    let (request, _content) = Request::from(message).unwrap();
+    let (request, _content) = Request::from(message);
     assert_eq!("GET", request.method.as_ref());
 }

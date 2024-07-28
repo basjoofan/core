@@ -1,7 +1,7 @@
-use crate::Error;
 use crate::Request;
 use crate::Response;
 use crate::Stream;
+use crate::Time;
 use std::io::BufReader;
 use std::time::Duration;
 use std::time::Instant;
@@ -12,48 +12,30 @@ pub struct Client {
     read_tiomeout: Option<Duration>,
 }
 
-#[derive(Debug)]
-pub struct Time {
-    pub start: Instant,
-    pub end: Instant,
-    pub total: Duration,
-    pub resolve: Duration,
-    pub connect: Duration,
-    pub write: Duration,
-    pub read: Duration,
-    pub delay: Duration,
-}
-
 impl Client {
     /// Send this request and wait for the result.
-    pub fn send(& self, message: & str) -> Result<(Request, Response, Time), Error> {
-        let (mut request, content) = Request::from(message)?;
-        let start = Instant::now();
-        let mut stream = Stream::connect(&request.url, self.connect_tiomeout, self.read_tiomeout)?;
-        let resolve = stream.resolve();
-        let connect = start.elapsed() - resolve;
-        request.write(&mut stream, content)?;
+    pub fn send(&self, message: &str) -> (Request, Response, Time, String) {
+        let (mut request, content) = Request::from(message);
+        let mut time = Time::new();
+        let mut stream = match Stream::connect(&request.url, self.connect_tiomeout, self.read_tiomeout) {
+            Ok(stream) => stream,
+            Err(error) => return (request, Response::default(), time, error.to_string()),
+        };
+        time.resolve = stream.resolve();
+        time.connect = time.start.elapsed() - time.resolve;
+        if let Err(error) = request.write(&mut stream, content) {
+            return (request, Response::default(), time, error.to_string());
+        };
         let read = Instant::now();
-        let mut delay = Duration::default();
-        let response = Response::from(BufReader::new(stream), Some(|| delay = read.elapsed()))?;
-        let read = read.elapsed() - delay;
-        let end = Instant::now();
-        let total = end - start;
-        let write = total - resolve - connect - read - delay;
-        Ok((
-            request,
-            response,
-            Time {
-                start,
-                end,
-                total,
-                resolve,
-                connect,
-                write,
-                read,
-                delay,
-            },
-        ))
+        let response = match Response::from(BufReader::new(stream), Some(|| time.delay = read.elapsed())) {
+            Ok(response) => response,
+            Err(error) => return (request, Response::default(), time, error.to_string()),
+        };
+        time.read = read.elapsed() - time.delay;
+        time.end = Instant::now();
+        time.total = time.end - time.start;
+        time.write = time.total - time.resolve - time.connect - time.read - time.delay;
+        (request, response, time, String::default())
     }
 }
 
@@ -64,7 +46,7 @@ fn test_send_message_get() {
     Host: www.baidu.com
     Connection: close"#;
     let client = Client::default();
-    let (request, response, time) = client.send(message).unwrap();
+    let (request, response, time, _) = client.send(message);
     assert_eq!("GET", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(
@@ -83,7 +65,7 @@ fn test_send_message_post() {
     Accept-Encoding: gzip, deflate
     Connection: close"#;
     let client = Client::default();
-    let (request, response, time) = client.send(message).unwrap();
+    let (request, response, time, _) = client.send(message);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(
@@ -104,7 +86,7 @@ fn test_send_message_post_form() {
 
     a: b"#;
     let client = Client::default();
-    let (request, response, time) = client.send(message).unwrap();
+    let (request, response, time, _) = client.send(message);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(
@@ -126,7 +108,7 @@ fn test_send_message_post_multipart() {
     a: b
     f: @src/lib.rs"#;
     let client = Client::default();
-    let (request, response, time) = client.send(message).unwrap();
+    let (request, response, time, _) = client.send(message);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(
@@ -159,7 +141,7 @@ fn test_send_message_post_json() {
     }
     "#;
     let client = Client::default();
-    let (request, response, time) = client.send(message).unwrap();
+    let (request, response, time, _) = client.send(message);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(

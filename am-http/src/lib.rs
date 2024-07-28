@@ -5,9 +5,10 @@ mod header;
 mod request;
 mod response;
 mod stream;
-
+mod url;
+mod time;
 pub use crate::client::Client;
-pub use crate::client::Time;
+pub use crate::time::Time;
 pub use crate::content::Content;
 pub use crate::error::Error;
 pub use crate::header::Header;
@@ -15,6 +16,7 @@ pub use crate::header::Headers;
 pub use crate::request::Request;
 pub use crate::response::Response;
 pub use crate::stream::Stream;
+pub use crate::url::Url;
 
 macro_rules! http_type {
     ($type: ident $(,$name: ident => $value: literal)+) => {
@@ -91,6 +93,14 @@ http_type! {
     Head => "HEAD",
     Trace => "TRACE",
     Connect => "CONNECT"
+}
+
+http_type! {
+    Scheme,
+    Http => "http",
+    Https => "https"
+    // Ws => "ws",
+    // Wss => "wss"
 }
 
 #[test]

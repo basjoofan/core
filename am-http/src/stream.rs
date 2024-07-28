@@ -1,4 +1,6 @@
 use crate::Error;
+use crate::Scheme;
+use crate::Url;
 use std::io::Read;
 use std::io::Write;
 use std::iter::{self, FusedIterator};
@@ -8,7 +10,6 @@ use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
-use url::Url;
 
 const RACE_DURATION: Duration = Duration::from_millis(200);
 
@@ -32,16 +33,15 @@ impl Stream {
         connect_tiomeout: Option<Duration>,
         read_tiomeout: Option<Duration>,
     ) -> Result<Self, Error> {
-        let host = url.host_str().ok_or(Error::EmptyUrlHost)?;
-        let port = url.port_or_known_default().ok_or(Error::InvalidUrlPort)?;
+        let host = url.host.as_str();
+        let port = url.port;
 
-        match url.scheme() {
-            "http" => {
+        match url.scheme {
+            Scheme::Http => {
                 let (stream, resolve) = Self::connect_tcp(host, port, connect_tiomeout, read_tiomeout)?;
                 Ok(Stream::Plain { stream, resolve })
             }
-            "https" => Self::connect_tls(host, port, connect_tiomeout, read_tiomeout),
-            _ => Err(Error::InvalidUrlScheme),
+            Scheme::Https => Self::connect_tls(host, port, connect_tiomeout, read_tiomeout),
         }
     }
 
