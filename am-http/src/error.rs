@@ -35,9 +35,6 @@ macro_rules! http_error {
 
 http_error! {
     EmptyMessage => "empty message",
-    InvalidMethod => "invalid method",
-    InvalidVersion => "invalid version",
-    InvalidStatus => "invalid status",
     EmptyUrl => "empty url",
     EmptyUrlHost => "empty url host",
     InvalidUrlHost => "invalid url host",

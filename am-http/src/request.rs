@@ -28,10 +28,7 @@ impl Request {
         let mut lines = message.trim().lines();
         if let Some(line) = lines.next() {
             let mut splits = line.split_whitespace();
-            let method = match splits.next() {
-                Some(method) => Method::try_from(method)?,
-                None => Method::default(),
-            };
+            let method = Method::from(splits.next());
             let url = match splits.next() {
                 Some(url) => match Url::parse(url) {
                     Ok(url) => Ok(url),
@@ -39,10 +36,7 @@ impl Request {
                 },
                 None => Err(Error::EmptyUrl),
             }?;
-            let version = match splits.next() {
-                Some(version) => Version::try_from(version)?,
-                None => Version::default(),
-            };
+            let version = Version::from(splits.next());
             let mut content_type = None;
             let mut headers = Headers::default();
             while let Some(line) = lines.next() {

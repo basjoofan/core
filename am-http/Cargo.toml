@@ -1,7 +1,7 @@
 [package]
 name = "am-http"
 version = "0.0.1"
-description = "http request"
+description = "http client"
 repository = "https://github.com/basjoofan/am"
 license = "MIT license"
 authors = ["Lamb <lambgao@me.com>"]

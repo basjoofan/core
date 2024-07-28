@@ -3,14 +3,13 @@ use crate::Error;
 use crate::Header;
 use crate::Headers;
 use crate::Stream;
-use crate::Version;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 
 pub struct Response {
     /// The response's version
-    pub version: Version,
+    pub version: String,
     /// The response's status
     pub status: u16,
     /// The response's reason
@@ -24,21 +23,15 @@ pub struct Response {
 impl Response {
     /// Converts a stream to an http response.
     pub fn from(mut reader: BufReader<Stream>, f: Option<impl FnMut()>) -> Result<Response, Error> {
-        let mut buf = [0; 1];
+        let mut buf = Vec::with_capacity(1);
         reader.read(&mut buf).map_err(|e| Error::ReadFailed(e))?;
         f.map(|mut f| f());
-        let mut line = String::from_utf8(buf.to_vec()).map_err(|_e| Error::InvalidVersion)?;
+        let mut line = String::from_utf8(buf).unwrap_or_default();
         reader.read_line(&mut line).map_err(|e| Error::ReadFailed(e))?;
         let mut splits = line.split_whitespace();
-        let version = match splits.next() {
-            Some(version) => Version::try_from(version),
-            None => Err(Error::InvalidVersion),
-        }?;
-        let status = match splits.next() {
-            Some(status) => status.parse::<u16>().map_err(|_e| Error::InvalidStatus),
-            None => Err(Error::InvalidStatus),
-        }?;
-        let reason = splits.next().unwrap_or_default().to_string();
+        let version = parse::<String>(splits.next());
+        let status = parse::<u16>(splits.next());
+        let reason = parse::<String>(splits.next());
         // headers
         let mut headers = Headers::default();
         loop {
@@ -64,6 +57,13 @@ impl Response {
             headers,
             body,
         })
+    }
+}
+
+fn parse<T: std::str::FromStr + std::default::Default>(str: Option<&str>) -> T {
+    match str {
+        Some(str) => str.parse::<T>().unwrap_or_default(),
+        None => T::default(),
     }
 }
 
