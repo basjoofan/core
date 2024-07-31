@@ -1,7 +1,7 @@
-use crate::Request;
-use crate::Response;
-use crate::Stream;
-use crate::Time;
+use super::Request;
+use super::Response;
+use super::Stream;
+use super::Time;
 use std::io::BufReader;
 use std::time::Duration;
 use std::time::Instant;

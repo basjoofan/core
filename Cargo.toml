@@ -1,6 +1,34 @@
-[workspace]
-resolver = "2"
-members = [
-    "am",
-    "am-*",
-]
+[package]
+name = "am"
+version = "0.0.1"
+description = "Continuous Test"
+repository = "https://github.com/basjoofan/am"
+license = "MIT license"
+authors = ["Lamb <lamb@basjoo.fan>"]
+keywords = ["test", "continuous"]
+edition = "2021"
+
+[lib]
+name = "am"
+path = "src/lib.rs"
+crate-type = ["lib"]
+
+[[bin]]
+name = "am"
+path = "src/main.rs"
+
+[dependencies]
+rustls = { version = "0.23.11", default-features = false, features = ["tls12", "std", "ring"]  }
+webpki-roots = "0.26.3"
+form_urlencoded = "1.2.1"
+multipart = { version = "0.18.0", default-features = false, features = ["client"]  }
+uuid = { version = "1.8.0", features = ["v7"] }
+ctrlc = "3.4.4"
+avro = { version = "0.16", features = ["zstandard"], package = "apache-avro" }
+clap = { version = "4.5.7", features = ["derive"] }
+humantime = "2.1.0"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+assert_fs = "1.0"
+predicates = "3.0"

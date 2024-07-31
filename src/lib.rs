@@ -1,6 +1,7 @@
 pub mod command;
 mod context;
 mod evaluator;
+mod http;
 mod lexer;
 mod native;
 mod parser;

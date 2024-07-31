@@ -1,4 +1,4 @@
-use crate::Scheme;
+use super::Scheme;
 
 pub struct Url {
     pub scheme: Scheme,

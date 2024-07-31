@@ -1,7 +1,7 @@
+use crate::http::Client;
 use crate::native;
 use crate::record::Record;
 use crate::value::Value;
-use http::Client;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
