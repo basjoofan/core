@@ -5,10 +5,9 @@ mod header;
 mod request;
 mod response;
 mod stream;
-mod url;
 mod time;
+mod url;
 pub use crate::client::Client;
-pub use crate::time::Time;
 pub use crate::content::Content;
 pub use crate::error::Error;
 pub use crate::header::Header;
@@ -16,6 +15,7 @@ pub use crate::header::Headers;
 pub use crate::request::Request;
 pub use crate::response::Response;
 pub use crate::stream::Stream;
+pub use crate::time::Time;
 pub use crate::url::Url;
 
 macro_rules! http_type {

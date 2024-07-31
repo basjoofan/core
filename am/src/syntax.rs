@@ -1,4 +1,4 @@
-use super::token::Token;
+use crate::token::Token;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
@@ -85,7 +85,7 @@ impl Display for Expr {
                         .collect::<Vec<String>>()
                         .join(", ")
                 )?;
-                if alternative.len() > 0 {
+                if !alternative.is_empty() {
                     write!(
                         f,
                         "}} else {{ {}",
@@ -167,7 +167,7 @@ impl Display for Expr {
                             if let Expr::String(token, _) = e {
                                 token.to_string()
                             } else {
-                                format!("${{{}}}", e.to_string())
+                                format!("${{{}}}", e)
                             }
                         })
                         .collect::<String>(),
@@ -197,10 +197,10 @@ impl<'a, T: std::fmt::Display> std::fmt::Display for May<'a, T> {
 fn test_program_display() {
     let p = Source {
         expressions: vec![Expr::Let(
-            Token::new(super::token::Kind::Let, String::from("let")),
+            Token::new(crate::token::Kind::Let, String::from("let")),
             Some(String::from("myVar")),
             Some(Box::new(Expr::Ident(
-                Token::new(super::token::Kind::Ident, String::from("anotherVar")),
+                Token::new(crate::token::Kind::Ident, String::from("anotherVar")),
                 String::from("anotherVar"),
             ))),
         )],

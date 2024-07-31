@@ -9,12 +9,12 @@ keywords = ["test", "continuous"]
 edition = "2021"
 
 [dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "macos-system-configuration", "multipart", "stream", "rustls-tls", "hickory-dns"] }
-tokio = { version = "1", features = ["rt", "net", "fs"] }
-tokio-util = { version = "0.7", features = ["codec"] }
+http = { path = "../am-http", package = "am-http" }
 uuid = { version = "1.8.0", features = ["v7"] }
 ctrlc = "3.4.4"
-apache-avro = { version = "0.16", features = ["zstandard"] }
+avro = { version = "0.16", features = ["zstandard"], package = "apache-avro" }
 
 [dev-dependencies]
-tokio-test = "*"
+assert_cmd = "2.0.14"
+assert_fs = "1.1.1"
+predicates = "3.1.0"

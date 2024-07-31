@@ -11,9 +11,9 @@ impl Content<'_> {
     pub fn write<W: Write>(&mut self, writer: &mut W) -> Result<(), Error> {
         match self {
             Content::Empty => Ok(()),
-            Content::Byte(bytes) => Ok(writer.write_all(bytes).map_err(|e| Error::WriteFailed(e))?),
+            Content::Byte(bytes) => Ok(writer.write_all(bytes).map_err(Error::WriteFailed)?),
             Content::Multipart(ref mut prepared) => {
-                std::io::copy(prepared, writer).map_err(|e| Error::WriteFailed(e))?;
+                std::io::copy(prepared, writer).map_err(Error::WriteFailed)?;
                 Ok(())
             }
         }

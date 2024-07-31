@@ -1,15 +1,8 @@
-use super::native;
-use super::record::Group;
-use super::record::Record;
-use super::syntax::Expr;
-use reqwest::Client;
-use std::borrow::BorrowMut;
+use crate::syntax::Expr;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
-use std::sync::mpsc::Sender;
-use uuid::Uuid;
 
 #[derive(Clone, PartialEq)]
 pub enum Value {
@@ -29,10 +22,7 @@ pub enum Value {
 
 impl Value {
     pub fn is_error(&self) -> bool {
-        match self {
-            Value::Error(_) => true,
-            _ => false,
-        }
+        matches!(self, Value::Error(_))
     }
 
     pub fn kind(&self) -> &str {
@@ -100,7 +90,7 @@ impl Display for Value {
                         if let Expr::String(token, _) = e {
                             token.to_string()
                         } else {
-                            format!("${{{}}}", e.to_string())
+                            format!("${{{}}}", e)
                         }
                     })
                     .collect::<String>(),
@@ -111,79 +101,5 @@ impl Display for Value {
                     .join(", ")
             ),
         }
-    }
-}
-
-#[derive(Clone)]
-pub struct Context {
-    // TODO inner use Arc
-    inner: HashMap<String, Value>,
-    client: Client,
-    sender: Option<Sender<Record>>,
-    // TODO group use Arc
-    group: Group,
-}
-
-impl Default for Context {
-    fn default() -> Self {
-        let mut inner = HashMap::default();
-        inner.insert(String::from("print"), Value::Native(native::print));
-        inner.insert(String::from("println"), Value::Native(native::println));
-        inner.insert(String::from("length"), Value::Native(native::length));
-        let client = Client::new();
-        let group = Group::default();
-        Context {
-            inner,
-            client,
-            sender: None,
-            group,
-        }
-    }
-}
-
-impl Context {
-    pub fn clone(parent: &Context) -> Context {
-        let clone = parent.clone();
-        Context {
-            inner: clone.inner,
-            client: clone.client,
-            sender: clone.sender,
-            group: clone.group,
-        }
-    }
-
-    pub fn set_sender(&mut self, sender: &Sender<Record>) {
-        self.sender = Some(sender.clone());
-    }
-
-    pub fn send(&mut self, record: &Record) {
-        if let Some(sender) = &self.sender {
-            let _ = sender.send(record.clone());
-        }
-    }
-
-    pub fn set(&mut self, name: String, value: Value) {
-        self.inner.borrow_mut().insert(name, value);
-    }
-
-    pub fn get(&self, name: &str) -> Option<Value> {
-        if let Some(value) = self.inner.get(name) {
-            return Some(value.clone());
-        }
-        None
-    }
-
-    pub fn client(&self) -> Client {
-        self.client.clone()
-    }
-
-    pub fn set_group(&mut self, name: &String) {
-        let id = Uuid::now_v7().to_string();
-        let name = name.clone();
-        self.group = Group { id, name };
-    }
-
-    pub fn group(&self) -> Group {
-        self.group.clone()
     }
 }

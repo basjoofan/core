@@ -20,14 +20,16 @@ pub struct Response {
     pub body: String,
 }
 
-impl  Response {
+impl Response {
     /// Converts a stream to an http response.
     pub fn from(mut reader: BufReader<Stream>, f: Option<impl FnMut()>) -> Result<Response, Error> {
         let mut buf = Vec::with_capacity(1);
-        reader.read(&mut buf).map_err(|e| Error::ReadFailed(e))?;
-        f.map(|mut f| f());
+        reader.read(&mut buf).map_err(Error::ReadFailed)?;
+        if let Some(mut f) = f {
+            f()
+        }
         let mut line = String::from_utf8(buf).unwrap_or_default();
-        reader.read_line(&mut line).map_err(|e| Error::ReadFailed(e))?;
+        reader.read_line(&mut line).map_err(Error::ReadFailed)?;
         let mut splits = line.split_whitespace();
         let version = parse::<String>(splits.next());
         let status = parse::<u16>(splits.next());
@@ -36,20 +38,18 @@ impl  Response {
         let mut headers = Headers::default();
         loop {
             let mut line = String::new();
-            reader.read_line(&mut line).map_err(|e| Error::ReadFailed(e))?;
+            reader.read_line(&mut line).map_err(Error::ReadFailed)?;
             if line.trim().is_empty() {
                 break;
-            } else {
-                if let Some((name, value)) = line.split_once(':') {
-                    headers.insert(Header {
-                        name: name.trim().to_string(),
-                        value: value.trim().to_string(),
-                    });
-                }
+            } else if let Some((name, value)) = line.split_once(':') {
+                headers.insert(Header {
+                    name: name.trim().to_string(),
+                    value: value.trim().to_string(),
+                });
             }
         }
         let mut body = String::default();
-        reader.read_to_string(&mut body).map_err(|e| Error::ReadFailed(e))?;
+        reader.read_to_string(&mut body).map_err(Error::ReadFailed)?;
         Ok(Response {
             version,
             status,

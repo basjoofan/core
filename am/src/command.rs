@@ -1,11 +1,11 @@
-use super::evaluator::eval_call_name;
-use super::parser::Parser;
-use super::record;
-use super::record::Record;
-use super::stat::Stats;
-use super::syntax::Expr;
-use super::value::Context;
-use super::value::Value;
+use crate::context::Context;
+use crate::evaluator::eval_call_name;
+use crate::parser::Parser;
+use crate::record;
+use crate::record::Record;
+use crate::stat::Stats;
+use crate::syntax::Expr;
+use crate::value::Value;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -22,14 +22,12 @@ pub fn repl() {
     let mut lines = stdin().lock().lines();
     let mut context = Context::default();
     loop {
-        if let Some(line) = lines.next() {
-            if let Ok(text) = line {
-                if text == "exit" {
-                    break;
-                }
-                let source = Parser::new(&text).parse();
-                print_error(source.eval(&mut context));
+        if let Some(Ok(text)) = lines.next() {
+            if text == "exit" {
+                break;
             }
+            let source = Parser::new(&text).parse();
+            print_error(source.eval(&mut context));
         }
     }
 }
@@ -59,7 +57,7 @@ pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32,
         let continuous = continuous.clone();
         let mut context = context.clone();
         context.set_sender(&sender);
-        context.set_group(&name);
+        context.set_name(&name);
         let name = name.clone();
         std::thread::spawn(move || {
             let mut i = iterations;
@@ -93,7 +91,7 @@ pub fn test(tag: String, file: Option<PathBuf>) {
             if tags.contains(&tag) {
                 let mut context = context.clone();
                 context.set_sender(&sender);
-                context.set_group(&name);
+                context.set_name(&name);
                 std::thread::spawn(move || {
                     print_error(eval_call_name(&name, &mut context));
                 });
@@ -104,35 +102,29 @@ pub fn test(tag: String, file: Option<PathBuf>) {
     process_record(receiver, file);
 }
 
-fn process_record(receiver: Receiver<Record>, file: Option<PathBuf>) {
+fn process_record(receiver: Receiver<(String, String, Record)>, file: Option<PathBuf>) {
     let schema = record::schema();
     let mut writer = record::writer(&schema, file);
     let mut stats = Stats::default();
-    for record in receiver {
+    for (id, name, record) in receiver {
         // print record
-        println!("=== TEST  {}/{}", record.group.name, record.request.name);
+        println!("=== TEST  {}/{}", name, record.name);
         let mut result = true;
         record.asserts.iter().for_each(|assert| {
             result &= assert.result;
             println!("{}", assert);
         });
         if result {
-            println!(
-                "--- PASS  {}/{} ({:?})",
-                record.group.name, record.request.name, record.duration
-            );
+            println!("--- PASS  {}/{} ({:?})", name, record.name, record.time.total);
         } else {
-            println!(
-                "--- FAIL  {}/{} ({:?})",
-                record.group.name, record.request.name, record.duration
-            );
-        }
-        // store record
-        if let Some(ref mut writer) = writer {
-            let _ = writer.append(record.to_record(&schema));
+            println!("--- FAIL  {}/{} ({:?})", name, record.name, record.time.total);
         }
         // stat record
-        stats.add(&record.request.name, record.duration.as_millis())
+        stats.add(&record.name, record.time.total.as_millis());
+        // store record
+        if let Some(ref mut writer) = writer {
+            let _ = writer.append(record.to(id, name, &schema));
+        }
     }
     if let Some(ref mut writer) = writer {
         let _ = writer.flush();
@@ -154,15 +146,11 @@ fn read_to_string(path: PathBuf) -> String {
 
 fn read(path: PathBuf, text: &mut String) -> std::io::Result<()> {
     if path.is_dir() {
-        for entry in std::fs::read_dir(path)? {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                read(path, text)?;
-            }
+        for entry in (std::fs::read_dir(path)?).flatten() {
+            read(entry.path(), text)?;
         }
     } else if path.is_file() && path.extension() == Some(std::ffi::OsStr::new(NAME)) {
         text.push_str(&std::fs::read_to_string(path)?)
-    } else {
     }
     Ok(())
 }

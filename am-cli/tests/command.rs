@@ -120,7 +120,7 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     "#;
     file.write_str(text)?;
     let mut cmd = Command::cargo_bin(NAME)?;
-    cmd.current_dir(temp.to_path_buf());
+    cmd.current_dir(&temp);
     cmd.arg("test");
     cmd.assert()
         .success()
@@ -147,14 +147,14 @@ fn test_command_call() -> Result<(), Box<dyn std::error::Error>> {
     "#;
     file.write_str(text)?;
     let mut cmd = Command::cargo_bin(NAME)?;
-    cmd.current_dir(temp.to_path_buf());
+    cmd.current_dir(&temp);
     cmd.arg("blow").arg("call");
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("--- PASS  call/request ("));
 
     let mut cmd = Command::cargo_bin(NAME)?;
-    cmd.current_dir(temp.to_path_buf());
+    cmd.current_dir(&temp);
     cmd.arg("blow").arg("blank");
     cmd.assert().success().stdout(predicate::str::contains("not found"));
     Ok(())

@@ -34,18 +34,16 @@ impl Request {
             let version = Version::from(splits.next());
             let mut content_type = None;
             let mut headers = Headers::default();
-            while let Some(line) = lines.next() {
+            for line in lines.by_ref() {
                 if line.trim().is_empty() {
                     break;
-                } else {
-                    if let Some((name, value)) = line.trim().split_once(':') {
-                        headers.insert(Header {
-                            name: name.trim().to_string(),
-                            value: value.trim().to_string(),
-                        });
-                        if content_type.is_none() && name.trim().to_lowercase() == "content-type" {
-                            content_type = Some(value.trim());
-                        }
+                } else if let Some((name, value)) = line.trim().split_once(':') {
+                    headers.insert(Header {
+                        name: name.trim().to_string(),
+                        value: value.trim().to_string(),
+                    });
+                    if content_type.is_none() && name.trim().to_lowercase() == "content-type" {
+                        content_type = Some(value.trim());
                     }
                 }
             }
@@ -54,7 +52,7 @@ impl Request {
             match content_type {
                 Some("application/x-www-form-urlencoded") => {
                     let mut serializer = form_urlencoded::Serializer::new(String::default());
-                    while let Some(line) = lines.next() {
+                    for line in lines.by_ref() {
                         if let Some((name, value)) = line.trim().split_once(':') {
                             serializer.append_pair(name, value);
                             body.push_str(line);
@@ -64,7 +62,7 @@ impl Request {
                 }
                 Some("multipart/form-data") => {
                     let mut parts = multipart::client::lazy::Multipart::new();
-                    while let Some(line) = lines.next() {
+                    for line in lines.by_ref() {
                         if let Some((name, value)) = line.trim().split_once(':') {
                             let (name, value) = (name.trim(), value.trim());
                             if value.starts_with('@') {
@@ -106,11 +104,11 @@ impl Request {
 
     pub fn write<W: Write>(&mut self, writer: W, mut content: Content) -> Result<(), Error> {
         let mut writer = BufWriter::new(writer);
-        write!(writer, "{} {} {}\r\n", self.method, self.url.path, self.version).map_err(|e| Error::WriteFailed(e))?;
+        write!(writer, "{} {} {}\r\n", self.method, self.url.path, self.version).map_err(Error::WriteFailed)?;
         for header in self.headers.iter() {
-            write!(writer, "{}: {}\r\n", header.name, header.value).map_err(|e| Error::WriteFailed(e))?;
+            write!(writer, "{}: {}\r\n", header.name, header.value).map_err(Error::WriteFailed)?;
         }
-        write!(writer, "\r\n").map_err(|e| Error::WriteFailed(e))?;
+        write!(writer, "\r\n").map_err(Error::WriteFailed)?;
         content.write(&mut writer)?;
         writer.flush().map_err(|_e| Error::WriteFlushFailed)?;
         Ok(())

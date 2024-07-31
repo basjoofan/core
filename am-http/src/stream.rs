@@ -21,7 +21,7 @@ pub enum Stream {
     Cipher {
         stream: TcpStream,
         resolve: Duration,
-        attach: rustls::ClientConnection,
+        attach: Box<rustls::ClientConnection>,
     },
     #[cfg(test)]
     Mock(std::io::Cursor<Vec<u8>>),
@@ -145,7 +145,7 @@ impl Stream {
                 .with_no_client_auth(),
         );
         let name = host.to_owned().try_into().map_err(|_e| Error::InvalidUrlHost)?;
-        let attach = rustls::ClientConnection::new(config, name).map_err(|_e| Error::TlsHandshakeFailed)?;
+        let attach = Box::new(rustls::ClientConnection::new(config, name).map_err(|_e| Error::TlsHandshakeFailed)?);
         let (stream, resolve) = Self::connect_tcp(host, port, connect_tiomeout, read_tiomeout)?;
         Ok(Stream::Cipher {
             attach,
@@ -171,7 +171,7 @@ impl Read for Stream {
             Stream::Cipher {
                 ref mut stream, attach, ..
             } => {
-                match rustls::Stream::new(attach, stream).read(buf) {
+                match rustls::Stream::new(attach.as_mut(), stream).read(buf) {
                     Err(e) if e.kind() == std::io::ErrorKind::ConnectionAborted => {
                         attach.send_close_notify();
                         attach.complete_io(stream)?;
@@ -195,7 +195,7 @@ impl Write for Stream {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match self {
             Stream::Plain { stream, .. } => stream.write(buf),
-            Stream::Cipher { stream, attach, .. } => rustls::Stream::new(attach, stream).write(buf),
+            Stream::Cipher { stream, attach, .. } => rustls::Stream::new(attach.as_mut(), stream).write(buf),
             #[cfg(test)]
             Stream::Mock(cursor) => cursor.write(buf),
         }
@@ -204,7 +204,7 @@ impl Write for Stream {
     fn flush(&mut self) -> std::io::Result<()> {
         match self {
             Stream::Plain { stream, .. } => stream.flush(),
-            Stream::Cipher { stream, attach, .. } => rustls::Stream::new(attach, stream).flush(),
+            Stream::Cipher { stream, attach, .. } => rustls::Stream::new(attach.as_mut(), stream).flush(),
             #[cfg(test)]
             Stream::Mock(cursor) => cursor.flush(),
         }

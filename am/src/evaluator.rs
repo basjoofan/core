@@ -1,13 +1,12 @@
-use super::record::Assert;
-use super::record::Record;
-use super::request;
-use super::syntax::Expr;
-use super::syntax::Source;
-use super::token::{Kind, Token};
-use super::value::Context;
-use super::value::Value;
+use crate::context::Context;
+use crate::record::Assert;
+use crate::record::Record;
+use crate::record::ToValue;
+use crate::syntax::Expr;
+use crate::syntax::Source;
+use crate::token::{Kind, Token};
+use crate::value::Value;
 use std::collections::HashMap;
-use tokio::runtime::Builder;
 
 impl Source {
     pub fn eval(&self, context: &mut Context) -> Value {
@@ -68,9 +67,9 @@ fn eval_let_expression(
             return value;
         }
         context.set(variable_name.clone(), value.clone());
-        return value;
+        value
     } else {
-        return Value::Error(format!("variable:{} value is none", token));
+        Value::Error(format!("variable:{} value is none", token))
     }
 }
 
@@ -80,9 +79,9 @@ fn eval_return_expression(value: &Option<Box<Expr>>, context: &mut Context) -> V
         if value.is_error() {
             return value;
         }
-        return Value::Return(Box::new(value));
+        Value::Return(Box::new(value))
     } else {
-        return Value::Error(format!("return value expression is none"));
+        Value::Error("return value expression is none".to_string())
     }
 }
 
@@ -118,8 +117,8 @@ fn eval_boolean_literal(value: &Option<bool>) -> Value {
     }
 }
 
-fn eval_string_literal(string: &String) -> Value {
-    Value::String(string.clone())
+fn eval_string_literal(string: &str) -> Value {
+    Value::String(string.to_owned())
 }
 
 fn eval_unary_expression(token: &Token, right: &Option<Box<Expr>>, context: &mut Context) -> Value {
@@ -220,8 +219,8 @@ fn eval_binary_float(token: &Token, left: f64, right: f64) -> Value {
 
 fn eval_binary_boolean(token: &Token, left: bool, right: bool) -> Value {
     match token.kind {
-        Kind::Lt => Value::Boolean(left < right),
-        Kind::Gt => Value::Boolean(left > right),
+        Kind::Lt => Value::Boolean(left & !right),
+        Kind::Gt => Value::Boolean(!left & right),
         Kind::Eq => Value::Boolean(left == right),
         Kind::Ne => Value::Boolean(left != right),
         _ => Value::Error(format!("not support operator: {}{}{}", left, token, right)),
@@ -245,17 +244,17 @@ fn eval_paren_expression(value: &Option<Box<Expr>>, context: &mut Context) -> Va
         if value.is_error() {
             return value;
         }
-        return value;
+        value
     } else {
-        return Value::Error(format!("paren value expression is none"));
+        Value::Error("paren value expression is none".to_string())
     }
 }
 
 fn eval_if_expression(
     token: &Token,
     condition: &Option<Box<Expr>>,
-    consequence: &Vec<Expr>,
-    alternative: &Vec<Expr>,
+    consequence: &[Expr],
+    alternative: &[Expr],
     context: &mut Context,
 ) -> Value {
     let condition = if let Some(condition) = condition {
@@ -272,8 +271,8 @@ fn eval_if_expression(
     }
 }
 
-fn eval_function_literal(parameters: &Vec<String>, body: &Vec<Expr>) -> Value {
-    Value::Function(parameters.clone(), body.clone())
+fn eval_function_literal(parameters: &[String], body: &[Expr]) -> Value {
+    Value::Function(parameters.to_owned(), body.to_owned())
 }
 
 fn eval_function_expression(
@@ -296,11 +295,11 @@ fn eval_function_expression(
     }
 }
 
-fn eval_call_expression(invoke: &Option<Box<Expr>>, arguments: &Vec<Expr>, context: &mut Context) -> Value {
+fn eval_call_expression(invoke: &Option<Box<Expr>>, arguments: &[Expr], context: &mut Context) -> Value {
     let invoke = if let Some(invoke) = invoke {
         eval_expression(invoke, context)
     } else {
-        Value::Error(format!("call expression function is none"))
+        Value::Error("call expression function is none".to_string())
     };
     if invoke.is_error() {
         return invoke;
@@ -336,17 +335,17 @@ pub fn eval_call_name(name: &String, context: &mut Context) -> Value {
     eval_call_value(invoke, Vec::new(), context)
 }
 
-fn eval_array_literal(elements: &Vec<Expr>, context: &mut Context) -> Value {
+fn eval_array_literal(elements: &[Expr], context: &mut Context) -> Value {
     let elements = eval_expressions(elements, context);
     if let Some(last) = elements.last() {
         if last.is_error() {
             return last.clone();
         }
     }
-    return Value::Array(elements);
+    Value::Array(elements)
 }
 
-fn eval_expressions(elements: &Vec<Expr>, context: &mut Context) -> Vec<Value> {
+fn eval_expressions(elements: &[Expr], context: &mut Context) -> Vec<Value> {
     let mut objects = Vec::new();
     for element in elements {
         let value = eval_expression(element, context);
@@ -355,7 +354,7 @@ fn eval_expressions(elements: &Vec<Expr>, context: &mut Context) -> Vec<Value> {
             return objects;
         }
     }
-    return objects;
+    objects
 }
 
 fn eval_map_literal(map: &Vec<(Expr, Expr)>, context: &mut Context) -> Value {
@@ -379,7 +378,7 @@ fn eval_index_expression(left: &Option<Box<Expr>>, index: &Option<Box<Expr>>, co
     let left = if let Some(left) = left {
         eval_expression(left, context)
     } else {
-        Value::Error(format!("index expression left is none"))
+        Value::Error("index expression left is none".to_string())
     };
     if left.is_error() {
         return left;
@@ -387,7 +386,7 @@ fn eval_index_expression(left: &Option<Box<Expr>>, index: &Option<Box<Expr>>, co
     let index = if let Some(index) = index {
         eval_expression(index, context)
     } else {
-        Value::Error(format!("index expression index is none"))
+        Value::Error("index expression index is none".to_string())
     };
     if index.is_error() {
         return index;
@@ -415,7 +414,7 @@ fn eval_field_expression(object: &Option<Box<Expr>>, field: &Option<String>, con
     let object = if let Some(object) = object {
         eval_expression(object, context)
     } else {
-        Value::Error(format!("index expression left is none"))
+        Value::Error("index expression left is none".to_string())
     };
     if object.is_error() {
         return object;
@@ -428,12 +427,12 @@ fn eval_field_expression(object: &Option<Box<Expr>>, field: &Option<String>, con
                 None => Value::None,
             }
         }
-        (_, None) => Value::Error(format!("field name is none")),
+        (_, None) => Value::Error("field name is none".to_string()),
         (_, _) => Value::Error(format!("field operator not support: {}", object.kind())),
     }
 }
 
-fn eval_block_expression(expressions: &Vec<Expr>, context: &mut Context) -> Value {
+fn eval_block_expression(expressions: &[Expr], context: &mut Context) -> Value {
     let mut result = Value::None;
     for expression in expressions.iter() {
         result = eval_expression(expression, context);
@@ -446,8 +445,8 @@ fn eval_block_expression(expressions: &Vec<Expr>, context: &mut Context) -> Valu
     result
 }
 
-fn eval_request_literal(name: &String, pieces: &Vec<Expr>, asserts: &Vec<Expr>) -> Value {
-    Value::Request(name.clone(), pieces.clone(), asserts.clone())
+fn eval_request_literal(name: &str, pieces: &[Expr], asserts: &[Expr]) -> Value {
+    Value::Request(name.to_owned(), pieces.to_owned(), asserts.to_owned())
 }
 
 fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Expr>, context: &mut Context) -> Value {
@@ -455,12 +454,11 @@ fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Exp
         .iter()
         .map(|p| eval_expression(p, context).to_string())
         .collect::<String>();
-    let client = context.client();
-    let runtime = Builder::new_current_thread().enable_all().build().unwrap();
-    // TODO unwrap error
-    let (duration, request, response) = runtime.block_on(request::send(client, &message, name)).unwrap();
-    if let Value::Map(map) = response.to_value() {
-        map.into_iter().for_each(|(key, value)| context.set(key, value))
+    let (request, response, time, error) = context.client().send(&message);
+    let value = response.to_value();
+    if let Value::Map(map) = &value {
+        map.iter()
+            .for_each(|(key, value)| context.set(key.clone(), value.clone()))
     }
     let mut asserts = Vec::new();
     for expression in expressions {
@@ -475,7 +473,7 @@ fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Exp
             } else {
                 Value::None
             };
-            let result = if let Value::Boolean(boolean) = eval_binary_operator(&token, &left, &right) {
+            let result = if let Value::Boolean(boolean) = eval_binary_operator(token, &left, &right) {
                 boolean
             } else {
                 false
@@ -491,14 +489,15 @@ fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Exp
         }
     }
     let record = Record {
-        group: context.group(),
-        duration,
+        name,
+        time,
         request,
         response,
         asserts,
+        error,
     };
-    context.send(&record);
-    record.to_value()
+    context.send(record);
+    value
 }
 
 // TODO test error handling
@@ -513,11 +512,11 @@ fn test_native_function() {
         (r#"length("hello world")"#, Value::Integer(11)),
         (
             r#"length(1)"#,
-            Value::Error(format!("function length not supported type Integer")),
+            Value::Error("function length not supported type Integer".to_string()),
         ),
         (
             r#"length("one", "two")"#,
-            Value::Error(format!("wrong number of arguments. got=2, want=1")),
+            Value::Error("wrong number of arguments. got=2, want=1".to_string()),
         ),
         (r#"length([1, 2, 3])"#, Value::Integer(3)),
         (r#"length([])"#, Value::Integer(0)),
@@ -1026,9 +1025,10 @@ fn test_eval_request_expression() {
     rq request`
       GET http://${host}/get
       Host: ${host}
+      Connection: close
     `[status == 200];
     let host = "httpbin.org";
-    let response = request().response;
+    let response = request();
     response.status"#;
     let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
@@ -1043,21 +1043,20 @@ fn test_send_record() {
     rq request`
       GET http://${host}/get
       Host: ${host}
+      Connection: close
     `[status == 200];
     let host = "httpbin.org";
-    let response = request().response;
+    let response = request();
     response.status"#;
     let source = crate::parser::Parser::new(text).parse();
     let mut context = Context::default();
     let (sender, receiver) = std::sync::mpsc::channel();
     context.set_sender(&sender);
-    std::thread::spawn(move || {
-        let evaluated = source.eval(&mut context);
-        println!("evaluated:{}", evaluated);
-        assert!(evaluated == Value::Integer(200));
-    });
+    let evaluated = std::thread::spawn(move || source.eval(&mut context)).join().unwrap();
+    println!("evaluated:{}", evaluated);
+    assert!(evaluated == Value::Integer(200));
     std::mem::drop(sender);
-    for record in receiver {
-        println!("{}", record);
+    for (_, _, record) in receiver {
+        println!("response.status: {:?}", record.response.status);
     }
 }

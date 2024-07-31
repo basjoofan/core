@@ -5,6 +5,7 @@ use crate::Time;
 use std::io::BufReader;
 use std::time::Duration;
 use std::time::Instant;
+use std::time::SystemTime;
 
 #[derive(Default)]
 pub struct Client {
@@ -16,13 +17,14 @@ impl Client {
     /// Send this request and wait for the result.
     pub fn send(&self, message: &str) -> (Request, Response, Time, String) {
         let (mut request, content) = Request::from(message);
-        let mut time = Time::new();
+        let mut time = Time::default();
+        let start = Instant::now();
         let mut stream = match Stream::connect(&request.url, self.connect_tiomeout, self.read_tiomeout) {
             Ok(stream) => stream,
             Err(error) => return (request, Response::default(), time, error.to_string()),
         };
         time.resolve = stream.resolve();
-        time.connect = time.start.elapsed() - time.resolve;
+        time.connect = start.elapsed() - time.resolve;
         if let Err(error) = request.write(&mut stream, content) {
             return (request, Response::default(), time, error.to_string());
         };
@@ -32,8 +34,11 @@ impl Client {
             Err(error) => return (request, Response::default(), time, error.to_string()),
         };
         time.read = read.elapsed() - time.delay;
-        time.end = Instant::now();
-        time.total = time.end - time.start;
+        let end = Instant::now();
+        time.total = end - start;
+        time.end = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
         time.write = time.total - time.resolve - time.connect - time.read - time.delay;
         (request, response, time, String::default())
     }
@@ -53,7 +58,7 @@ fn test_send_message_get() {
         time.total,
         time.resolve + time.connect + time.write + time.delay + time.read
     );
-    println!("{:?}", time);
+    println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
 
@@ -72,7 +77,7 @@ fn test_send_message_post() {
         time.total,
         time.resolve + time.connect + time.write + time.delay + time.read
     );
-    println!("{:?}", time);
+    println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
 
@@ -93,7 +98,7 @@ fn test_send_message_post_form() {
         time.total,
         time.resolve + time.connect + time.write + time.delay + time.read
     );
-    println!("{:?}", time);
+    println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
 
@@ -115,7 +120,7 @@ fn test_send_message_post_multipart() {
         time.total,
         time.resolve + time.connect + time.write + time.delay + time.read
     );
-    println!("{:?}", time);
+    println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
 
@@ -148,6 +153,6 @@ fn test_send_message_post_json() {
         time.total,
         time.resolve + time.connect + time.write + time.delay + time.read
     );
-    println!("{:?}", time);
+    println!("{:?}", time.total);
     println!("{:?}", response.body);
 }

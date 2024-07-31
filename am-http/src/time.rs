@@ -1,22 +1,22 @@
-
 use std::time::Duration;
-use std::time::Instant;
+use std::time::SystemTime;
 
-#[derive(Debug)]
 pub struct Time {
-    pub start: Instant,
-    pub end: Instant,
+    pub start: Duration,
+    pub end: Duration,
     pub total: Duration,
     pub resolve: Duration,
     pub connect: Duration,
     pub write: Duration,
-    pub read: Duration,
     pub delay: Duration,
+    pub read: Duration,
 }
 
-impl Time {
-    pub fn new() -> Self {
-        let now = Instant::now();
+impl Default for Time {
+    fn default() -> Self {
+        let now = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
         Self {
             start: now,
             end: now,
@@ -24,8 +24,8 @@ impl Time {
             resolve: Duration::ZERO,
             connect: Duration::ZERO,
             write: Duration::ZERO,
-            read: Duration::ZERO,
             delay: Duration::ZERO,
+            read: Duration::ZERO,
         }
     }
 }

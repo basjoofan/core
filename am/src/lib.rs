@@ -1,10 +1,10 @@
 pub mod command;
+mod context;
 mod evaluator;
 mod lexer;
 mod native;
 mod parser;
 mod record;
-mod request;
 mod stat;
 mod syntax;
 mod token;
