@@ -1,4 +1,4 @@
-name: Continuous Integration
+name: build
 on:
   push:
     branches:
@@ -42,23 +42,23 @@ jobs:
             !./target/*/*/*.zip
             !./target/*/*/*.tar.gz
           key: ${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.toml') }}
-      - name: Install Rust Toolchain
+      - name: Update Rust Toolchain
         run: |
           rustup update stable
           rustup component add rustfmt rust-src clippy
           rustup target add ${{ matrix.target }}
       - name: Run Tests
         run: cargo test
-      # - name: Check Clippy
-      #   run: cargo clippy --all-targets -- -D clippy::disallowed_macros -D clippy::dbg_macro -D clippy::todo
-      - name: Check Format
+      - name: Clippy Check
+        run: cargo clippy --all-targets
+      - name: Format Check
         run: cargo fmt --check
       - name: Build Release (linux)
         if: contains(matrix.target, 'linux')
         run: |
           cargo install cross --force
           cross build --release --target ${{ matrix.target }}
-      - name: Build Release
+      - name: Build Release (darwin or windows)
         if: ${{ !contains(matrix.target, 'linux') }}
         run: cargo build --release --target ${{ matrix.target }}
       # - name: Code Sign (darwin)

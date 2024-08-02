@@ -125,7 +125,7 @@ pub fn writer(schema: &avro::Schema, file: Option<PathBuf>) -> Option<avro::Writ
                 Err(error) => panic!("couldn't create {}: {:?}", display, error),
                 Ok(file) => file,
             };
-            Some(avro::Writer::with_codec(schema, file, avro::Codec::Zstandard))
+            Some(avro::Writer::new(schema, file))
         }
         None => None,
     }

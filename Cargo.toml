@@ -23,9 +23,9 @@ webpki-roots = "0.26.3"
 form_urlencoded = "1.2.1"
 multipart = { version = "0.18.0", default-features = false, features = ["client"]  }
 uuid = { version = "1.8.0", features = ["v7"] }
-ctrlc = "3.4.4"
-avro = { version = "0.16", features = ["zstandard"], package = "apache-avro" }
+avro = { version = "0.16", package = "apache-avro" }
 clap = { version = "4.5.7", features = ["derive"] }
+ctrlc = "3.4.4"
 humantime = "2.1.0"
 
 [dev-dependencies]

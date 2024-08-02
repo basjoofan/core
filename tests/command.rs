@@ -115,7 +115,7 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let host = "httpbin.org";
     #[test, function]
     fn call() {
-      let response = request().response;
+      let response = request();
       response.status
     }
     "#;
@@ -143,7 +143,7 @@ fn test_command_call() -> Result<(), Box<dyn std::error::Error>> {
     let host = "httpbin.org";
     #[test, function]
     fn call() {
-      let response = request().response;
+      let response = request();
       response.status
     }
     "#;
