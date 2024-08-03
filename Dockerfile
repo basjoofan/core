@@ -7,4 +7,3 @@ RUN cargo build --release
 FROM alpine:3.20.2
 # copy compiled file from build stage
 COPY --from=builder ./target/release/am /usr/bin
-ENTRYPOINT am eval 'println("🍀 Hello Am!");'
