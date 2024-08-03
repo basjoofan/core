@@ -9,14 +9,10 @@ on:
   workflow_dispatch:
 jobs:
   image:
-    name: ${{ matrix.platform }}
-    strategy:
-      matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
     runs-on: ubuntu-latest
     steps:
+      - name: Setup Qemu
+        uses: docker/setup-qemu-action@v3
       - name: Setup Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login Docker
@@ -39,7 +35,7 @@ jobs:
       - name: Build Image
         uses: docker/build-push-action@v6
         with:
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           push: ${{ startsWith(github.ref, 'refs/tags/') }}
           tags: |
             ${{ github.repository }}:latest
