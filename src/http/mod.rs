@@ -20,7 +20,7 @@ pub use url::Url;
 
 macro_rules! http_type {
     ($type: ident $(,$name: ident => $value: literal)+) => {
-        #[derive(Default)]
+        #[derive(Default, Eq, PartialEq)]
         #[non_exhaustive]
         pub enum $type {
             #[default]

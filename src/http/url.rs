@@ -19,7 +19,7 @@ impl std::convert::From<&str> for Url {
                     (str, "/")
                 };
                 let (host, port) = if let Some(j) = host.find(':') {
-                    (&host[..j], host[j..].parse::<u16>().ok())
+                    (&host[..j], (&host[j + 1..]).parse::<u16>().ok())
                 } else {
                     (host, None)
                 };
@@ -67,4 +67,84 @@ impl std::fmt::Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}://{}{}", self.scheme, self.host, self.path)
     }
+}
+
+#[test]
+fn test_url_with_ip() {
+    let str = "http://IP_ADDRESS";
+    let url = Url::from(str);
+    assert_eq!(url.scheme, Scheme::Http);
+    assert_eq!(url.host, "IP_ADDRESS");
+    assert_eq!(url.port, 80);
+    assert_eq!(url.path, "/");
+}
+
+#[test]
+fn test_url_with_ip_port() {
+    let str = "http://IP_ADDRESS:52831";
+    let url = Url::from(str);
+    assert_eq!(url.scheme, Scheme::Http);
+    assert_eq!(url.host, "IP_ADDRESS");
+    assert_eq!(url.port, 52831);
+    assert_eq!(url.path, "/");
+}
+
+#[test]
+fn test_url_with_ip_path() {
+    let str = "http://IP_ADDRESS/hello";
+    let url = Url::from(str);
+    assert_eq!(url.scheme, Scheme::Http);
+    assert_eq!(url.host, "IP_ADDRESS");
+    assert_eq!(url.port, 80);
+    assert_eq!(url.path, "/hello");
+}
+
+#[test]
+fn test_url_with_ip_port_path() {
+    let str = "http://IP_ADDRESS:52831/hello/world";
+    let url = Url::from(str);
+    assert_eq!(url.scheme, Scheme::Http);
+    assert_eq!(url.host, "IP_ADDRESS");
+    assert_eq!(url.port, 52831);
+    assert_eq!(url.path, "/hello/world");
+}
+
+#[test]
+fn test_url_with_ip_path_query() {
+    let str = "http://IP_ADDRESS/hello/world?a=b";
+    let url = Url::from(str);
+    assert_eq!(url.scheme, Scheme::Http);
+    assert_eq!(url.host, "IP_ADDRESS");
+    assert_eq!(url.port, 80);
+    assert_eq!(url.path, "/hello/world?a=b");
+}
+
+#[test]
+fn test_url_with_ip_port_path_query() {
+    let str = "http://IP_ADDRESS:52831/hello/world?a=b";
+    let url = Url::from(str);
+    assert_eq!(url.scheme, Scheme::Http);
+    assert_eq!(url.host, "IP_ADDRESS");
+    assert_eq!(url.port, 52831);
+    assert_eq!(url.path, "/hello/world?a=b");
+}
+
+#[test]
+fn test_url_with_ip_path_query_fragment() {
+    let str = "http://IP_ADDRESS/hello/world?a=b#fragment";
+    let url = Url::from(str);
+    assert_eq!(url.scheme, Scheme::Http);
+    assert_eq!(url.host, "IP_ADDRESS");
+    assert_eq!(url.port, 80);
+    assert_eq!(url.path, "/hello/world?a=b#fragment");
+}
+
+#[test]
+fn test_url_with_ip_port_path_query_fragment() {
+    let str = "http://IP_ADDRESS:52831/hello/world?a=b#fragment";
+    let url = Url::from(str);
+    assert_eq!(url.scheme, Scheme::Http);
+    assert_eq!(url.host, "IP_ADDRESS");
+    assert_eq!(url.port, 52831);
+    assert_eq!(url.path, "/hello/world?a=b#fragment");
 }
