@@ -82,8 +82,8 @@ pub fn test(tag: String, file: Option<PathBuf>) {
     let source = Parser::new(&text).parse();
     print_error(source.eval(&mut context));
     let (sender, receiver) = mpsc::channel();
-    for call in source.requests.into_iter().chain(source.functions.into_iter()) {
-        if let (Some(tags), Some(name)) = match call {
+    for test in source.tests.into_iter() {
+        if let (Some(tags), Some(name)) = match test {
             Expr::Function(_, Some(tags), Some(name), _, _) => (Some(tags), Some(name)),
             Expr::Request(_, Some(tags), name, _, _) => (Some(tags), Some(name)),
             _ => (None, None),

@@ -4,9 +4,9 @@ use std::fmt::Formatter;
 use std::fmt::Result;
 
 pub struct Source {
-    pub expressions: Vec<Expr>,
-    pub functions: Vec<Expr>,
-    pub requests: Vec<Expr>,
+    pub block: Vec<Expr>,
+    pub calls: Vec<Expr>,
+    pub tests: Vec<Expr>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -30,6 +30,7 @@ pub enum Expr {
     // Field Access of a named field (object.field)
     Field(Token, Option<Box<Expr>>, Option<String>),
     Request(Token, Option<Vec<String>>, String, Vec<Expr>, Vec<Expr>),
+    Test(Token, String, Vec<Expr>),
     // TODO Assign An assignment expression: a = compute().
     // TODO Closure A closure expression: |a, b| a + b.
     // TODO Break A break, with an optional label to break and an optional expression.
@@ -42,14 +43,14 @@ pub enum Expr {
 
 impl Display for Source {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        for expression in self.expressions.iter() {
-            write!(f, "{}", expression)?
+        for expr in self.block.iter() {
+            write!(f, "{}", expr)?
         }
-        for function in self.functions.iter() {
-            write!(f, "{}", function)?
+        for call in self.calls.iter() {
+            write!(f, "{}", call)?
         }
-        for request in self.requests.iter() {
-            write!(f, "{}", request)?
+        for test in self.tests.iter() {
+            write!(f, "{}", test)?
         }
         Ok(())
     }
@@ -64,10 +65,10 @@ impl Display for Expr {
             Expr::Boolean(token, _) => write!(f, "{}", token),
             Expr::String(token, _) => write!(f, "\"{}\"", token),
             Expr::Let(token, name, value) => {
-                write!(f, "{} {} = {};", token, May(name), May(value))
+                write!(f, "{} {} = {}", token, May(name), May(value))
             }
             Expr::Return(token, value) => {
-                write!(f, "{} {};", token, May(value))
+                write!(f, "{} {}", token, May(value))
             }
             Expr::Unary(token, right) => write!(f, "({}{})", token, May(right)),
             Expr::Binary(token, left, right) => {
@@ -83,7 +84,7 @@ impl Display for Expr {
                         .iter()
                         .map(|e| e.to_string())
                         .collect::<Vec<String>>()
-                        .join(", ")
+                        .join(";")
                 )?;
                 if !alternative.is_empty() {
                     write!(
@@ -93,7 +94,7 @@ impl Display for Expr {
                             .iter()
                             .map(|e| e.to_string())
                             .collect::<Vec<String>>()
-                            .join(", ")
+                            .join(";")
                     )?
                 }
                 write!(f, " }}")?;
@@ -116,7 +117,7 @@ impl Display for Expr {
                     .map(|e| e.to_string())
                     .collect::<Vec<String>>()
                     .join(", "),
-                body.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
+                body.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
             ),
             Expr::Call(_, function, arguments) => write!(
                 f,
@@ -178,6 +179,13 @@ impl Display for Expr {
                         .join(", ")
                 )
             }
+            Expr::Test(token, name, block) => write!(
+                f,
+                "{} {} {{ {} }}",
+                token,
+                name,
+                block.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
+            ),
         }
     }
 }
@@ -194,9 +202,9 @@ impl<'a, T: std::fmt::Display> std::fmt::Display for May<'a, T> {
 }
 
 #[test]
-fn test_program_display() {
-    let p = Source {
-        expressions: vec![Expr::Let(
+fn test_source_display() {
+    let source = Source {
+        block: vec![Expr::Let(
             Token::new(crate::token::Kind::Let, String::from("let")),
             Some(String::from("myVar")),
             Some(Box::new(Expr::Ident(
@@ -204,8 +212,8 @@ fn test_program_display() {
                 String::from("anotherVar"),
             ))),
         )],
-        functions: vec![],
-        requests: vec![],
+        calls: vec![],
+        tests: vec![],
     };
-    assert_eq!(p.to_string(), "let myVar = anotherVar;");
+    assert_eq!(source.to_string(), "let myVar = anotherVar");
 }

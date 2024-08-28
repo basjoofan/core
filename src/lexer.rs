@@ -99,6 +99,7 @@ pub fn segment(text: &str) -> Vec<Token> {
                         "if" => (Kind::If, string),
                         "else" => (Kind::Else, string),
                         "return" => (Kind::Return, string),
+                        "test" => (Kind::Test, string),
                         _ => (Kind::Ident, string),
                     }
                 }
@@ -138,7 +139,7 @@ fn test_segment() {
             [1, 2];
             {"foo": "bar"};
             _a2
-            #[test]
+            #[tag]
             rq request`
               GET http://example.com
               Host: example.com
@@ -147,6 +148,10 @@ fn test_segment() {
             regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22"
             ]
             object.field
+            test expectStatusOk {
+                let response = request();
+                response.status
+            }
             "#;
     let expect = vec![
         (Kind::Let, "let"),
@@ -244,7 +249,7 @@ fn test_segment() {
         (Kind::Ident, "_a2"),
         (Kind::Well, "#"),
         (Kind::Ls, "["),
-        (Kind::Ident, "test"),
+        (Kind::Ident, "tag"),
         (Kind::Rs, "]"),
         (Kind::Rq, "rq"),
         (Kind::Ident, "request"),
@@ -269,12 +274,22 @@ fn test_segment() {
         (Kind::Ident, "object"),
         (Kind::Dot, "."),
         (Kind::Ident, "field"),
+        (Kind::Test, "test"),
+        (Kind::Ident, "expectStatusOk"),
+        (Kind::Lb, "{"),
+        (Kind::Let, "let"),
+        (Kind::Ident, "response"),
+        (Kind::Assign, "="),
+        (Kind::Ident, "request"),
+        (Kind::Lp, "("),
+        (Kind::Rp, ")"),
+        (Kind::Semi, ";"),
+        (Kind::Ident, "response"),
+        (Kind::Dot, "."),
+        (Kind::Ident, "status"),
+        (Kind::Rb, "}"),
     ];
     let tokens = segment(text);
-    tokens
-        .iter()
-        .enumerate()
-        .for_each(|(i, t)| println!("token:{} == {}", t, expect[i].1));
     assert_eq!(expect.len(), tokens.len());
     for (i, (kind, literal)) in expect.into_iter().enumerate() {
         let token = tokens.get(i).unwrap();

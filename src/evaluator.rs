@@ -9,17 +9,14 @@ use std::collections::HashMap;
 
 impl Source {
     pub fn eval(&self, context: &mut Context) -> Value {
-        for function in &self.functions {
-            if let Expr::Function(_, _, Some(name), parameters, body) = function {
+        for call in &self.calls {
+            if let Expr::Function(_, _, Some(name), parameters, body) = call {
                 context.set(name.clone(), eval_function_literal(parameters, body))
-            }
-        }
-        for request in &self.requests {
-            if let Expr::Request(_, _, name, pieces, asserts) = request {
+            } else if let Expr::Request(_, _, name, pieces, asserts) = call {
                 context.set(name.clone(), eval_request_literal(name, pieces, asserts))
             }
         }
-        eval_block_expression(&self.expressions, context)
+        eval_block_expression(&self.block, context)
     }
 }
 
@@ -45,6 +42,7 @@ pub fn eval_expression(expression: &Expr, context: &mut Context) -> Value {
         Expr::Index(_, left, index) => eval_index_expression(left, index, context),
         Expr::Field(_, object, field) => eval_field_expression(object, field, context),
         Expr::Request(_, _, name, pieces, asserts) => eval_request_literal(name, pieces, asserts),
+        Expr::Test(_, _, _) => todo!(),
     }
 }
 

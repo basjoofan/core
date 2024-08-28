@@ -52,6 +52,7 @@ pub enum Kind {
     If,     // if
     Else,   // else
     Return, // return
+    Test,   // test
 }
 
 #[derive(Clone, PartialEq, Eq)]
