@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::evaluator::eval_call_name;
+use crate::evaluator::eval_expression;
 use crate::parser::Parser;
 use crate::record;
 use crate::record::Record;
@@ -45,62 +45,94 @@ pub fn run(path: Option<PathBuf>) {
     print_error(source.eval(&mut context));
 }
 
-pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
+pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
     let text = read_to_string(std::env::current_dir().unwrap());
     let mut context = Context::default();
     let source = Parser::new(&text).parse();
     print_error(source.eval(&mut context));
-    let (sender, receiver) = mpsc::channel();
-    let continuous = Arc::new(AtomicBool::new(true));
-    let iterations = iterations / concurrency;
-    for _ in 0..concurrency {
-        let continuous = continuous.clone();
-        let mut context = context.clone();
-        context.set_sender(&sender);
-        context.set_name(&name);
-        let name = name.clone();
-        std::thread::spawn(move || {
-            let mut i = iterations;
-            while continuous.load(Ordering::Relaxed) && i > 0 {
-                print_error(eval_call_name(&name, &mut context));
-                i -= 1;
-            }
-        });
-    }
-    handle_ctrlc(continuous.clone());
-    std::thread::spawn(move || {
-        std::thread::sleep(duration);
-        continuous.store(false, Ordering::Relaxed)
-    });
-    std::mem::drop(sender);
-    process_record(receiver, file);
-}
-
-pub fn test(tag: String, file: Option<PathBuf>) {
-    let text = read_to_string(std::env::current_dir().unwrap());
-    let mut context = Context::default();
-    let source = Parser::new(&text).parse();
-    print_error(source.eval(&mut context));
-    let (sender, receiver) = mpsc::channel();
-    for test in source.tests.into_iter() {
-        if let (Some(tags), Some(name)) = match test {
-            Expr::Function(_, Some(tags), Some(name), _, _) => (Some(tags), Some(name)),
-            Expr::Request(_, Some(tags), name, _, _) => (Some(tags), Some(name)),
-            _ => (None, None),
-        } {
-            if tags.contains(&tag) {
-                let mut context = context.clone();
-                context.set_sender(&sender);
-                context.set_name(&name);
-                std::thread::spawn(move || {
-                    print_error(eval_call_name(&name, &mut context));
-                });
+    match name {
+        Some(name) => {
+            if let Some(block) = source.tests.get(&name) {
+                print_error(eval_test(&block, &mut context));
             }
         }
+        None => {
+            source.tests.iter().for_each(|(_, block)| {
+                print_error(eval_test(&block, &mut context));
+            });
+        }
     }
-    std::mem::drop(sender);
-    process_record(receiver, file);
 }
+
+fn eval_test(expressions: &[Expr], context: &mut Context) -> Value{
+    let mut result = Value::None;
+    for expression in expressions.iter() {
+        result = eval_expression(expression, context);
+        match result {
+            Value::Error(_) => return result,
+            Value::Return(value) => return *value,
+            _ => {}
+        }
+    }
+    result
+}
+
+// pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
+//     let text = read_to_string(std::env::current_dir().unwrap());
+//     let mut context = Context::default();
+//     let source = Parser::new(&text).parse();
+//     print_error(source.eval(&mut context));
+//     let (sender, receiver) = mpsc::channel();
+//     let continuous = Arc::new(AtomicBool::new(true));
+//     let iterations = iterations / concurrency;
+//     for _ in 0..concurrency {
+//         let continuous = continuous.clone();
+//         let mut context = context.clone();
+//         context.set_sender(&sender);
+//         context.set_name(&name);
+//         let name = name.clone();
+//         std::thread::spawn(move || {
+//             let mut i = iterations;
+//             while continuous.load(Ordering::Relaxed) && i > 0 {
+//                 print_error(eval_call_name(&name, &mut context));
+//                 i -= 1;
+//             }
+//         });
+//     }
+//     handle_ctrlc(continuous.clone());
+//     std::thread::spawn(move || {
+//         std::thread::sleep(duration);
+//         continuous.store(false, Ordering::Relaxed)
+//     });
+//     std::mem::drop(sender);
+//     process_record(receiver, file);
+// }
+
+// pub fn test(tag: String, file: Option<PathBuf>) {
+//     let text = read_to_string(std::env::current_dir().unwrap());
+//     let mut context = Context::default();
+//     let source = Parser::new(&text).parse();
+//     print_error(source.eval(&mut context));
+//     let (sender, receiver) = mpsc::channel();
+//     for test in source.tests.into_iter() {
+//         if let (Some(tags), Some(name)) = match test {
+//             Expr::Function(_, Some(tags), Some(name), _, _) => (Some(tags), Some(name)),
+//             Expr::Request(_, Some(tags), name, _, _) => (Some(tags), Some(name)),
+//             _ => (None, None),
+//         } {
+//             if tags.contains(&tag) {
+//                 let mut context = context.clone();
+//                 context.set_sender(&sender);
+//                 context.set_name(&name);
+//                 std::thread::spawn(move || {
+//                     print_error(eval_call_name(&name, &mut context));
+//                 });
+//             }
+//         }
+//     }
+//     std::mem::drop(sender);
+//     process_record(receiver, file);
+// }
 
 fn process_record(receiver: Receiver<(String, String, Record)>, file: Option<PathBuf>) {
     let schema = record::schema();

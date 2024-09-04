@@ -15,9 +15,6 @@ pub enum Kind {
     String,   // "foobar"
     Template, // `GET http://example.com`
 
-    // symbol
-    Well, // #
-
     // operator
     Assign, // =
     Bang,   // !

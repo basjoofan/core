@@ -10,9 +10,9 @@ use std::collections::HashMap;
 impl Source {
     pub fn eval(&self, context: &mut Context) -> Value {
         for call in &self.calls {
-            if let Expr::Function(_, _, Some(name), parameters, body) = call {
+            if let Expr::Function(_, Some(name), parameters, body) = call {
                 context.set(name.clone(), eval_function_literal(parameters, body))
-            } else if let Expr::Request(_, _, name, pieces, asserts) = call {
+            } else if let Expr::Request(_, name, pieces, asserts) = call {
                 context.set(name.clone(), eval_request_literal(name, pieces, asserts))
             }
         }
@@ -35,13 +35,13 @@ pub fn eval_expression(expression: &Expr, context: &mut Context) -> Value {
         Expr::If(token, condition, consequence, alternative) => {
             eval_if_expression(token, condition, consequence, alternative, context)
         }
-        Expr::Function(_, _, _, parameters, body) => eval_function_literal(parameters, body),
+        Expr::Function(_, _, parameters, body) => eval_function_literal(parameters, body),
         Expr::Call(_, function, arguments) => eval_call_expression(function, arguments, context),
         Expr::Array(_, elements) => eval_array_literal(elements, context),
         Expr::Map(_, pairs) => eval_map_literal(pairs, context),
         Expr::Index(_, left, index) => eval_index_expression(left, index, context),
         Expr::Field(_, object, field) => eval_field_expression(object, field, context),
-        Expr::Request(_, _, name, pieces, asserts) => eval_request_literal(name, pieces, asserts),
+        Expr::Request(_, name, pieces, asserts) => eval_request_literal(name, pieces, asserts),
         Expr::Test(_, _, _) => todo!(),
     }
 }
@@ -324,7 +324,7 @@ fn eval_call_value(invoke: Value, arguments: Vec<Value>, context: &mut Context) 
     }
 }
 
-pub fn eval_call_name(name: &String, context: &mut Context) -> Value {
+fn eval_call_name(name: &String, context: &mut Context) -> Value {
     let invoke = eval_ident_expression(name, context);
     if invoke.is_error() {
         return invoke;

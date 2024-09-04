@@ -1,4 +1,5 @@
 use crate::token::Token;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
@@ -6,7 +7,7 @@ use std::fmt::Result;
 pub struct Source {
     pub block: Vec<Expr>,
     pub calls: Vec<Expr>,
-    pub tests: Vec<Expr>,
+    pub tests: HashMap<String, Vec<Expr>>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -22,14 +23,14 @@ pub enum Expr {
     Binary(Token, Option<Box<Expr>>, Option<Box<Expr>>),
     Paren(Token, Option<Box<Expr>>),
     If(Token, Option<Box<Expr>>, Vec<Expr>, Vec<Expr>),
-    Function(Token, Option<Vec<String>>, Option<String>, Vec<String>, Vec<Expr>),
+    Function(Token, Option<String>, Vec<String>, Vec<Expr>),
     Call(Token, Option<Box<Expr>>, Vec<Expr>),
     Array(Token, Vec<Expr>),
     Map(Token, Vec<(Expr, Expr)>),
     Index(Token, Option<Box<Expr>>, Option<Box<Expr>>),
     // Field Access of a named field (object.field)
     Field(Token, Option<Box<Expr>>, Option<String>),
-    Request(Token, Option<Vec<String>>, String, Vec<Expr>, Vec<Expr>),
+    Request(Token, String, Vec<Expr>, Vec<Expr>),
     Test(Token, String, Vec<Expr>),
     // TODO Assign An assignment expression: a = compute().
     // TODO Closure A closure expression: |a, b| a + b.
@@ -49,8 +50,13 @@ impl Display for Source {
         for call in self.calls.iter() {
             write!(f, "{}", call)?
         }
-        for test in self.tests.iter() {
-            write!(f, "{}", test)?
+        for (name, block) in self.tests.iter() {
+            write!(
+                f,
+                "test {} {{ {} }}",
+                name,
+                block.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
+            )?
         }
         Ok(())
     }
@@ -100,16 +106,9 @@ impl Display for Expr {
                 write!(f, " }}")?;
                 Ok(())
             }
-            Expr::Function(token, tags, name, parameters, body) => write!(
+            Expr::Function(token, name, parameters, body) => write!(
                 f,
-                "{}{} {} ({}) {{ {} }}",
-                match tags {
-                    Some(tags) => format!(
-                        "#[{}]\n",
-                        tags.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
-                    ),
-                    None => String::default(),
-                },
+                "{} {} ({}) {{ {} }}",
                 token,
                 May(name),
                 parameters
@@ -149,17 +148,10 @@ impl Display for Expr {
             ),
             Expr::Index(_, left, index) => write!(f, "({}[{}])", May(left), May(index)),
             Expr::Field(token, object, field) => write!(f, "{}{}{}", May(object), token, May(field)),
-            Expr::Request(token, tags, name, pieces, asserts) => {
+            Expr::Request(token, name, pieces, asserts) => {
                 write!(
                     f,
-                    "{}{} {} `{}`[{}]",
-                    match tags {
-                        Some(tags) => format!(
-                            "#[{}]\n",
-                            tags.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
-                        ),
-                        None => String::default(),
-                    },
+                    "{} {} `{}`[{}]",
                     token,
                     name,
                     pieces
@@ -213,7 +205,7 @@ fn test_source_display() {
             ))),
         )],
         calls: vec![],
-        tests: vec![],
+        tests: HashMap::new(),
     };
     assert_eq!(source.to_string(), "let myVar = anotherVar");
 }

@@ -7,7 +7,6 @@ pub fn segment(text: &str) -> Vec<Token> {
     while let Some(char) = chars.next() {
         if !char.is_whitespace() {
             let (kind, literal) = match char {
-                '#' => (Kind::Well, String::from(char)),
                 '=' => {
                     if let Some('=') = chars.peek() {
                         (Kind::Eq, String::from_iter([char, chars.next().unwrap()]))
@@ -247,7 +246,7 @@ fn test_segment() {
         (Kind::Rb, "}"),
         (Kind::Semi, ";"),
         (Kind::Ident, "_a2"),
-        (Kind::Well, "#"),
+        (Kind::Illegal, "#"),
         (Kind::Ls, "["),
         (Kind::Ident, "tag"),
         (Kind::Rs, "]"),

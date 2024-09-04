@@ -3,6 +3,7 @@ use crate::syntax::Expr;
 use crate::syntax::Source;
 use crate::token::{Kind, Token, LOWEST, STMT, UNARY};
 use core::f64;
+use std::collections::HashMap;
 use std::fmt::Write;
 
 pub struct Parser {
@@ -63,12 +64,14 @@ impl Parser {
     pub fn parse(&mut self) -> Source {
         let mut block = Vec::new();
         let mut calls = Vec::new();
-        let mut tests = Vec::new();
+        let mut tests = HashMap::new();
         while self.current_token().is_some() {
             if let Some(expression) = self.parse_expression(LOWEST) {
                 match *expression {
                     Expr::Function(..) | Expr::Request(..) => calls.push(*expression),
-                    Expr::Test(..) => tests.push(*expression),
+                    Expr::Test(_, name, block) => {
+                        tests.insert(name, block);
+                    }
                     _ => block.push(*expression),
                 }
             }
@@ -100,7 +103,6 @@ impl Parser {
                 Kind::Ls => self.parse_array_literal(),
                 Kind::Lb => self.parse_map_literal(),
                 Kind::Rq => self.parse_request_literal(),
-                Kind::Well => self.parse_annotation_literal(),
                 Kind::Test => self.parse_test_literal(),
                 _ => None,
             };
@@ -338,7 +340,7 @@ impl Parser {
                 return None;
             }
             let body = self.parse_block_expression();
-            Some(Box::new(Expr::Function(token, None, name, parameters, body)))
+            Some(Box::new(Expr::Function(token, name, parameters, body)))
         } else {
             None
         }
@@ -480,36 +482,7 @@ impl Parser {
                 self.next_token();
                 asserts = self.parse_expression_list(Kind::Rs);
             }
-            Some(Box::new(Expr::Request(token, None, name, pieces, asserts)))
-        } else {
-            None
-        }
-    }
-
-    fn parse_annotation_literal(&mut self) -> Option<Box<Expr>> {
-        if self.current_token().is_some() {
-            if !self.peek_token_expect(Kind::Ls) {
-                return None;
-            }
-            let tags = self.parse_ident_list(Kind::Rs);
-            if self.peek_token_is(Kind::Fn) || self.peek_token_is(Kind::Rq) {
-                self.next_token();
-                if let Some(call) = self.parse_expression(LOWEST) {
-                    match *call {
-                        Expr::Function(token, _, name, parameters, body) => {
-                            Some(Box::new(Expr::Function(token, Some(tags), name, parameters, body)))
-                        }
-                        Expr::Request(token, _, name, pieces, asserts) => {
-                            Some(Box::new(Expr::Request(token, Some(tags), name, pieces, asserts)))
-                        }
-                        _ => None,
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
+            Some(Box::new(Expr::Request(token, name, pieces, asserts)))
         } else {
             None
         }
@@ -915,7 +888,7 @@ fn test_parse_function_literal() {
         assert!(source.calls.len() == 1);
         if let Some(function) = source.calls.first() {
             println!("{}", function);
-            if let Expr::Function(_, _, name, parameters, body) = function.clone() {
+            if let Expr::Function(_, name, parameters, body) = function.clone() {
                 assert!(name == expected_name);
                 assert!(parameters == expected_parameters);
                 assert!(body[0].to_string() == expected_body);
@@ -943,7 +916,7 @@ fn test_parse_function_parameter() {
         assert!(source.calls.len() == 1);
         if let Some(function) = source.calls.first() {
             println!("{}", function);
-            if let Expr::Function(_, _, _, parameters, _) = function.clone() {
+            if let Expr::Function(_, _, parameters, _) = function.clone() {
                 assert!(parameters == expected);
             } else {
                 unreachable!("function literal parse failed")
@@ -1238,7 +1211,7 @@ fn test_parse_request_literal() {
         assert!(source.calls.len() == expected_len);
         if let Some(request) = source.calls.first() {
             println!("request:{}", request);
-            if let Expr::Request(_, _, name, pieces, asserts) = request.clone() {
+            if let Expr::Request(_, name, pieces, asserts) = request.clone() {
                 assert!(name == expected_name);
                 assert!(pieces.iter().map(|piece| piece.to_string()).collect::<Vec<String>>() == expected_pieces);
                 assert!(asserts.is_empty());
@@ -1271,64 +1244,11 @@ fn test_parse_request_asserts() {
         let source = Parser::new(text).parse();
         if let Some(request) = source.calls.first() {
             println!("request:{}", request);
-            if let Expr::Request(_, _, _, _, asserts) = request.clone() {
+            if let Expr::Request(_, _, _, asserts) = request.clone() {
                 assert!(asserts.len() == expected_len);
                 assert!(asserts.iter().map(|assert| assert.to_string()).collect::<Vec<String>>() == expected_asserts);
             } else {
                 unreachable!("request literal parse failed")
-            }
-        } else {
-            unreachable!("source expression none")
-        }
-    }
-}
-
-#[test]
-fn test_parse_annotation_literal() {
-    let tests = vec![
-        (
-            r#"
-            #[test]
-            rq request`
-                GET http://${host}/api\nHost: example.com\n`[
-                status == 200]"#,
-            1,
-            Some(vec!["test".to_string()]),
-        ),
-        (r#"#[]rq request`POST`[]"#, 0, Some(vec![])),
-        (
-            r#"
-            #[test]
-            fn add(x, y) { 
-                x + y 
-            }
-            "#,
-            1,
-            Some(vec!["test".to_string()]),
-        ),
-        (r#"fn add(x, y) { x + y }"#, 0, None),
-        (r#"#[test]fn add(x, y) { x + y }"#, 1, Some(vec!["test".to_string()])),
-        (
-            r#"#[test, tag]fn add(x, y) { x + y }"#,
-            2,
-            Some(vec!["test".to_string(), "tag".to_string()]),
-        ),
-    ];
-    for (text, expected_len, expected_tags) in tests {
-        let source = Parser::new(text).parse();
-        let mut calls = Vec::new();
-        calls.extend_from_slice(&source.calls);
-        calls.extend_from_slice(&source.calls);
-        if let Some(call) = calls.first() {
-            println!("call:\n{}", call);
-            if let Expr::Request(_, tags, _, _, _) = call.clone() {
-                assert!(tags.clone().unwrap_or_default().len() == expected_len);
-                assert!(tags == expected_tags);
-            } else if let Expr::Function(_, tags, _, _, _) = call.clone() {
-                assert!(tags.clone().unwrap_or_default().len() == expected_len);
-                assert!(tags == expected_tags);
-            } else {
-                unreachable!("annotation literal parse failed")
             }
         } else {
             unreachable!("source expression none")
@@ -1358,14 +1278,8 @@ fn test_parse_test_literal() {
     ];
     for (text, expected_name, expected_length) in tests {
         let source = Parser::new(text).parse();
-        if let Some(test) = source.tests.first() {
-            println!("{}", test);
-            if let Expr::Test(_, name, block) = test.clone() {
-                assert!(name == expected_name);
-                assert!(block.len() == expected_length);
-            } else {
-                unreachable!("test literal parse failed")
-            }
+        if let Some(block) = source.tests.get(&expected_name) {
+            assert!(block.len() == expected_length);
         } else {
             unreachable!("source expression none")
         }
