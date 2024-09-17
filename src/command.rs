@@ -57,14 +57,17 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
             }
         }
         None => {
-            source.tests.iter().for_each(|(_, block)| {
-                print_error(eval_test(&block, &mut context));
+            source.tests.into_iter().for_each(|(_, block)| {
+                let mut context = context.clone();
+                std::thread::spawn(move || {
+                    print_error(eval_test(&block, &mut context));
+                });
             });
         }
     }
 }
 
-fn eval_test(expressions: &[Expr], context: &mut Context) -> Value{
+fn eval_test(expressions: &[Expr], context: &mut Context) -> Value {
     let mut result = Value::None;
     for expression in expressions.iter() {
         result = eval_expression(expression, context);

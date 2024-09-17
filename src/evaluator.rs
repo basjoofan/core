@@ -1,4 +1,5 @@
 use crate::context::Context;
+use crate::http::Client;
 use crate::record::Assert;
 use crate::record::Record;
 use crate::syntax::Expr;
@@ -451,7 +452,7 @@ fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Exp
         .iter()
         .map(|p| eval_expression(p, context).to_string())
         .collect::<String>();
-    let (request, response, time, error) = context.client().send(&message);
+    let (request, response, time, error) = Client::default().send(&message);
     let value = response.to_value();
     if let Value::Map(map) = &value {
         map.iter()
@@ -493,7 +494,6 @@ fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Exp
         asserts,
         error,
     };
-    context.send(record);
     value
 }
 
@@ -1032,28 +1032,4 @@ fn test_eval_request_expression() {
     let evaluated = source.eval(&mut context);
     println!("evaluated:{}", evaluated);
     assert!(evaluated == Value::Integer(200));
-}
-
-#[test]
-fn test_send_record() {
-    let text = r#"
-    rq request`
-      GET http://${host}/get
-      Host: ${host}
-      Connection: close
-    `[status == 200];
-    let host = "httpbin.org";
-    let response = request();
-    response.status"#;
-    let source = crate::parser::Parser::new(text).parse();
-    let mut context = Context::default();
-    let (sender, receiver) = std::sync::mpsc::channel();
-    context.set_sender(&sender);
-    let evaluated = std::thread::spawn(move || source.eval(&mut context)).join().unwrap();
-    println!("evaluated:{}", evaluated);
-    assert!(evaluated == Value::Integer(200));
-    std::mem::drop(sender);
-    for (_, _, record) in receiver {
-        println!("response.status: {:?}", record.response.status);
-    }
 }
