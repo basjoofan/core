@@ -1,5 +1,3 @@
-impl std::error::Error for Error {}
-
 macro_rules! http_error {
     ($($name: ident => $description: expr,)+) => {
         #[derive(Debug)]
@@ -11,6 +9,9 @@ macro_rules! http_error {
                 $name,
             )+
         }
+
+        impl std::error::Error for Error {}
+
         impl std::fmt::Display for Error {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {

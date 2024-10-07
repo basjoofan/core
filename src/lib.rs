@@ -1,4 +1,6 @@
+mod code;
 pub mod command;
+mod compiler;
 mod context;
 mod evaluator;
 mod http;
@@ -10,4 +12,5 @@ mod stat;
 mod syntax;
 mod token;
 mod value;
+mod vm;
 mod writer;

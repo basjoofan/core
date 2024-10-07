@@ -1,3 +1,4 @@
+use crate::compiler::Compiler;
 use crate::context::Context;
 use crate::evaluator::eval_expression;
 use crate::parser::Parser;
@@ -6,12 +7,12 @@ use crate::record::Record;
 use crate::stat::Stats;
 use crate::syntax::Expr;
 use crate::value::Value;
+use crate::vm::Vm;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,14 +21,22 @@ pub const NAME: &str = env!("CARGO_PKG_NAME");
 
 pub fn repl() {
     let mut lines = stdin().lock().lines();
-    let mut context = Context::default();
-    loop {
+    'repl: loop {
         if let Some(Ok(text)) = lines.next() {
             if text == "exit" {
                 break;
             }
             let source = Parser::new(&text).parse();
-            print_error(source.eval(&mut context));
+            let mut compiler = Compiler::new();
+            for expression in source.block.iter() {
+                if let Err(message) = compiler.compile(&expression) {
+                    println!("{}", message);
+                    continue 'repl;
+                }
+            }
+            let mut vm = Vm::new(compiler.constants, compiler.instructions);
+            vm.run();
+            println!("{}", vm.top().unwrap().clone());
         }
     }
 }
