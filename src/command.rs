@@ -36,7 +36,7 @@ pub fn repl() {
             }
             let mut vm = Vm::new(compiler.constants, compiler.instructions);
             vm.run();
-            println!("{}", vm.top().unwrap().clone());
+            println!("{}", vm.top().unwrap());
         }
     }
 }

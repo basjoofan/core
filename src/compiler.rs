@@ -1,11 +1,10 @@
-use crate::code::make;
 use crate::code::Opcode;
 use crate::syntax::Expr;
 use crate::token::Kind;
 use crate::value::Value;
 
 pub struct Compiler {
-    pub instructions: Vec<u8>,
+    pub instructions: Vec<Opcode>,
     pub constants: Vec<Value>,
 }
 
@@ -17,13 +16,12 @@ impl Compiler {
         }
     }
 
-    fn emit(&mut self, opcode: Opcode, operand: Option<usize>) -> usize {
-        let position = self.instructions.len();
-        self.instructions.append(&mut make(opcode, operand));
-        position
+    fn emit(&mut self, opcode: Opcode) -> usize {
+        self.instructions.push(opcode);
+        self.instructions.len() - 1
     }
 
-    fn add_constant(&mut self, value: Value) -> usize {
+    fn save(&mut self, value: Value) -> usize {
         self.constants.push(value);
         self.constants.len() - 1
     }
@@ -33,8 +31,8 @@ impl Compiler {
             Expr::Ident(_, _) => todo!(),
             Expr::Integer(_, value) => {
                 let integer = Value::Integer(value.unwrap_or_default());
-                let constant = self.add_constant(integer);
-                self.emit(Opcode::Constant, Some(constant));
+                let index = self.save(integer);
+                self.emit(Opcode::Constant(index));
             }
             Expr::Float(_, _) => todo!(),
             Expr::Boolean(_, _) => todo!(),
@@ -46,7 +44,7 @@ impl Compiler {
                 self.compile(&left.clone().unwrap())?;
                 self.compile(&right.clone().unwrap())?;
                 match token.kind {
-                    Kind::Plus => self.emit(Opcode::Add, None),
+                    Kind::Plus => self.emit(Opcode::Add),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
@@ -67,11 +65,11 @@ impl Compiler {
 
 #[cfg(test)]
 mod tests {
-    use crate::code;
+    use crate::code::Opcode;
     use crate::compiler::Compiler;
     use crate::value::Value;
 
-    fn run_compiler_tests(tests: Vec<(&str, Vec<Value>, Vec<u8>)>) {
+    fn run_compiler_tests(tests: Vec<(&str, Vec<Value>, Vec<Opcode>)>) {
         let mut compiler = Compiler::new();
         for (text, constants, instructions) in tests {
             let source = crate::parser::Parser::new(text).parse();
@@ -79,13 +77,7 @@ mod tests {
                 let result = compiler.compile(&expression);
                 assert!(result.is_ok(), "{}", result.unwrap_err())
             }
-            assert_eq!(
-                compiler.instructions,
-                instructions,
-                "wrong instructions\nwant:\n{} got:\n{}",
-                code::read(&instructions),
-                code::read(&compiler.instructions)
-            );
+            assert_eq!(compiler.instructions, instructions);
             assert!(compiler.constants == constants);
         }
     }
@@ -95,12 +87,7 @@ mod tests {
         let tests = vec![(
             "1 + 2",
             vec![Value::Integer(1), Value::Integer(2)],
-            vec![
-                code::make(code::Opcode::Constant, Some(0)),
-                code::make(code::Opcode::Constant, Some(1)),
-                code::make(code::Opcode::Add, None),
-            ]
-            .concat(),
+            vec![Opcode::Constant(0), Opcode::Constant(1), Opcode::Add],
         )];
         run_compiler_tests(tests);
     }

@@ -1,15 +1,15 @@
-use crate::code::{self, Opcode};
+use crate::code::Opcode;
 use crate::value::Value;
 
 pub struct Vm {
     constants: Vec<Value>,
-    instructions: Vec<u8>,
+    instructions: Vec<Opcode>,
     stack: Vec<Value>,
     // sp: usize,
 }
 
 impl Vm {
-    pub fn new(constants: Vec<Value>, instructions: Vec<u8>) -> Self {
+    pub fn new(constants: Vec<Value>, instructions: Vec<Opcode>) -> Self {
         Self {
             constants,
             instructions,
@@ -19,21 +19,17 @@ impl Vm {
     }
 
     pub fn run(&mut self) {
-        let mut i = 0;
-        while i < self.instructions.len() {
-            let opcode = Opcode::from(self.instructions[i]);
-            i += 1;
+        for opcode in self.instructions.iter() {
             match opcode {
-                Opcode::Constant => {
-                    let index = code::read(&self.instructions[i..i + opcode.width()]);
-                    i += opcode.width();
-                    if let Some(value) = self.constants.get(index as usize) {
-                        self.push(value.clone());
+                Opcode::Constant(index) => {
+                    if let Some(value) = self.constants.get(*index) {
+                        // self.push(value.clone());
+                        self.stack.push(value.clone())
                     }
                 }
                 Opcode::Add => {
-                    let right = self.pop();
-                    let left = self.pop();
+                    let right = self.stack.pop();
+                    let left = self.stack.pop();
                     match (left, right) {
                         (Some(Value::Integer(left)), Some(Value::Integer(right))) => {
                             self.stack.push(Value::Integer(left + right))
@@ -47,14 +43,6 @@ impl Vm {
 
     pub fn top(&self) -> Option<&Value> {
         self.stack.last()
-    }
-
-    fn pop(&mut self) -> Option<Value> {
-        self.stack.pop()
-    }
-
-    fn push(&mut self, value: Value) {
-        self.stack.push(value)
     }
 }
 
