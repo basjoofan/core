@@ -1,10 +1,6 @@
 use crate::lexer;
 use crate::syntax::Expr;
-use crate::syntax::Source;
 use crate::token::{Kind, Token, LOWEST, STMT, UNARY};
-use core::f64;
-use std::collections::HashMap;
-use std::fmt::Write;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -23,8 +19,8 @@ impl Parser {
         self.index += 1;
     }
 
-    fn current_token(&self) -> Option<&Token> {
-        self.tokens.get(self.index)
+    fn current_token(&self) -> &Token {
+        &self.tokens[self.index]
     }
 
     fn peek_token(&self) -> Option<&Token> {
@@ -35,22 +31,21 @@ impl Parser {
         matches!(self.peek_token(), Some(peek) if kind == peek.kind)
     }
 
-    fn peek_token_expect(&mut self, kind: Kind) -> bool {
-        if self.peek_token_is(kind) {
-            self.next_token();
-            true
+    fn peek_token_expect(&mut self, kind: Kind) -> Result<(), String> {
+        if let Some(peek) = self.peek_token() {
+            if kind == peek.kind {
+                self.next_token();
+                Ok(())
+            } else {
+                Err(format!("token expect {:?} but found {:?}", kind, peek.kind))
+            }
         } else {
-            // TODO catch peek expect error
-            false
+            Err(format!("token expect {:?} but found none", kind))
         }
     }
 
     fn current_precedence(&self) -> u8 {
-        if let Some(current) = self.current_token() {
-            current.precedence()
-        } else {
-            LOWEST
-        }
+        self.current_token().precedence()
     }
 
     fn peek_precedence(&self) -> u8 {
@@ -61,474 +56,304 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Source {
-        let mut block = Vec::new();
-        let mut calls = Vec::new();
-        let mut tests = HashMap::new();
-        while self.current_token().is_some() {
-            if let Some(expression) = self.parse_expression(LOWEST) {
-                match *expression {
-                    Expr::Function(..) | Expr::Request(..) => calls.push(*expression),
-                    Expr::Test(_, name, block) => {
-                        tests.insert(name, block);
+    pub fn parse(&mut self) -> Result<Vec<Expr>, String> {
+        let mut exprs = Vec::new();
+        while self.index < self.tokens.len() {
+            exprs.push(self.parse_expr(LOWEST)?);
+            if self.peek_token_is(Kind::Semi) {
+                self.next_token();
+            }
+            self.next_token();
+        }
+        Ok(exprs)
+    }
+
+    fn parse_expr(&mut self, mut precedence: u8) -> Result<Expr, String> {
+        let prefix = match self.current_token().kind {
+            Kind::Ident => self.parse_ident_expr(),
+            Kind::Integer => self.parse_integer_literal()?,
+            Kind::Float => self.parse_float_literal()?,
+            Kind::True | Kind::False => self.parse_boolean_literal()?,
+            Kind::String => self.parse_string_literal(),
+            Kind::Let => {
+                precedence = STMT;
+                self.parse_let_expr()?
+            }
+            Kind::Return => {
+                precedence = STMT;
+                self.parse_return_expr()?
+            }
+            Kind::Bang | Kind::Minus => self.parse_unary_expr()?,
+            Kind::Lp => self.parse_paren_expr()?,
+            Kind::If => self.parse_if_expr()?,
+            Kind::Fn => self.parse_function_literal()?,
+            Kind::Ls => self.parse_array_literal()?,
+            Kind::Lb => self.parse_map_literal()?,
+            Kind::Rq => self.parse_request_literal()?,
+            Kind::Test => self.parse_test_literal()?,
+            _ => Err(format!("parse expr error: {}", self.current_token()))?,
+        };
+        let mut left = prefix;
+        while !self.peek_token_is(Kind::Semi) && precedence < self.peek_precedence() {
+            left = if let Some(peek) = self.peek_token() {
+                match peek.kind {
+                    Kind::Plus | Kind::Minus | Kind::Star | Kind::Slash | Kind::Lt | Kind::Gt | Kind::Eq | Kind::Ne => {
+                        self.next_token();
+                        self.parse_binary_expr(left)?
                     }
-                    _ => block.push(*expression),
+                    Kind::Lp => {
+                        self.next_token();
+                        self.parse_call_expr(left)?
+                    }
+                    Kind::Ls => {
+                        self.next_token();
+                        self.parse_index_expr(left)?
+                    }
+                    Kind::Dot => {
+                        self.next_token();
+                        self.parse_field_expr(left)?
+                    }
+                    _ => left,
                 }
-            }
-            self.next_token();
-        }
-        Source { block, calls, tests }
-    }
-
-    fn parse_expression(&mut self, mut precedence: u8) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let prefix = match current.kind {
-                Kind::Ident => self.parse_ident_expression(),
-                Kind::Integer => self.parse_integer_literal(),
-                Kind::Float => self.parse_float_literal(),
-                Kind::True | Kind::False => self.parse_boolean_literal(),
-                Kind::String => self.parse_string_literal(),
-                Kind::Let => {
-                    precedence = STMT;
-                    self.parse_let_expression()
-                }
-                Kind::Return => {
-                    precedence = STMT;
-                    self.parse_return_expression()
-                }
-                Kind::Bang | Kind::Minus => self.parse_unary_expression(),
-                Kind::Lp => self.parse_paren_expression(),
-                Kind::If => self.parse_if_expression(),
-                Kind::Fn => self.parse_function_literal(),
-                Kind::Ls => self.parse_array_literal(),
-                Kind::Lb => self.parse_map_literal(),
-                Kind::Rq => self.parse_request_literal(),
-                Kind::Test => self.parse_test_literal(),
-                _ => None,
-            };
-            if let Some(prefix) = prefix {
-                let mut left = Some(prefix);
-                while !self.peek_token_is(Kind::Semi) && precedence < self.peek_precedence() {
-                    left = if let Some(peek) = self.peek_token() {
-                        match peek.kind {
-                            Kind::Plus
-                            | Kind::Minus
-                            | Kind::Star
-                            | Kind::Slash
-                            | Kind::Lt
-                            | Kind::Gt
-                            | Kind::Eq
-                            | Kind::Ne => {
-                                self.next_token();
-                                self.parse_binary_expression(left)
-                            }
-                            Kind::Lp => {
-                                self.next_token();
-                                self.parse_call_expression(left)
-                            }
-                            Kind::Ls => {
-                                self.next_token();
-                                self.parse_index_expression(left)
-                            }
-                            Kind::Dot => {
-                                self.next_token();
-                                self.parse_field_expression(left)
-                            }
-                            _ => left,
-                        }
-                    } else {
-                        left
-                    };
-                }
+            } else {
                 left
-            } else {
-                // TODO catch grammar error
-                None
-            }
-        } else {
-            None
-        }
-    }
-
-    fn parse_ident_expression(&self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let value = current.literal.clone();
-            Some(Box::new(Expr::Ident(token, value)))
-        } else {
-            None
-        }
-    }
-
-    fn parse_current_string(&self) -> Option<String> {
-        self.current_token().map(|token| token.literal.clone())
-    }
-
-    fn parse_integer_literal(&self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let value = match current.literal.clone().parse::<i64>() {
-                Ok(integer) => Some(integer),
-                Err(_) => {
-                    // TODO catch parse int error
-                    None
-                }
             };
-            Some(Box::new(Expr::Integer(token, value)))
-        } else {
-            None
+        }
+        Ok(left)
+    }
+
+    fn parse_ident_expr(&self) -> Expr {
+        let token = self.current_token().clone();
+        let value = token.literal.clone();
+        Expr::Ident(token, value)
+    }
+
+    fn parse_current_string(&self) -> String {
+        self.current_token().literal.clone()
+    }
+
+    fn parse_integer_literal(&self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        match token.literal.parse::<i64>() {
+            Ok(integer) => Ok(Expr::Integer(token, integer)),
+            Err(_) => Err(format!("parse integer error: {}", token)),
         }
     }
 
-    fn parse_float_literal(&self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let value = match current.literal.clone().parse::<f64>() {
-                Ok(float) => Some(float),
-                Err(_) => {
-                    // TODO catch parse float error
-                    Some(f64::NAN)
-                }
-            };
-            Some(Box::new(Expr::Float(token, value)))
-        } else {
-            None
+    fn parse_float_literal(&self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        match token.literal.parse::<f64>() {
+            Ok(float) => Ok(Expr::Float(token, float)),
+            Err(_) => Err(format!("parse float error: {}", token)),
         }
     }
 
-    fn parse_boolean_literal(&self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let value = match current.literal.clone().parse::<bool>() {
-                Ok(boolean) => Some(boolean),
-                Err(_) => {
-                    // TODO catch parse bool error
-                    None
-                }
-            };
-            Some(Box::new(Expr::Boolean(token, value)))
-        } else {
-            None
+    fn parse_boolean_literal(&self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        match token.literal.parse::<bool>() {
+            Ok(boolean) => Ok(Expr::Boolean(token, boolean)),
+            Err(_) => Err(format!("parse boolean error: {}", token)),
         }
     }
 
-    fn parse_string_literal(&self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let value = current.literal.clone();
-            Some(Box::new(Expr::String(token, value)))
-        } else {
-            None
-        }
+    fn parse_string_literal(&self) -> Expr {
+        let token = self.current_token().clone();
+        let string = token.literal.clone();
+        Expr::String(token, string)
     }
 
-    fn parse_let_expression(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            if !self.peek_token_expect(Kind::Ident) {
-                return None;
-            }
-            let name = self.parse_current_string();
-            if !self.peek_token_expect(Kind::Assign) {
-                return None;
-            }
+    fn parse_let_expr(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.peek_token_expect(Kind::Ident)?;
+        let name = self.parse_current_string();
+        self.peek_token_expect(Kind::Assign)?;
+        self.next_token();
+        let value = self.parse_expr(LOWEST)?;
+        if self.peek_token_is(Kind::Semi) {
             self.next_token();
-            let value = self.parse_expression(LOWEST);
-            if self.peek_token_is(Kind::Semi) {
-                self.next_token();
-            }
-            Some(Box::new(Expr::Let(token, name, value)))
-        } else {
-            None
         }
+        Ok(Expr::Let(token, name, Box::new(value)))
     }
 
-    fn parse_return_expression(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
+    fn parse_return_expr(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.next_token();
+        let value = self.parse_expr(LOWEST)?;
+        if self.peek_token_is(Kind::Semi) {
             self.next_token();
-            let value = self.parse_expression(LOWEST);
-            if self.peek_token_is(Kind::Semi) {
-                self.next_token();
-            }
-            Some(Box::new(Expr::Return(token, value)))
-        } else {
-            None
         }
+        Ok(Expr::Return(token, Box::new(value)))
     }
 
-    fn parse_unary_expression(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
+    fn parse_unary_expr(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.next_token();
+        let right = self.parse_expr(UNARY)?;
+        Ok(Expr::Unary(token, Box::new(right)))
+    }
+
+    fn parse_binary_expr(&mut self, left: Expr) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        let precedence = self.current_precedence();
+        self.next_token();
+        let right = self.parse_expr(precedence)?;
+        Ok(Expr::Binary(token, Box::new(left), Box::new(right)))
+    }
+
+    fn parse_paren_expr(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.next_token();
+        let expr = self.parse_expr(LOWEST)?;
+        self.peek_token_expect(Kind::Rp)?;
+        Ok(Expr::Paren(token, Box::new(expr)))
+    }
+
+    fn parse_if_expr(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.peek_token_expect(Kind::Lp)?;
+        self.next_token();
+        let condition = self.parse_expr(LOWEST)?;
+        self.peek_token_expect(Kind::Rp)?;
+        let consequence = self.parse_block_expr()?;
+        let mut alternative = Vec::new();
+        if self.peek_token_is(Kind::Else) {
             self.next_token();
-            let right = self.parse_expression(UNARY);
-            Some(Box::new(Expr::Unary(token, right)))
-        } else {
-            None
+            alternative = self.parse_block_expr()?;
         }
+        Ok(Expr::If(token, Box::new(condition), consequence, alternative))
     }
 
-    fn parse_binary_expression(&mut self, left: Option<Box<Expr>>) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let precedence = self.current_precedence();
-            self.next_token();
-            let right = self.parse_expression(precedence);
-            Some(Box::new(Expr::Binary(token, left, right)))
-        } else {
-            None
-        }
+    fn parse_function_literal(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.peek_token_expect(Kind::Lp)?;
+        let parameters = self.parse_ident_list(Kind::Rp)?;
+        let body = self.parse_block_expr()?;
+        Ok(Expr::Function(token, parameters, body))
     }
 
-    fn parse_paren_expression(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            self.next_token();
-            let expression = self.parse_expression(LOWEST);
-            if !self.peek_token_expect(Kind::Rp) {
-                None
-            } else {
-                Some(Box::new(Expr::Paren(token, expression)))
-            }
-        } else {
-            None
-        }
-    }
-
-    fn parse_if_expression(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            if !self.peek_token_expect(Kind::Lp) {
-                return None;
-            }
-            self.next_token();
-            let condition = self.parse_expression(LOWEST);
-            if !self.peek_token_expect(Kind::Rp) {
-                return None;
-            }
-            if !self.peek_token_expect(Kind::Lb) {
-                return None;
-            }
-            let consequence = self.parse_block_expression();
-            let mut alternative = Vec::new();
-            if self.peek_token_is(Kind::Else) {
-                self.next_token();
-                if !self.peek_token_expect(Kind::Lb) {
-                    return None;
-                }
-                alternative = self.parse_block_expression();
-            }
-            Some(Box::new(Expr::If(token, condition, consequence, alternative)))
-        } else {
-            None
-        }
-    }
-
-    fn parse_function_literal(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let mut name = None;
-            if self.peek_token_is(Kind::Ident) {
-                self.next_token();
-                name = self.parse_current_string();
-            }
-            if !self.peek_token_expect(Kind::Lp) {
-                return None;
-            }
-            let parameters = self.parse_ident_list(Kind::Rp);
-            if !self.peek_token_expect(Kind::Lb) {
-                return None;
-            }
-            let body = self.parse_block_expression();
-            Some(Box::new(Expr::Function(token, name, parameters, body)))
-        } else {
-            None
-        }
-    }
-
-    fn parse_ident_list(&mut self, end: Kind) -> Vec<String> {
+    fn parse_ident_list(&mut self, end: Kind) -> Result<Vec<String>, String> {
         let mut idents = Vec::new();
         if self.peek_token_is(end.clone()) {
             self.next_token();
         } else {
-            self.next_token();
-            if let Some(ident) = self.parse_current_string() {
-                idents.push(ident);
-            }
+            self.peek_token_expect(Kind::Ident)?;
+            idents.push(self.parse_current_string());
             while self.peek_token_is(Kind::Comma) {
                 self.next_token();
-                self.next_token();
-                if let Some(ident) = self.parse_current_string() {
-                    idents.push(ident);
-                }
+                self.peek_token_expect(Kind::Ident)?;
+                idents.push(self.parse_current_string());
             }
-            self.peek_token_expect(end);
+            self.peek_token_expect(end)?;
         }
-        idents
+        Ok(idents)
     }
 
-    fn parse_call_expression(&mut self, function: Option<Box<Expr>>) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let arguments = self.parse_expression_list(Kind::Rp);
-            Some(Box::new(Expr::Call(token, function, arguments)))
-        } else {
-            None
-        }
+    fn parse_call_expr(&mut self, function: Expr) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        let arguments = self.parse_expr_list(Kind::Rp)?;
+        Ok(Expr::Call(token, Box::new(function), arguments))
     }
 
-    fn parse_expression_list(&mut self, end: Kind) -> Vec<Expr> {
-        let mut expressions = Vec::new();
+    fn parse_expr_list(&mut self, end: Kind) -> Result<Vec<Expr>, String> {
+        let mut exprs = Vec::new();
         if self.peek_token_is(end.clone()) {
             self.next_token();
         } else {
             self.next_token();
-            if let Some(expression) = self.parse_expression(LOWEST) {
-                expressions.push(*expression);
-            }
+            exprs.push(self.parse_expr(LOWEST)?);
             while self.peek_token_is(Kind::Comma) {
                 self.next_token();
                 self.next_token();
-                if let Some(expression) = self.parse_expression(LOWEST) {
-                    expressions.push(*expression);
-                }
+                exprs.push(self.parse_expr(LOWEST)?);
             }
-            self.peek_token_expect(end);
+            self.peek_token_expect(end)?;
         }
-        expressions
+        Ok(exprs)
     }
 
-    fn parse_array_literal(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let elements = self.parse_expression_list(Kind::Rs);
-            Some(Box::new(Expr::Array(token, elements)))
-        } else {
-            None
-        }
+    fn parse_array_literal(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        let elements = self.parse_expr_list(Kind::Rs)?;
+        Ok(Expr::Array(token, elements))
     }
 
-    fn parse_map_literal(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            let mut pairs = Vec::new();
-            while !self.peek_token_is(Kind::Rb) {
-                self.next_token();
-                let key = self.parse_expression(LOWEST);
-                if !self.peek_token_expect(Kind::Colon) {
-                    return None;
-                }
-                self.next_token();
-                let value = self.parse_expression(LOWEST);
-                if let (Some(key), Some(value)) = (key, value) {
-                    pairs.push((*key, *value));
-                }
-                if !self.peek_token_is(Kind::Rb) && !self.peek_token_expect(Kind::Comma) {
-                    return None;
-                }
-            }
-            if !self.peek_token_expect(Kind::Rb) {
-                return None;
-            }
-            Some(Box::new(Expr::Map(token, pairs)))
-        } else {
-            None
-        }
-    }
-
-    fn parse_index_expression(&mut self, left: Option<Box<Expr>>) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
+    fn parse_map_literal(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        let mut pairs = Vec::new();
+        while !self.peek_token_is(Kind::Rb) {
             self.next_token();
-            let index = self.parse_expression(LOWEST);
-            if !self.peek_token_expect(Kind::Rs) {
-                None
-            } else {
-                Some(Box::new(Expr::Index(token, left, index)))
-            }
-        } else {
-            None
-        }
-    }
-
-    fn parse_field_expression(&mut self, object: Option<Box<Expr>>) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
+            let key = self.parse_expr(LOWEST)?;
+            self.peek_token_expect(Kind::Colon)?;
             self.next_token();
-            let field = self.parse_current_string();
-            Some(Box::new(Expr::Field(token, object, field)))
-        } else {
-            None
+            let value = self.parse_expr(LOWEST)?;
+            pairs.push((key, value));
+            if !self.peek_token_is(Kind::Rb) {
+                self.peek_token_expect(Kind::Comma)?;
+            }
         }
+        self.peek_token_expect(Kind::Rb)?;
+        Ok(Expr::Map(token, pairs))
     }
 
-    fn parse_request_literal(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            if !self.peek_token_expect(Kind::Ident) {
-                return None;
-            }
-            let name = self.parse_current_string().unwrap();
-            if !self.peek_token_expect(Kind::Template) {
-                return None;
-            }
-            let message = self.parse_current_string().unwrap();
-            let pieces = divide_template_pieces(message.trim().lines().fold(String::new(), |mut string, str| {
-                let _ = writeln!(string, "{}", str.trim());
-                string
-            }));
-            let mut asserts = Vec::new();
-            if self.peek_token_is(Kind::Ls) {
-                self.next_token();
-                asserts = self.parse_expression_list(Kind::Rs);
-            }
-            Some(Box::new(Expr::Request(token, name, pieces, asserts)))
-        } else {
-            None
-        }
+    fn parse_index_expr(&mut self, left: Expr) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.next_token();
+        let index = self.parse_expr(LOWEST)?;
+        self.peek_token_expect(Kind::Rs)?;
+        Ok(Expr::Index(token, Box::new(left), Box::new(index)))
     }
 
-    fn parse_test_literal(&mut self) -> Option<Box<Expr>> {
-        if let Some(current) = self.current_token() {
-            let token = current.clone();
-            if !self.peek_token_expect(Kind::Ident) {
-                return None;
-            }
-            let name = self.parse_current_string().unwrap();
-            if !self.peek_token_expect(Kind::Lb) {
-                return None;
-            }
-            let block = self.parse_block_expression();
-            Some(Box::new(Expr::Test(token, name, block)))
-        } else {
-            None
-        }
+    fn parse_field_expr(&mut self, object: Expr) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.peek_token_expect(Kind::Ident)?;
+        let field = self.parse_current_string();
+        Ok(Expr::Field(token, Box::new(object), field))
     }
 
-    fn parse_block_expression(&mut self) -> Vec<Expr> {
-        let mut expressions = Vec::new();
-        if let Some(Token {
-            kind: Kind::Lb,
-            literal: _,
-        }) = self.current_token()
-        {
+    fn parse_request_literal(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.peek_token_expect(Kind::Ident)?;
+        let name = self.parse_current_string();
+        self.peek_token_expect(Kind::Template)?;
+        let message = self.parse_current_string();
+        let pieces = divide_template_pieces(message.trim().lines().fold(String::new(), |mut string, str| {
+            string.push_str(str.trim());
+            string.push_str("\n");
+            string
+        }))?;
+        let mut asserts = Vec::new();
+        if self.peek_token_is(Kind::Ls) {
             self.next_token();
-            while let Some(current) = self.current_token() {
-                if current.kind == Kind::Rb {
-                    break;
-                }
-                if let Some(expression) = self.parse_expression(LOWEST) {
-                    expressions.push(*expression);
-                }
+            asserts = self.parse_expr_list(Kind::Rs)?;
+        }
+        Ok(Expr::Request(token, name, pieces, asserts))
+    }
+
+    fn parse_test_literal(&mut self) -> Result<Expr, String> {
+        let token = self.current_token().clone();
+        self.peek_token_expect(Kind::Ident)?;
+        let name = self.parse_current_string();
+        let block = self.parse_block_expr()?;
+        Ok(Expr::Test(token, name, block))
+    }
+
+    fn parse_block_expr(&mut self) -> Result<Vec<Expr>, String> {
+        let mut exprs = Vec::new();
+        self.peek_token_expect(Kind::Lb)?;
+        while !self.peek_token_is(Kind::Rb) {
+            self.next_token();
+            exprs.push(self.parse_expr(LOWEST)?);
+            if self.peek_token_is(Kind::Semi) {
                 self.next_token();
             }
         }
-        expressions
+        self.peek_token_expect(Kind::Rb)?;
+        Ok(exprs)
     }
 }
 
-fn divide_template_pieces(message: String) -> Vec<Expr> {
-    let mut expressions = Vec::new();
+fn divide_template_pieces(message: String) -> Result<Vec<Expr>, String> {
+    let mut exprs = Vec::new();
     let mut chars = message.chars().peekable();
     while let Some(char) = chars.next() {
         match (char, chars.peek()) {
@@ -545,12 +370,10 @@ fn divide_template_pieces(message: String) -> Vec<Expr> {
                     }
                 }
                 if closed {
-                    if let Some(e) = Parser::new(&string).parse_expression(LOWEST) {
-                        expressions.push(*e);
-                    }
+                    exprs.push(Parser::new(&string).parse_expr(LOWEST)?);
                 } else {
                     string.insert_str(0, "${");
-                    expressions.push(Expr::String(
+                    exprs.push(Expr::String(
                         Token {
                             kind: Kind::String,
                             literal: string.clone(),
@@ -568,7 +391,7 @@ fn divide_template_pieces(message: String) -> Vec<Expr> {
                         string.push(chars.next().unwrap());
                     }
                 }
-                expressions.push(Expr::String(
+                exprs.push(Expr::String(
                     Token {
                         kind: Kind::String,
                         literal: string.clone(),
@@ -578,11 +401,11 @@ fn divide_template_pieces(message: String) -> Vec<Expr> {
             }
         }
     }
-    expressions
+    Ok(exprs)
 }
 
 #[test]
-fn test_parse_let_expression() {
+fn test_parse_let_expr() {
     let tests = vec![
         ("let x =  5;", 1, "let x 5"),
         ("let y  = true;", 1, "let y true"),
@@ -590,24 +413,31 @@ fn test_parse_let_expression() {
         ("let i = 0; [1][i];", 2, "let i 0"),
     ];
     for (text, len, expected) in tests {
-        let source = Parser::new(text).parse();
-        assert!(source.block.len() == len);
-        if let Some(expression) = source.block.first() {
-            println!("{}", expression);
-            if let Expr::Let(token, Some(name), Some(value)) = expression.clone() {
-                let parsed = format!("{} {} {}", token, name, value);
-                assert!(expected == parsed);
-            } else {
-                unreachable!("let expression parse failed")
+        match Parser::new(text).parse() {
+            Ok(source) => {
+                println!("{}", source.len());
+                assert!(source.len() == len);
+                if let Some(expr) = source.first() {
+                    println!("{}", expr);
+                    if let Expr::Let(token, name, value) = expr {
+                        let parsed = format!("{} {} {}", token, name, value);
+                        assert!(expected == parsed);
+                    } else {
+                        unreachable!("let expr parse failed")
+                    }
+                } else {
+                    unreachable!("source expr none")
+                }
             }
-        } else {
-            unreachable!("source expression none")
+            Err(message) => {
+                unreachable!("{}", message)
+            }
         }
     }
 }
 
 #[test]
-fn test_parse_return_expression() {
+fn test_parse_return_expr() {
     let tests = vec![
         ("return 5;", 1, "5"),
         ("return true;", 1, "true"),
@@ -615,71 +445,74 @@ fn test_parse_return_expression() {
         ("return foobar; [1][i];", 2, "foobar"),
     ];
     for (text, len, expected) in tests {
-        let source = Parser::new(text).parse();
-        println!("source:{}", source);
-        assert!(source.block.len() == len);
-        if let Some(expression) = source.block.first() {
-            println!("{}", expression);
-            if let Expr::Return(_, Some(value)) = expression.clone() {
-                assert!(expected == value.to_string());
+        if let Ok(source) = Parser::new(text).parse() {
+            assert!(source.len() == len);
+            if let Some(expr) = source.first() {
+                println!("{}", expr);
+                if let Expr::Return(_, value) = expr {
+                    assert!(expected == value.to_string());
+                } else {
+                    unreachable!("return expr parse failed")
+                }
             } else {
-                unreachable!("return expression parse failed")
+                unreachable!("source expr none")
             }
-        } else {
-            unreachable!("source expression none")
         }
     }
 }
 
 #[test]
-fn test_parse_ident_expression() {
+fn test_parse_ident_expr() {
     let text = "foobar;";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Ident(_, value) = expression {
-            assert!(value == "foobar");
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Ident(_, value) = expr {
+                assert!(value == "foobar");
+            } else {
+                unreachable!("ident expr parse failed")
+            }
         } else {
-            unreachable!("ident expression parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
 fn test_parse_integer_literal() {
     let text = "5;";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Integer(_, Some(value)) = *expression {
-            assert!(value == 5);
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Integer(_, value) = *expr {
+                assert!(value == 5);
+            } else {
+                unreachable!("integer literal parse failed")
+            }
         } else {
-            unreachable!("integer literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
 fn test_parse_float_literal() {
     let text = "3.14159265358979323846264338327950288;";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("expression:{}", expression);
-        if let Expr::Float(_, Some(value)) = *expression {
-            println!("value:{}", value);
-            assert!(value == f64::consts::PI);
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("expr:{}", expr);
+            if let Expr::Float(_, value) = *expr {
+                println!("value:{}", value);
+                assert!(value == core::f64::consts::PI);
+            } else {
+                unreachable!("float literal parse failed")
+            }
         } else {
-            unreachable!("float literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
@@ -687,17 +520,18 @@ fn test_parse_float_literal() {
 fn test_parse_boolean_literal() {
     let tests = vec![("true;", true), ("false;", false)];
     for (text, expected) in tests {
-        let source = Parser::new(text).parse();
-        assert!(source.block.len() == 1);
-        if let Some(expression) = source.block.first() {
-            println!("{}", expression);
-            if let Expr::Boolean(_, Some(value)) = *expression {
-                assert!(value == expected);
+        if let Ok(source) = Parser::new(text).parse() {
+            assert!(source.len() == 1);
+            if let Some(expr) = source.first() {
+                println!("{}", expr);
+                if let Expr::Boolean(_, value) = *expr {
+                    assert!(value == expected);
+                } else {
+                    unreachable!("boolean literal parse failed")
+                }
             } else {
-                unreachable!("boolean literal parse failed")
+                unreachable!("source expr none")
             }
-        } else {
-            unreachable!("source expression none")
         }
     }
 }
@@ -705,22 +539,23 @@ fn test_parse_boolean_literal() {
 #[test]
 fn test_parse_string_literal() {
     let text = r#""hello world";"#;
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::String(_, value) = expression {
-            assert!(value == "hello world");
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::String(_, value) = expr {
+                assert!(value == "hello world");
+            } else {
+                unreachable!("string literal parse failed")
+            }
         } else {
-            unreachable!("string literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
-fn test_parse_unary_expression() {
+fn test_parse_unary_expr() {
     let tests = vec![
         ("!5;", "!", "5"),
         ("-15;", "-", "15"),
@@ -730,24 +565,25 @@ fn test_parse_unary_expression() {
         ("!false;", "!", "false"),
     ];
     for (text, expected_operator, expected_right) in tests {
-        let source = Parser::new(text).parse();
-        assert!(source.block.len() == 1);
-        if let Some(expression) = source.block.first() {
-            println!("{}", expression);
-            if let Expr::Unary(token, Some(right)) = expression {
-                assert!(expected_operator == token.to_string());
-                assert!(expected_right == right.to_string());
+        if let Ok(source) = Parser::new(text).parse() {
+            assert!(source.len() == 1);
+            if let Some(expr) = source.first() {
+                println!("{}", expr);
+                if let Expr::Unary(token, right) = expr {
+                    assert!(expected_operator == token.to_string());
+                    assert!(expected_right == right.to_string());
+                } else {
+                    unreachable!("unary expr parse failed")
+                }
             } else {
-                unreachable!("unary expression parse failed")
+                unreachable!("source expr none")
             }
-        } else {
-            unreachable!("source expression none")
         }
     }
 }
 
 #[test]
-fn test_parse_binary_expression() {
+fn test_parse_binary_expr() {
     let tests = vec![
         ("5 + 5;", "5", "+", "5"),
         ("5 - 5;", "5", "-", "5"),
@@ -770,19 +606,20 @@ fn test_parse_binary_expression() {
         ("false == false", "false", "==", "false"),
     ];
     for (text, expected_left, expected_operator, expected_right) in tests {
-        let source = Parser::new(text).parse();
-        assert!(source.block.len() == 1);
-        if let Some(expression) = source.block.first() {
-            println!("{}", expression);
-            if let Expr::Binary(token, Some(left), Some(right)) = expression {
-                assert!(expected_left == left.to_string());
-                assert!(expected_operator == token.to_string());
-                assert!(expected_right == right.to_string());
+        if let Ok(source) = Parser::new(text).parse() {
+            assert!(source.len() == 1);
+            if let Some(expr) = source.first() {
+                println!("{}", expr);
+                if let Expr::Binary(token, left, right) = expr {
+                    assert!(expected_left == left.to_string());
+                    assert!(expected_operator == token.to_string());
+                    assert!(expected_right == right.to_string());
+                } else {
+                    unreachable!("binary expr parse failed")
+                }
             } else {
-                unreachable!("binary expression parse failed")
+                unreachable!("source expr none")
             }
-        } else {
-            unreachable!("source expression none")
         }
     }
 }
@@ -798,7 +635,7 @@ fn test_parse_operator_precedence() {
         ("a * b / c", "((a * b) / c)"),
         ("a + b / c", "(a + (b / c))"),
         ("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)"),
-        ("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"),
+        ("3 + 4; -5 * 6", "(3 + 4)((-5) * 6)"),
         ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
         ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
         ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
@@ -825,78 +662,80 @@ fn test_parse_operator_precedence() {
         ),
     ];
     for (text, expected) in tests {
-        let source = Parser::new(text).parse();
-        println!("{}=={}", source, expected);
-        assert!(source.to_string() == expected);
+        if let Ok(source) = Parser::new(text).parse() {
+            println!(
+                "{}:{:?}",
+                source[0],
+                source.iter().map(|e| e.to_string() + "|").collect::<String>()
+            );
+            let actual: String = source.iter().map(|e| e.to_string()).collect::<String>();
+            println!("{}=={}", actual, expected);
+            assert!(actual == expected);
+        }
     }
 }
 
 #[test]
-fn test_parse_if_expression() {
+fn test_parse_if_expr() {
     let text = "if (x < y) { x }";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::If(_, Some(condition), consequence, alternative) = expression {
-            assert!(condition.to_string() == "(x < y)");
-            assert!(consequence[0].to_string() == "x");
-            assert!(alternative.is_empty())
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::If(_, condition, consequence, alternative) = expr {
+                assert!(condition.to_string() == "(x < y)");
+                assert!(consequence[0].to_string() == "x");
+                assert!(alternative.is_empty())
+            } else {
+                unreachable!("if expr parse failed")
+            }
         } else {
-            unreachable!("if expression parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
-fn test_parse_if_else_expression() {
+fn test_parse_if_else_expr() {
     let text = "if (x < y) { z;x } else { y }";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::If(_, Some(condition), consequence, alternative) = expression {
-            assert!(condition.to_string() == "(x < y)");
-            assert!(consequence[0].to_string() == "z");
-            assert!(consequence[1].to_string() == "x");
-            assert!(alternative[0].to_string() == "y")
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::If(_, condition, consequence, alternative) = expr {
+                assert!(condition.to_string() == "(x < y)");
+                assert!(consequence[0].to_string() == "z");
+                assert!(consequence[1].to_string() == "x");
+                assert!(alternative[0].to_string() == "y")
+            } else {
+                unreachable!("if expr parse failed")
+            }
         } else {
-            unreachable!("if expression parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
 fn test_parse_function_literal() {
     let tests = vec![
-        ("fn(x, y) { x + y }", None, vec!["x", "y"], "(x + y)"),
-        (
-            "fn add(x, y) { x + y }",
-            Some(String::from("add")),
-            vec!["x", "y"],
-            "(x + y)",
-        ),
-        ("fn(x) { x + 1;x }", None, vec!["x"], "(x + 1)"),
+        ("fn(x, y) { x + y }", vec!["x", "y"], "(x + y)"),
+        ("fn(x) { x + 1;x }", vec!["x"], "(x + 1)"),
+        ("fn() { 1 + 2;3 }", vec![], "(1 + 2)"),
     ];
-    for (text, expected_name, expected_parameters, expected_body) in tests {
-        let source = Parser::new(text).parse();
-        println!("source({}):{}", source.calls.len(), source);
-        assert!(source.calls.len() == 1);
-        if let Some(function) = source.calls.first() {
-            println!("{}", function);
-            if let Expr::Function(_, name, parameters, body) = function.clone() {
-                assert!(name == expected_name);
-                assert!(parameters == expected_parameters);
-                assert!(body[0].to_string() == expected_body);
+    for (text, expected_parameters, expected_body) in tests {
+        if let Ok(source) = Parser::new(text).parse() {
+            if let Some(function) = source.first() {
+                println!("{}", function);
+                if let Expr::Function(_, parameters, body) = function {
+                    assert!(parameters == &expected_parameters);
+                    assert!(body[0].to_string() == expected_body);
+                } else {
+                    unreachable!("function literal parse failed")
+                }
             } else {
-                unreachable!("function literal parse failed")
+                unreachable!("source expr none")
             }
-        } else {
-            unreachable!("source expression none")
         }
     }
 }
@@ -907,66 +746,65 @@ fn test_parse_function_parameter() {
         ("fn() {};", vec![]),
         ("fn(x) {};", vec!["x"]),
         ("fn(x, y, z) {};", vec!["x", "y", "z"]),
-        ("fn no() {};", vec![]),
-        ("fn one(x) {};", vec!["x"]),
-        ("fn multiple(x, y, z) {};", vec!["x", "y", "z"]),
     ];
     for (text, expected) in tests {
-        let source = Parser::new(text).parse();
-        assert!(source.calls.len() == 1);
-        if let Some(function) = source.calls.first() {
-            println!("{}", function);
-            if let Expr::Function(_, _, parameters, _) = function.clone() {
-                assert!(parameters == expected);
+        if let Ok(source) = Parser::new(text).parse() {
+            if let Some(function) = source.first() {
+                println!("{}", function);
+                if let Expr::Function(_, parameters, _) = function {
+                    assert!(parameters == &expected);
+                } else {
+                    unreachable!("function literal parse failed")
+                }
             } else {
-                unreachable!("function literal parse failed")
+                unreachable!("source expr none")
+            }
+        }
+    }
+}
+
+#[test]
+fn test_parse_call_expr() {
+    let text = "add(1, 2 * 3, 4 + 5);";
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Call(_, function, arguments) = expr {
+                assert!(function.to_string() == "add");
+                assert!(arguments[0].to_string() == "1");
+                assert!(arguments[1].to_string() == "(2 * 3)");
+                assert!(arguments[2].to_string() == "(4 + 5)");
+            } else {
+                unreachable!("call expr parse failed")
             }
         } else {
-            unreachable!("source expression none")
+            unreachable!("source expr none")
         }
     }
 }
 
 #[test]
-fn test_parse_call_expression() {
-    let text = "add(1, 2 * 3, 4 + 5);";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Call(_, Some(function), arguments) = expression {
-            assert!(function.to_string() == "add");
-            assert!(arguments[0].to_string() == "1");
-            assert!(arguments[1].to_string() == "(2 * 3)");
-            assert!(arguments[2].to_string() == "(4 + 5)");
-        } else {
-            unreachable!("call expression parse failed")
-        }
-    } else {
-        unreachable!("source expression none")
-    }
-}
-
-#[test]
-fn test_parse_call_expression_argument() {
+fn test_parse_call_expr_argument() {
     let tests = vec![
         ("add();", "add", vec![]),
         ("add(1);", "add", vec!["1"]),
         ("add(1, 2 * 3, 4 + 5);", "add", vec!["1", "(2 * 3)", "(4 + 5)"]),
     ];
     for (text, function_name, expected) in tests {
-        let source = Parser::new(text).parse();
-        assert!(source.block.len() == 1);
-        if let Some(expression) = source.block.first() {
-            println!("{}", expression);
-            if let Expr::Call(_, Some(function), arguments) = expression {
-                assert!(function.to_string() == function_name);
-                assert!(arguments.iter().map(|a| a.to_string()).collect::<Vec<String>>() == expected);
+        if let Ok(source) = Parser::new(text).parse() {
+            assert!(source.len() == 1);
+            if let Some(expr) = source.first() {
+                println!("{}", expr);
+                if let Expr::Call(_, function, arguments) = expr {
+                    assert!(function.to_string() == function_name);
+                    assert!(arguments.iter().map(|a| a.to_string()).collect::<Vec<String>>() == expected);
+                } else {
+                    unreachable!("call expr parse failed")
+                }
             } else {
-                unreachable!("call expression parse failed")
+                unreachable!("source expr none")
             }
-        } else {
-            unreachable!("source expression none")
         }
     }
 }
@@ -974,90 +812,95 @@ fn test_parse_call_expression_argument() {
 #[test]
 fn test_parse_array_literal_empty() {
     let text = "[]";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Array(_, elements) = expression {
-            assert!(elements.is_empty());
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Array(_, elements) = expr {
+                assert!(elements.is_empty());
+            } else {
+                unreachable!("array literal parse failed")
+            }
         } else {
-            unreachable!("array literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
 fn test_parse_array_literal() {
     let text = "[1, 2 * 2, 3 + 3]";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Array(_, elements) = expression {
-            assert!(elements.len() == 3);
-            assert!(elements[0].to_string() == "1");
-            assert!(elements[1].to_string() == "(2 * 2)");
-            assert!(elements[2].to_string() == "(3 + 3)");
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Array(_, elements) = expr {
+                assert!(elements.len() == 3);
+                assert!(elements[0].to_string() == "1");
+                assert!(elements[1].to_string() == "(2 * 2)");
+                assert!(elements[2].to_string() == "(3 + 3)");
+            } else {
+                unreachable!("array literal parse failed")
+            }
         } else {
-            unreachable!("array literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
-fn test_parse_index_expression() {
+fn test_parse_index_expr() {
     let text = "myArray[1 + 1]";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Index(_, Some(left), Some(index)) = expression {
-            assert!(left.to_string() == "myArray");
-            assert!(index.to_string() == "(1 + 1)");
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Index(_, left, index) = expr {
+                assert!(left.to_string() == "myArray");
+                assert!(index.to_string() == "(1 + 1)");
+            } else {
+                unreachable!("index expr parse failed")
+            }
         } else {
-            unreachable!("index expression parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
-fn test_parse_field_expression() {
+fn test_parse_field_expr() {
     let text = "object.field";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Field(_, Some(object), Some(field)) = expression {
-            assert!(object.to_string() == "object");
-            assert!(*field == "field");
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Field(_, object, field) = expr {
+                assert!(object.to_string() == "object");
+                assert!(*field == "field");
+            } else {
+                unreachable!("field expr parse failed")
+            }
         } else {
-            unreachable!("field expression parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
 fn test_parse_map_literal_empty() {
     let text = "{}";
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Map(_, pairs) = expression {
-            assert!(pairs.is_empty());
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Map(_, pairs) = expr {
+                assert!(pairs.is_empty());
+            } else {
+                unreachable!("map literal parse failed")
+            }
         } else {
-            unreachable!("map literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
@@ -1069,23 +912,24 @@ fn test_parse_map_literal_string_key() {
         (String::from("\"two\""), String::from("2")),
         (String::from("\"three\""), String::from("3")),
     ];
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Map(_, pairs) = expression {
-            assert!(
-                pairs
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<Vec<(String, String)>>()
-                    == expected
-            );
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Map(_, pairs) = expr {
+                assert!(
+                    pairs
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect::<Vec<(String, String)>>()
+                        == expected
+                );
+            } else {
+                unreachable!("map literal parse failed")
+            }
         } else {
-            unreachable!("map literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
@@ -1096,23 +940,24 @@ fn test_parse_map_literal_boolean_key() {
         (String::from("true"), String::from("1")),
         (String::from("false"), String::from("2")),
     ];
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Map(_, pairs) = expression {
-            assert!(
-                pairs
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<Vec<(String, String)>>()
-                    == expected
-            );
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Map(_, pairs) = expr {
+                assert!(
+                    pairs
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect::<Vec<(String, String)>>()
+                        == expected
+                );
+            } else {
+                unreachable!("map literal parse failed")
+            }
         } else {
-            unreachable!("map literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
@@ -1124,51 +969,53 @@ fn test_parse_map_literal_integer_key() {
         (String::from("2"), String::from("2")),
         (String::from("3"), String::from("3")),
     ];
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Map(_, pairs) = expression {
-            assert!(
-                pairs
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<Vec<(String, String)>>()
-                    == expected
-            );
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Map(_, pairs) = expr {
+                assert!(
+                    pairs
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect::<Vec<(String, String)>>()
+                        == expected
+                );
+            } else {
+                unreachable!("map literal parse failed")
+            }
         } else {
-            unreachable!("map literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
 #[test]
-fn test_parse_map_literal_with_expression() {
+fn test_parse_map_literal_with_expr() {
     let text = r#"{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}"#;
     let expected = vec![
         (String::from("\"one\""), String::from("(0 + 1)")),
         (String::from("\"two\""), String::from("(10 - 8)")),
         (String::from("\"three\""), String::from("(15 / 5)")),
     ];
-    let source = Parser::new(text).parse();
-    assert!(source.block.len() == 1);
-    if let Some(expression) = source.block.first() {
-        println!("{}", expression);
-        if let Expr::Map(_, pairs) = expression {
-            assert!(
-                pairs
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<Vec<(String, String)>>()
-                    == expected
-            );
+    if let Ok(source) = Parser::new(text).parse() {
+        assert!(source.len() == 1);
+        if let Some(expr) = source.first() {
+            println!("{}", expr);
+            if let Expr::Map(_, pairs) = expr {
+                assert!(
+                    pairs
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect::<Vec<(String, String)>>()
+                        == expected
+                );
+            } else {
+                unreachable!("map literal parse failed")
+            }
         } else {
-            unreachable!("map literal parse failed")
+            unreachable!("source expr none")
         }
-    } else {
-        unreachable!("source expression none")
     }
 }
 
@@ -1189,9 +1036,10 @@ fn test_parse_template_pieces() {
         ),
     ];
     for (message, expected_pieces) in tests {
-        let pieces = divide_template_pieces(message.to_string());
-        pieces.iter().for_each(|piece| println!("{}", piece));
-        assert!(pieces.iter().map(|piece| piece.to_string()).collect::<Vec<String>>() == expected_pieces);
+        if let Ok(pieces) = divide_template_pieces(message.to_string()) {
+            pieces.iter().for_each(|piece| println!("{}", piece));
+            assert!(pieces.iter().map(|piece| piece.to_string()).collect::<Vec<String>>() == expected_pieces);
+        }
     }
 }
 
@@ -1207,19 +1055,21 @@ fn test_parse_request_literal() {
         ("rq request`POST`", 1, "request", vec!["\"POST\n\""]),
     ];
     for (text, expected_len, expected_name, expected_pieces) in tests {
-        let source = Parser::new(text).parse();
-        assert!(source.calls.len() == expected_len);
-        if let Some(request) = source.calls.first() {
-            println!("request:{}", request);
-            if let Expr::Request(_, name, pieces, asserts) = request.clone() {
-                assert!(name == expected_name);
-                assert!(pieces.iter().map(|piece| piece.to_string()).collect::<Vec<String>>() == expected_pieces);
-                assert!(asserts.is_empty());
+        if let Ok(source) = Parser::new(text).parse() {
+            assert!(source.len() == expected_len);
+            if let Some(request) = source.first() {
+                println!("request:{}", request);
+                if let Expr::Request(_, name, pieces, asserts) = request.clone() {
+                    assert!(name == expected_name);
+                    pieces.iter().for_each(|piece| println!("{}", piece));
+                    assert!(pieces.iter().map(|piece| piece.to_string()).collect::<Vec<String>>() == expected_pieces);
+                    assert!(asserts.is_empty());
+                } else {
+                    unreachable!("request literal parse failed")
+                }
             } else {
-                unreachable!("request literal parse failed")
+                unreachable!("source expr none")
             }
-        } else {
-            unreachable!("source expression none")
         }
     }
 }
@@ -1241,17 +1091,20 @@ fn test_parse_request_asserts() {
         (r#"rq request`POST`[]"#, 0, vec![]),
     ];
     for (text, expected_len, expected_asserts) in tests {
-        let source = Parser::new(text).parse();
-        if let Some(request) = source.calls.first() {
-            println!("request:{}", request);
-            if let Expr::Request(_, _, _, asserts) = request.clone() {
-                assert!(asserts.len() == expected_len);
-                assert!(asserts.iter().map(|assert| assert.to_string()).collect::<Vec<String>>() == expected_asserts);
+        if let Ok(source) = Parser::new(text).parse() {
+            if let Some(request) = source.first() {
+                println!("request:{}", request);
+                if let Expr::Request(_, _, _, asserts) = request.clone() {
+                    assert!(asserts.len() == expected_len);
+                    assert!(
+                        asserts.iter().map(|assert| assert.to_string()).collect::<Vec<String>>() == expected_asserts
+                    );
+                } else {
+                    unreachable!("request literal parse failed")
+                }
             } else {
-                unreachable!("request literal parse failed")
+                unreachable!("source expr none")
             }
-        } else {
-            unreachable!("source expression none")
         }
     }
 }
@@ -1265,23 +1118,25 @@ fn test_parse_test_literal() {
                 let response = request();
                 response.status
             }"#,
-            String::from("expectStatusOk"),
+            "expectStatusOk",
             2,
         ),
         (
             r#"
             test empty {
             }"#,
-            String::from("empty"),
+            "empty",
             0,
         ),
     ];
     for (text, expected_name, expected_length) in tests {
-        let source = Parser::new(text).parse();
-        if let Some(block) = source.tests.get(&expected_name) {
-            assert!(block.len() == expected_length);
-        } else {
-            unreachable!("source expression none")
+        if let Ok(source) = Parser::new(text).parse() {
+            if let Some(Expr::Test(_, name, block)) = source.first() {
+                assert!(name == expected_name);
+                assert!(block.len() == expected_length);
+            } else {
+                unreachable!("source expr none")
+            }
         }
     }
 }

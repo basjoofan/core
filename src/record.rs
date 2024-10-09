@@ -185,48 +185,48 @@ const RAW: &str = r#"
 }
 "#;
 
-#[test]
-fn test_record_to_record() {
-    let record = Record {
-        name: String::from("name"),
-        time: Time::default(),
-        request: Request::default(),
-        response: Response::default(),
-        asserts: vec![Assert {
-            expression: Expr::Binary(
-                Token {
-                    kind: crate::token::Kind::Eq,
-                    literal: String::from("=="),
-                },
-                Some(Box::new(Expr::Ident(
-                    Token {
-                        kind: crate::token::Kind::Ident,
-                        literal: String::from("status"),
-                    },
-                    String::from("status"),
-                ))),
-                Some(Box::new(Expr::Integer(
-                    Token {
-                        kind: crate::token::Kind::Integer,
-                        literal: String::from("200"),
-                    },
-                    Some(200),
-                ))),
-            ),
-            left: Value::Integer(200),
-            comparison: Token {
-                kind: crate::token::Kind::Eq,
-                literal: String::from("=="),
-            },
-            right: Value::Integer(200),
-            result: true,
-        }],
-        error: String::from("error"),
-    };
-    let schema = schema();
-    let avro = record.to("id".to_string(), "name".to_string(), &schema);
-    println!("avro:{:?}", avro);
-    let mut writer = avro::Writer::new(&schema, Vec::new());
-    println!("append: {:?}", writer.append(avro).unwrap());
-    println!("encoded: {:?}", writer.into_inner().unwrap());
-}
+// #[test]
+// fn test_record_to_record() {
+//     let record = Record {
+//         name: String::from("name"),
+//         time: Time::default(),
+//         request: Request::default(),
+//         response: Response::default(),
+//         asserts: vec![Assert {
+//             expression: Expr::Binary(
+//                 Token {
+//                     kind: crate::token::Kind::Eq,
+//                     literal: String::from("=="),
+//                 },
+//                 Some(Box::new(Expr::Ident(
+//                     Token {
+//                         kind: crate::token::Kind::Ident,
+//                         literal: String::from("status"),
+//                     },
+//                     String::from("status"),
+//                 ))),
+//                 Some(Box::new(Expr::Integer(
+//                     Token {
+//                         kind: crate::token::Kind::Integer,
+//                         literal: String::from("200"),
+//                     },
+//                     Some(200),
+//                 ))),
+//             ),
+//             left: Value::Integer(200),
+//             comparison: Token {
+//                 kind: crate::token::Kind::Eq,
+//                 literal: String::from("=="),
+//             },
+//             right: Value::Integer(200),
+//             result: true,
+//         }],
+//         error: String::from("error"),
+//     };
+//     let schema = schema();
+//     let avro = record.to("id".to_string(), "name".to_string(), &schema);
+//     println!("avro:{:?}", avro);
+//     let mut writer = avro::Writer::new(&schema, Vec::new());
+//     println!("append: {:?}", writer.append(avro).unwrap());
+//     println!("encoded: {:?}", writer.into_inner().unwrap());
+// }

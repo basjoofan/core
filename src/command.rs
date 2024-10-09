@@ -1,11 +1,8 @@
 use crate::compiler::Compiler;
-use crate::context::Context;
-use crate::evaluator::eval_expression;
 use crate::parser::Parser;
 use crate::record;
 use crate::record::Record;
 use crate::stat::Stats;
-use crate::syntax::Expr;
 use crate::value::Value;
 use crate::vm::Vm;
 use std::io::stdin;
@@ -26,74 +23,78 @@ pub fn repl() {
             if text == "exit" {
                 break;
             }
-            let source = Parser::new(&text).parse();
-            let mut compiler = Compiler::new();
-            for expression in source.block.iter() {
-                if let Err(message) = compiler.compile(&expression) {
-                    println!("{}", message);
-                    continue 'repl;
+            match Parser::new(&text).parse() {
+                Ok(source) => {
+                    let mut compiler = Compiler::new();
+                    for expression in source.iter() {
+                        if let Err(message) = compiler.compile(&expression) {
+                            println!("{}", message);
+                            continue 'repl;
+                        }
+                    }
+                    let mut vm = Vm::new(compiler.constants, compiler.instructions);
+                    vm.run();
+                    println!("{}", vm.top().unwrap());
                 }
-            }
-            let mut vm = Vm::new(compiler.constants, compiler.instructions);
-            vm.run();
-            println!("{}", vm.top().unwrap());
+                Err(_) => continue 'repl,
+            };
         }
     }
 }
 
 pub fn eval(text: String) {
-    let mut context = Context::default();
-    let source = Parser::new(&text).parse();
-    print_error(source.eval(&mut context));
+    // let mut context = Context::default();
+    // let source = Parser::new(&text).parse();
+    // print_error(eval_block_expression(&source, &mut context));
 }
 
 pub fn run(path: Option<PathBuf>) {
-    let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
-    let mut context = Context::default();
-    let source = Parser::new(&text).parse();
-    print_error(source.eval(&mut context));
+    // let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
+    // let mut context = Context::default();
+    // let source = Parser::new(&text).parse();
+    // print_error(eval_block_expression(&source, &mut context));
 }
 
 pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
-    let text = read_to_string(std::env::current_dir().unwrap());
-    let mut context = Context::default();
-    let source = Parser::new(&text).parse();
-    print_error(source.eval(&mut context));
-    match name {
-        Some(name) => {
-            if let Some(block) = source.tests.get(&name) {
-                print_error(eval_test(&block, &mut context));
-            }
-        }
-        None => {
-            source.tests.into_iter().for_each(|(_, block)| {
-                let mut context = context.clone();
-                std::thread::spawn(move || {
-                    print_error(eval_test(&block, &mut context));
-                });
-            });
-        }
-    }
+    //     let text = read_to_string(std::env::current_dir().unwrap());
+    //     let mut context = Context::default();
+    //     let source = Parser::new(&text).parse();
+    //     print_error(eval_block_expression(&source, &mut context));
+    //     match name {
+    //         Some(name) => {
+    //             if let Some(block) = source.tests.get(&name) {
+    //                 print_error(eval_test(&block, &mut context));
+    //             }
+    //         }
+    //         None => {
+    //             source.tests.into_iter().for_each(|(_, block)| {
+    //                 let mut context = context.clone();
+    //                 std::thread::spawn(move || {
+    //                     print_error(eval_test(&block, &mut context));
+    //                 });
+    //             });
+    //         }
+    //     }
 }
 
-fn eval_test(expressions: &[Expr], context: &mut Context) -> Value {
-    let mut result = Value::None;
-    for expression in expressions.iter() {
-        result = eval_expression(expression, context);
-        match result {
-            Value::Error(_) => return result,
-            Value::Return(value) => return *value,
-            _ => {}
-        }
-    }
-    result
-}
+// fn eval_test(expressions: &[Expr], context: &mut Context) -> Value {
+//     let mut result = Value::None;
+//     for expression in expressions.iter() {
+//         result = eval_expression(expression, context);
+//         match result {
+//             Value::Error(_) => return result,
+//             Value::Return(value) => return *value,
+//             _ => {}
+//         }
+//     }
+//     result
+// }
 
 // pub fn blow(name: String, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
 //     let text = read_to_string(std::env::current_dir().unwrap());
 //     let mut context = Context::default();
 //     let source = Parser::new(&text).parse();
-//     print_error(source.eval(&mut context));
+//     print_error(eval_block_expression(&source, &mut context));
 //     let (sender, receiver) = mpsc::channel();
 //     let continuous = Arc::new(AtomicBool::new(true));
 //     let iterations = iterations / concurrency;
@@ -124,7 +125,7 @@ fn eval_test(expressions: &[Expr], context: &mut Context) -> Value {
 //     let text = read_to_string(std::env::current_dir().unwrap());
 //     let mut context = Context::default();
 //     let source = Parser::new(&text).parse();
-//     print_error(source.eval(&mut context));
+//     print_error(eval_block_expression(&source, &mut context));
 //     let (sender, receiver) = mpsc::channel();
 //     for test in source.tests.into_iter() {
 //         if let (Some(tags), Some(name)) = match test {

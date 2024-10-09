@@ -2,8 +2,6 @@ use super::Error;
 use super::Header;
 use super::Headers;
 use super::Stream;
-use crate::context::Context;
-use crate::parser::Parser;
 use crate::value::Value;
 use std::collections::HashMap;
 use std::io::BufRead;
@@ -82,8 +80,9 @@ impl Response {
         }
         map.insert(String::from("headers"), Value::Map(headers));
         map.insert(String::from("body"), Value::String(self.body.clone()));
-        let json = Parser::new(&self.body).parse().eval(&mut Context::default());
-        map.insert(String::from("json"), json);
+        // TODO parse json value
+        // let json = Parser::new(&self.body).parse().eval(&mut Context::default());
+        // map.insert(String::from("json"), json);
         Value::Map(map)
     }
 }

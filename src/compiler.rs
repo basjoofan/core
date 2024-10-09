@@ -30,7 +30,7 @@ impl Compiler {
         match expression {
             Expr::Ident(_, _) => todo!(),
             Expr::Integer(_, value) => {
-                let integer = Value::Integer(value.unwrap_or_default());
+                let integer = Value::Integer(*value);
                 let index = self.save(integer);
                 self.emit(Opcode::Constant(index));
             }
@@ -41,8 +41,8 @@ impl Compiler {
             Expr::Return(_, _) => todo!(),
             Expr::Unary(_, _) => todo!(),
             Expr::Binary(token, left, right) => {
-                self.compile(&left.clone().unwrap())?;
-                self.compile(&right.clone().unwrap())?;
+                self.compile(left)?;
+                self.compile(right)?;
                 match token.kind {
                     Kind::Plus => self.emit(Opcode::Add),
                     _ => Err(format!("Unknown operator: {}", token))?,
@@ -50,7 +50,7 @@ impl Compiler {
             }
             Expr::Paren(_, _) => todo!(),
             Expr::If(_, _, _, _) => todo!(),
-            Expr::Function(_, _, _, _) => todo!(),
+            Expr::Function(_, _, _) => todo!(),
             Expr::Call(_, _, _) => todo!(),
             Expr::Array(_, _) => todo!(),
             Expr::Map(_, _) => todo!(),
@@ -72,8 +72,8 @@ mod tests {
     fn run_compiler_tests(tests: Vec<(&str, Vec<Value>, Vec<Opcode>)>) {
         let mut compiler = Compiler::new();
         for (text, constants, instructions) in tests {
-            let source = crate::parser::Parser::new(text).parse();
-            for expression in source.block.iter() {
+            let source = crate::parser::Parser::new(text).parse().unwrap();
+            for expression in source.iter() {
                 let result = compiler.compile(&expression);
                 assert!(result.is_ok(), "{}", result.unwrap_err())
             }
