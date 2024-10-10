@@ -69,7 +69,7 @@ impl Parser {
     }
 
     fn parse_expr(&mut self, mut precedence: u8) -> Result<Expr, String> {
-        let prefix = match self.current_token().kind {
+        let mut left = match self.current_token().kind {
             Kind::Ident => self.parse_ident_expr(),
             Kind::Integer => self.parse_integer_literal()?,
             Kind::Float => self.parse_float_literal()?,
@@ -93,30 +93,32 @@ impl Parser {
             Kind::Test => self.parse_test_literal()?,
             _ => Err(format!("parse expr error: {}", self.current_token()))?,
         };
-        let mut left = prefix;
         while !self.peek_token_is(Kind::Semi) && precedence < self.peek_precedence() {
-            left = if let Some(peek) = self.peek_token() {
-                match peek.kind {
-                    Kind::Plus | Kind::Minus | Kind::Star | Kind::Slash | Kind::Lt | Kind::Gt | Kind::Eq | Kind::Ne => {
-                        self.next_token();
-                        self.parse_binary_expr(left)?
-                    }
-                    Kind::Lp => {
-                        self.next_token();
-                        self.parse_call_expr(left)?
-                    }
-                    Kind::Ls => {
-                        self.next_token();
-                        self.parse_index_expr(left)?
-                    }
-                    Kind::Dot => {
-                        self.next_token();
-                        self.parse_field_expr(left)?
-                    }
-                    _ => left,
+            left = match self.peek_token() {
+                Some(Token { kind: Kind::Plus, .. })
+                | Some(Token { kind: Kind::Minus, .. })
+                | Some(Token { kind: Kind::Star, .. })
+                | Some(Token { kind: Kind::Slash, .. })
+                | Some(Token { kind: Kind::Lt, .. })
+                | Some(Token { kind: Kind::Gt, .. })
+                | Some(Token { kind: Kind::Eq, .. })
+                | Some(Token { kind: Kind::Ne, .. }) => {
+                    self.next_token();
+                    self.parse_binary_expr(left)?
                 }
-            } else {
-                left
+                Some(Token { kind: Kind::Lp, .. }) => {
+                    self.next_token();
+                    self.parse_call_expr(left)?
+                }
+                Some(Token { kind: Kind::Ls, .. }) => {
+                    self.next_token();
+                    self.parse_index_expr(left)?
+                }
+                Some(Token { kind: Kind::Dot, .. }) => {
+                    self.next_token();
+                    self.parse_field_expr(left)?
+                }
+                _ => left,
             };
         }
         Ok(left)
@@ -318,7 +320,7 @@ impl Parser {
         let message = self.parse_current_string();
         let pieces = divide_template_pieces(message.trim().lines().fold(String::new(), |mut string, str| {
             string.push_str(str.trim());
-            string.push_str("\n");
+            string.push('\n');
             string
         }))?;
         let mut asserts = Vec::new();
