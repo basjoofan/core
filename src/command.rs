@@ -36,7 +36,10 @@ pub fn repl() {
                     vm.run();
                     println!("{}", vm.top().unwrap());
                 }
-                Err(_) => continue 'repl,
+                Err(message) => {
+                    println!("{}", message);
+                    continue 'repl;
+                }
             };
         }
     }
