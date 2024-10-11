@@ -107,6 +107,7 @@ pub fn segment(text: &str) -> Vec<Token> {
             tokens.push(Token::new(kind, literal));
         }
     }
+    tokens.push(Token::new(Kind::Eof, String::new()));
     tokens
 }
 
@@ -287,6 +288,7 @@ fn test_segment() {
         (Kind::Dot, "."),
         (Kind::Ident, "status"),
         (Kind::Rb, "}"),
+        (Kind::Eof, ""),
     ];
     let tokens = segment(text);
     assert_eq!(expect.len(), tokens.len());

@@ -4,7 +4,8 @@ use std::fmt::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
-    Illegal,
+    Illegal, // illegal token
+    Eof,     // end of file
 
     // ident + literal
     Ident,    // add, foobar, x, y, ...

@@ -16,7 +16,8 @@ impl Parser {
     }
 
     fn next_token(&mut self) {
-        self.index += 1;
+        let index = self.index + 1;
+        (index < self.tokens.len()).then(|| self.index = index);
     }
 
     fn current_token(&self) -> &Token {
@@ -58,7 +59,7 @@ impl Parser {
 
     pub fn parse(&mut self) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
-        while self.index < self.tokens.len() {
+        while self.current_token().kind != Kind::Eof {
             exprs.push(self.parse_expr(LOWEST)?);
             if self.peek_token_is(&Kind::Semi) {
                 self.next_token();
