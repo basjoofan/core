@@ -1,9 +1,9 @@
 // use crate::context::Context;
 // use crate::http::Client;
 // use crate::record::Assert;
-// use crate::syntax::Expr;
+// use crate::Expr;
 // use crate::token::{Kind, Token};
-// use crate::value::Value;
+// use crate::Value;
 // use std::collections::HashMap;
 
 // fn eval_expression(expression: &Expr, context: &mut Context) -> Value {

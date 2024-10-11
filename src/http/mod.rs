@@ -7,16 +7,18 @@ mod response;
 mod stream;
 mod time;
 mod url;
-pub use client::Client;
-pub use content::Content;
-pub use error::Error;
-pub use header::Header;
-pub use header::Headers;
+
+// use client::Client;
+use content::Content;
+use error::Error;
+use header::Header;
+use header::Headers;
+use stream::Stream;
+use url::Url;
+
 pub use request::Request;
 pub use response::Response;
-pub use stream::Stream;
 pub use time::Time;
-pub use url::Url;
 
 macro_rules! http_type {
     ($type: ident $(,$name: ident => $value: literal)+) => {

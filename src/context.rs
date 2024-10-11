@@ -1,5 +1,5 @@
 use crate::native;
-use crate::value::Value;
+use crate::Value;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 

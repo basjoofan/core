@@ -1,10 +1,10 @@
-use crate::compiler::Compiler;
-use crate::parser::Parser;
+use crate::Compiler;
+use crate::Parser;
 use crate::record;
-use crate::record::Record;
-use crate::stat::Stats;
-use crate::value::Value;
-use crate::vm::Vm;
+use crate::Record;
+use crate::Stats;
+use crate::Value;
+use crate::Vm;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ pub fn repl() {
                 Ok(source) => {
                     let mut compiler = Compiler::new();
                     for expression in source.iter() {
-                        if let Err(message) = compiler.compile(&expression) {
+                        if let Err(message) = compiler.compile(expression) {
                             println!("{}", message);
                             continue 'repl;
                         }

@@ -1,9 +1,9 @@
 use crate::http::Request;
 use crate::http::Response;
 use crate::http::Time;
-use crate::syntax::Expr;
-use crate::token::Token;
-use crate::value::Value;
+use crate::Expr;
+use crate::Token;
+use crate::Value;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;

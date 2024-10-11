@@ -1,6 +1,7 @@
 use crate::lexer;
-use crate::syntax::Expr;
-use crate::token::{Kind, Token};
+use crate::Expr;
+use crate::Kind;
+use crate::Token;
 
 pub struct Parser {
     tokens: Vec<Token>,

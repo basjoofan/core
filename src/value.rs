@@ -1,4 +1,4 @@
-use crate::syntax::Expr;
+use crate::Expr;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;

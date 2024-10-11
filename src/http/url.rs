@@ -19,7 +19,7 @@ impl std::convert::From<&str> for Url {
                     (str, "/")
                 };
                 let (host, port) = if let Some(j) = host.find(':') {
-                    (&host[..j], (&host[j + 1..]).parse::<u16>().ok())
+                    (&host[..j], host[j + 1..].parse::<u16>().ok())
                 } else {
                     (host, None)
                 };

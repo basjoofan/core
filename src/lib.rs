@@ -14,3 +14,14 @@ mod token;
 mod value;
 mod vm;
 mod writer;
+
+use token::Kind;
+use token::Token;
+use syntax::Expr;
+use value::Value;
+use code::Opcode;
+use compiler::Compiler;
+use parser::Parser;
+use record::Record;
+use stat::Stats;
+use vm::Vm;

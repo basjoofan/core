@@ -1,5 +1,5 @@
-use crate::token::Kind;
-use crate::token::Token;
+use crate::Kind;
+use crate::Token;
 
 pub fn segment(text: &str) -> Vec<Token> {
     let mut tokens = Vec::new();

@@ -2,7 +2,7 @@ use super::Error;
 use super::Header;
 use super::Headers;
 use super::Stream;
-use crate::value::Value;
+use crate::Value;
 use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::BufReader;

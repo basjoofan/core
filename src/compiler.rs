@@ -1,7 +1,7 @@
-use crate::code::Opcode;
-use crate::syntax::Expr;
-use crate::token::Kind;
-use crate::value::Value;
+use crate::Opcode;
+use crate::Expr;
+use crate::Kind;
+use crate::Value;
 
 pub struct Compiler {
     pub instructions: Vec<Opcode>,
@@ -65,16 +65,16 @@ impl Compiler {
 
 #[cfg(test)]
 mod tests {
-    use crate::code::Opcode;
-    use crate::compiler::Compiler;
-    use crate::value::Value;
+    use crate::Opcode;
+    use crate::Compiler;
+    use crate::Value;
 
     fn run_compiler_tests(tests: Vec<(&str, Vec<Value>, Vec<Opcode>)>) {
         let mut compiler = Compiler::new();
         for (text, constants, instructions) in tests {
             let source = crate::parser::Parser::new(text).parse().unwrap();
             for expression in source.iter() {
-                let result = compiler.compile(&expression);
+                let result = compiler.compile(expression);
                 assert!(result.is_ok(), "{}", result.unwrap_err())
             }
             assert_eq!(compiler.instructions, instructions);

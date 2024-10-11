@@ -1,5 +1,5 @@
-use crate::code::Opcode;
-use crate::value::Value;
+use crate::Opcode;
+use crate::Value;
 
 pub struct Vm {
     constants: Vec<Value>,
@@ -48,16 +48,16 @@ impl Vm {
 
 #[cfg(test)]
 mod tests {
-    use crate::compiler::Compiler;
-    use crate::value::Value;
-    use crate::vm::Vm;
+    use crate::Compiler;
+    use crate::Value;
+    use crate::Vm;
 
     fn run_vm_tests(tests: Vec<(&str, Value)>) {
         for (text, value) in tests {
             let source = crate::parser::Parser::new(text).parse().unwrap();
             let mut compiler = Compiler::new();
             for expression in source.iter() {
-                let result = compiler.compile(&expression);
+                let result = compiler.compile(expression);
                 assert!(result.is_ok(), "{}", result.unwrap_err())
             }
             let mut vm = Vm::new(compiler.constants, compiler.instructions);
