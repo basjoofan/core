@@ -28,13 +28,13 @@ impl Parser {
         self.tokens.get(self.index + 1)
     }
 
-    fn peek_token_is(&self, kind: &Kind) -> bool {
-        matches!(self.peek_token(), Some(peek) if kind == &peek.kind)
+    fn peek_token_is(&self, kind: Kind) -> bool {
+        matches!(self.peek_token(), Some(peek) if kind == peek.kind)
     }
 
-    fn peek_token_expect(&mut self, kind: &Kind) -> Result<(), String> {
+    fn peek_token_expect(&mut self, kind: Kind) -> Result<(), String> {
         if let Some(peek) = self.peek_token() {
-            if kind == &peek.kind {
+            if kind == peek.kind {
                 self.next_token();
                 Ok(())
             } else {
@@ -61,7 +61,7 @@ impl Parser {
         let mut exprs = Vec::new();
         while self.current_token().kind != Kind::Eof {
             exprs.push(self.parse_expr(u8::MIN)?);
-            if self.peek_token_is(&Kind::Semi) {
+            if self.peek_token_is(Kind::Semi) {
                 self.next_token();
             }
             self.next_token();
@@ -94,7 +94,7 @@ impl Parser {
             Kind::Test => self.parse_test_literal()?,
             _ => Err(format!("parse expr error: {}", self.current_token()))?,
         };
-        while !self.peek_token_is(&Kind::Semi) && precedence < self.peek_precedence() {
+        while !self.peek_token_is(Kind::Semi) && precedence < self.peek_precedence() {
             left = match self.peek_token() {
                 Some(Token { kind: Kind::Plus, .. })
                 | Some(Token { kind: Kind::Minus, .. })
@@ -167,12 +167,12 @@ impl Parser {
 
     fn parse_let_expr(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
-        self.peek_token_expect(&Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident)?;
         let name = self.parse_current_string();
-        self.peek_token_expect(&Kind::Assign)?;
+        self.peek_token_expect(Kind::Assign)?;
         self.next_token();
         let value = self.parse_expr(u8::MIN)?;
-        if self.peek_token_is(&Kind::Semi) {
+        if self.peek_token_is(Kind::Semi) {
             self.next_token();
         }
         Ok(Expr::Let(token, name, Box::new(value)))
@@ -182,7 +182,7 @@ impl Parser {
         let token = self.current_token().clone();
         self.next_token();
         let value = self.parse_expr(u8::MIN)?;
-        if self.peek_token_is(&Kind::Semi) {
+        if self.peek_token_is(Kind::Semi) {
             self.next_token();
         }
         Ok(Expr::Return(token, Box::new(value)))
@@ -211,19 +211,19 @@ impl Parser {
         let token = self.current_token().clone();
         self.next_token();
         let expr = self.parse_expr(u8::MIN)?;
-        self.peek_token_expect(&Kind::Rp)?;
+        self.peek_token_expect(Kind::Rp)?;
         Ok(Expr::Paren(token, Box::new(expr)))
     }
 
     fn parse_if_expr(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
-        self.peek_token_expect(&Kind::Lp)?;
+        self.peek_token_expect(Kind::Lp)?;
         self.next_token();
         let condition = self.parse_expr(u8::MIN)?;
-        self.peek_token_expect(&Kind::Rp)?;
+        self.peek_token_expect(Kind::Rp)?;
         let consequence = self.parse_block_expr()?;
         let mut alternative = Vec::new();
-        if self.peek_token_is(&Kind::Else) {
+        if self.peek_token_is(Kind::Else) {
             self.next_token();
             alternative = self.parse_block_expr()?;
         }
@@ -232,19 +232,19 @@ impl Parser {
 
     fn parse_function_literal(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
-        self.peek_token_expect(&Kind::Lp)?;
-        let parameters = self.parse_ident_list(&Kind::Rp)?;
+        self.peek_token_expect(Kind::Lp)?;
+        let parameters = self.parse_ident_list(Kind::Rp)?;
         let body = self.parse_block_expr()?;
         Ok(Expr::Function(token, parameters, body))
     }
 
-    fn parse_ident_list(&mut self, end: &Kind) -> Result<Vec<String>, String> {
+    fn parse_ident_list(&mut self, end: Kind) -> Result<Vec<String>, String> {
         let mut idents = Vec::new();
         while !self.peek_token_is(end) {
-            self.peek_token_expect(&Kind::Ident)?;
+            self.peek_token_expect(Kind::Ident)?;
             idents.push(self.parse_current_string());
             if !self.peek_token_is(end) {
-                self.peek_token_expect(&Kind::Comma)?;
+                self.peek_token_expect(Kind::Comma)?;
             }
         }
         self.peek_token_expect(end)?;
@@ -253,17 +253,17 @@ impl Parser {
 
     fn parse_call_expr(&mut self, function: Expr) -> Result<Expr, String> {
         let token = self.current_token().clone();
-        let arguments = self.parse_expr_list(&Kind::Rp)?;
+        let arguments = self.parse_expr_list(Kind::Rp)?;
         Ok(Expr::Call(token, Box::new(function), arguments))
     }
 
-    fn parse_expr_list(&mut self, end: &Kind) -> Result<Vec<Expr>, String> {
+    fn parse_expr_list(&mut self, end: Kind) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
         while !self.peek_token_is(end) {
             self.next_token();
             exprs.push(self.parse_expr(u8::MIN)?);
             if !self.peek_token_is(end) {
-                self.peek_token_expect(&Kind::Comma)?;
+                self.peek_token_expect(Kind::Comma)?;
             }
         }
         self.peek_token_expect(end)?;
@@ -272,25 +272,25 @@ impl Parser {
 
     fn parse_array_literal(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
-        let elements = self.parse_expr_list(&Kind::Rs)?;
+        let elements = self.parse_expr_list(Kind::Rs)?;
         Ok(Expr::Array(token, elements))
     }
 
     fn parse_map_literal(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
         let mut pairs = Vec::new();
-        while !self.peek_token_is(&Kind::Rb) {
+        while !self.peek_token_is(Kind::Rb) {
             self.next_token();
             let key = self.parse_expr(u8::MIN)?;
-            self.peek_token_expect(&Kind::Colon)?;
+            self.peek_token_expect(Kind::Colon)?;
             self.next_token();
             let value = self.parse_expr(u8::MIN)?;
             pairs.push((key, value));
-            if !self.peek_token_is(&Kind::Rb) {
-                self.peek_token_expect(&Kind::Comma)?;
+            if !self.peek_token_is(Kind::Rb) {
+                self.peek_token_expect(Kind::Comma)?;
             }
         }
-        self.peek_token_expect(&Kind::Rb)?;
+        self.peek_token_expect(Kind::Rb)?;
         Ok(Expr::Map(token, pairs))
     }
 
@@ -298,22 +298,22 @@ impl Parser {
         let token = self.current_token().clone();
         self.next_token();
         let index = self.parse_expr(u8::MIN)?;
-        self.peek_token_expect(&Kind::Rs)?;
+        self.peek_token_expect(Kind::Rs)?;
         Ok(Expr::Index(token, Box::new(left), Box::new(index)))
     }
 
     fn parse_field_expr(&mut self, object: Expr) -> Result<Expr, String> {
         let token = self.current_token().clone();
-        self.peek_token_expect(&Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident)?;
         let field = self.parse_current_string();
         Ok(Expr::Field(token, Box::new(object), field))
     }
 
     fn parse_request_literal(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
-        self.peek_token_expect(&Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident)?;
         let name = self.parse_current_string();
-        self.peek_token_expect(&Kind::Template)?;
+        self.peek_token_expect(Kind::Template)?;
         let message = self.parse_current_string();
         let pieces = divide_template_pieces(message.trim().lines().fold(String::new(), |mut string, str| {
             string.push_str(str.trim());
@@ -321,16 +321,16 @@ impl Parser {
             string
         }))?;
         let mut asserts = Vec::new();
-        if self.peek_token_is(&Kind::Ls) {
+        if self.peek_token_is(Kind::Ls) {
             self.next_token();
-            asserts = self.parse_expr_list(&Kind::Rs)?;
+            asserts = self.parse_expr_list(Kind::Rs)?;
         }
         Ok(Expr::Request(token, name, pieces, asserts))
     }
 
     fn parse_test_literal(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
-        self.peek_token_expect(&Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident)?;
         let name = self.parse_current_string();
         let block = self.parse_block_expr()?;
         Ok(Expr::Test(token, name, block))
@@ -338,15 +338,15 @@ impl Parser {
 
     fn parse_block_expr(&mut self) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
-        self.peek_token_expect(&Kind::Lb)?;
-        while !self.peek_token_is(&Kind::Rb) {
+        self.peek_token_expect(Kind::Lb)?;
+        while !self.peek_token_is(Kind::Rb) {
             self.next_token();
             exprs.push(self.parse_expr(u8::MIN)?);
-            if self.peek_token_is(&Kind::Semi) {
+            if self.peek_token_is(Kind::Semi) {
                 self.next_token();
             }
         }
-        self.peek_token_expect(&Kind::Rb)?;
+        self.peek_token_expect(Kind::Rb)?;
         Ok(exprs)
     }
 }
