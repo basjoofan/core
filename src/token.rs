@@ -53,7 +53,7 @@ pub enum Kind {
     Test,   // test
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: Kind,
     pub literal: String,
@@ -66,20 +66,22 @@ impl Token {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
-            Kind::Eq => EQUALS,
-            Kind::Ne => EQUALS,
-            Kind::Lt => COMPARE,
-            Kind::Gt => COMPARE,
-            Kind::Plus => ADD_SUB,
-            Kind::Minus => ADD_SUB,
-            Kind::Star => MUL_DIV,
-            Kind::Slash => MUL_DIV,
-            // Kind::Minus | Kind::Bang  => UNARY
-            Kind::Lp => CALL,
-            Kind::Ls => SELECT,
-            Kind::Dot => SELECT,
-            // Kind::Let | Kind::Return  => STMT
-            _ => LOWEST,
+            Kind::Eq => 2,    // 8==6
+            Kind::Ne => 2,    // 8!=6
+            Kind::Lt => 3,    // 8<6
+            Kind::Gt => 3,    // 8>6
+            Kind::Plus => 4,  // 8+6
+            Kind::Minus => 4, // 8-6
+            Kind::Star => 5,  // 8*6
+            Kind::Slash => 5, // 8/6
+            // Kind::Minus => 6,  -X unary minus +2
+            Kind::Bang => 6,   // !X
+            Kind::Lp => 7,     // function()
+            Kind::Ls => 8,     // array[index]
+            Kind::Dot => 8,    // object.field
+            Kind::Let => 9,    // let
+            Kind::Return => 9, // return
+            _ => 0,
         }
     }
 }
@@ -89,13 +91,3 @@ impl Display for Token {
         write!(f, "{}", self.literal)
     }
 }
-
-pub const LOWEST: u8 = 1;
-const EQUALS: u8 = 2; // ==
-const COMPARE: u8 = 3; // > or <
-const ADD_SUB: u8 = 4; // + or -
-const MUL_DIV: u8 = 5; // * or /
-pub const UNARY: u8 = 6; // -X or !X
-const CALL: u8 = 7; // myFunction(X)
-const SELECT: u8 = 8; // array[index] or object.field
-pub const STMT: u8 = 9; // let or return

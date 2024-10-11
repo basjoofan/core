@@ -1,6 +1,6 @@
 use crate::lexer;
 use crate::syntax::Expr;
-use crate::token::{Kind, Token, LOWEST, STMT, UNARY};
+use crate::token::{Kind, Token};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -53,14 +53,14 @@ impl Parser {
         if let Some(peek) = self.peek_token() {
             peek.precedence()
         } else {
-            LOWEST
+            u8::MIN
         }
     }
 
     pub fn parse(&mut self) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
         while self.current_token().kind != Kind::Eof {
-            exprs.push(self.parse_expr(LOWEST)?);
+            exprs.push(self.parse_expr(u8::MIN)?);
             if self.peek_token_is(&Kind::Semi) {
                 self.next_token();
             }
@@ -77,11 +77,11 @@ impl Parser {
             Kind::True | Kind::False => self.parse_boolean_literal()?,
             Kind::String => self.parse_string_literal(),
             Kind::Let => {
-                precedence = STMT;
+                precedence = self.current_precedence();
                 self.parse_let_expr()?
             }
             Kind::Return => {
-                precedence = STMT;
+                precedence = self.current_precedence();
                 self.parse_return_expr()?
             }
             Kind::Bang | Kind::Minus => self.parse_unary_expr()?,
@@ -171,7 +171,7 @@ impl Parser {
         let name = self.parse_current_string();
         self.peek_token_expect(&Kind::Assign)?;
         self.next_token();
-        let value = self.parse_expr(LOWEST)?;
+        let value = self.parse_expr(u8::MIN)?;
         if self.peek_token_is(&Kind::Semi) {
             self.next_token();
         }
@@ -181,7 +181,7 @@ impl Parser {
     fn parse_return_expr(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
         self.next_token();
-        let value = self.parse_expr(LOWEST)?;
+        let value = self.parse_expr(u8::MIN)?;
         if self.peek_token_is(&Kind::Semi) {
             self.next_token();
         }
@@ -190,8 +190,12 @@ impl Parser {
 
     fn parse_unary_expr(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
+        let mut precedence = self.current_precedence();
+        (token.kind == Kind::Minus).then(|| {
+            precedence += 2;
+        });
         self.next_token();
-        let right = self.parse_expr(UNARY)?;
+        let right = self.parse_expr(precedence)?;
         Ok(Expr::Unary(token, Box::new(right)))
     }
 
@@ -206,7 +210,7 @@ impl Parser {
     fn parse_paren_expr(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
         self.next_token();
-        let expr = self.parse_expr(LOWEST)?;
+        let expr = self.parse_expr(u8::MIN)?;
         self.peek_token_expect(&Kind::Rp)?;
         Ok(Expr::Paren(token, Box::new(expr)))
     }
@@ -215,7 +219,7 @@ impl Parser {
         let token = self.current_token().clone();
         self.peek_token_expect(&Kind::Lp)?;
         self.next_token();
-        let condition = self.parse_expr(LOWEST)?;
+        let condition = self.parse_expr(u8::MIN)?;
         self.peek_token_expect(&Kind::Rp)?;
         let consequence = self.parse_block_expr()?;
         let mut alternative = Vec::new();
@@ -257,7 +261,7 @@ impl Parser {
         let mut exprs = Vec::new();
         while !self.peek_token_is(end) {
             self.next_token();
-            exprs.push(self.parse_expr(LOWEST)?);
+            exprs.push(self.parse_expr(u8::MIN)?);
             if !self.peek_token_is(end) {
                 self.peek_token_expect(&Kind::Comma)?;
             }
@@ -277,10 +281,10 @@ impl Parser {
         let mut pairs = Vec::new();
         while !self.peek_token_is(&Kind::Rb) {
             self.next_token();
-            let key = self.parse_expr(LOWEST)?;
+            let key = self.parse_expr(u8::MIN)?;
             self.peek_token_expect(&Kind::Colon)?;
             self.next_token();
-            let value = self.parse_expr(LOWEST)?;
+            let value = self.parse_expr(u8::MIN)?;
             pairs.push((key, value));
             if !self.peek_token_is(&Kind::Rb) {
                 self.peek_token_expect(&Kind::Comma)?;
@@ -293,7 +297,7 @@ impl Parser {
     fn parse_index_expr(&mut self, left: Expr) -> Result<Expr, String> {
         let token = self.current_token().clone();
         self.next_token();
-        let index = self.parse_expr(LOWEST)?;
+        let index = self.parse_expr(u8::MIN)?;
         self.peek_token_expect(&Kind::Rs)?;
         Ok(Expr::Index(token, Box::new(left), Box::new(index)))
     }
@@ -337,7 +341,7 @@ impl Parser {
         self.peek_token_expect(&Kind::Lb)?;
         while !self.peek_token_is(&Kind::Rb) {
             self.next_token();
-            exprs.push(self.parse_expr(LOWEST)?);
+            exprs.push(self.parse_expr(u8::MIN)?);
             if self.peek_token_is(&Kind::Semi) {
                 self.next_token();
             }
@@ -365,7 +369,7 @@ fn divide_template_pieces(message: String) -> Result<Vec<Expr>, String> {
                     }
                 }
                 if closed {
-                    exprs.push(Parser::new(&string).parse_expr(LOWEST)?);
+                    exprs.push(Parser::new(&string).parse_expr(u8::MIN)?);
                 } else {
                     string.insert_str(0, "${");
                     exprs.push(Expr::String(
@@ -655,14 +659,13 @@ fn test_parse_operator_precedence() {
             "add(a * b[2], b[1], 2 * [1, 2][1])",
             "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
         ),
+        ("!add()", "(!add())"),
+        ("-add()", "(-add())"),
+        ("!array[1]", "(!(array[1]))"),
+        ("-object.field", "(-object.field)"),
     ];
     for (text, expected) in tests {
         if let Ok(source) = Parser::new(text).parse() {
-            println!(
-                "{}:{:?}",
-                source[0],
-                source.iter().map(|e| e.to_string() + "|").collect::<String>()
-            );
             let actual: String = source.iter().map(|e| e.to_string()).collect::<String>();
             println!("{}=={}", actual, expected);
             assert!(actual == expected);
