@@ -78,6 +78,20 @@ impl Vm {
                 }
                 Opcode::True => self.push(Value::Boolean(true)),
                 Opcode::False => self.push(Value::Boolean(false)),
+                Opcode::Minus => {
+                    let operand = self.pop();
+                    match operand {
+                        Value::Integer(value) => self.push(Value::Integer(-value)),
+                        _ => panic!("unsupported types for negation: {}", operand),
+                    }
+                }
+                Opcode::Bang => {
+                    let operand = self.pop();
+                    match operand {
+                        Value::Boolean(false) => self.push(Value::Boolean(true)),
+                        _ => self.push(Value::Boolean(false)),
+                    }
+                }
             }
         }
     }
@@ -132,6 +146,10 @@ mod tests {
             ("5 * 2 + 10", Value::Integer(20)),
             ("5 + 2 * 10", Value::Integer(25)),
             ("5 * (2 + 10)", Value::Integer(60)),
+            ("-5", Value::Integer(-5)),
+            ("-10", Value::Integer(-10)),
+            ("-50 + 100 + -50", Value::Integer(0)),
+            ("(5 + 10 * 2 + 15 / 3) * 2 + -10", Value::Integer(50)),
         ];
         run_vm_tests(tests);
     }
@@ -158,6 +176,12 @@ mod tests {
             ("(1 < 2) == false", Value::Boolean(false)),
             ("(1 > 2) == true", Value::Boolean(false)),
             ("(1 > 2) == false", Value::Boolean(true)),
+            ("!true", Value::Boolean(false)),
+            ("!false", Value::Boolean(true)),
+            ("!5", Value::Boolean(false)),
+            ("!!true", Value::Boolean(true)),
+            ("!!false", Value::Boolean(false)),
+            ("!!5", Value::Boolean(true)),
         ];
         run_vm_tests(tests);
     }

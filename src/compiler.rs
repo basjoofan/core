@@ -53,7 +53,14 @@ impl Compiler {
             Expr::String(_, _) => todo!(),
             Expr::Let(_, _, _) => todo!(),
             Expr::Return(_, _) => todo!(),
-            Expr::Unary(_, _) => todo!(),
+            Expr::Unary(token, right) => {
+                self.compile_expr(right)?;
+                match token.kind {
+                    Kind::Minus => self.emit(Opcode::Minus),
+                    Kind::Bang => self.emit(Opcode::Bang),
+                    _ => Err(format!("Unknown operator: {}", token))?,
+                };
+            },
             Expr::Binary(token, left, right) => {
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
@@ -129,6 +136,11 @@ mod tests {
                 vec![Value::Integer(2), Value::Integer(1)],
                 vec![Opcode::Const(0), Opcode::Const(1), Opcode::Div, Opcode::Pop],
             ),
+            (
+                "-1",
+                vec![Value::Integer(1)],
+                vec![Opcode::Const(0), Opcode::Minus, Opcode::Pop],
+            ),
         ];
         run_compiler_tests(tests);
     }
@@ -168,6 +180,7 @@ mod tests {
                 vec![],
                 vec![Opcode::True, Opcode::False, Opcode::Ne, Opcode::Pop],
             ),
+            ("!true", vec![], vec![Opcode::True, Opcode::Bang, Opcode::Pop]),
         ];
         run_compiler_tests(tests);
     }

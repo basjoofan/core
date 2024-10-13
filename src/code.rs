@@ -15,4 +15,8 @@ pub enum Opcode {
     Gt,
     Eq,
     Ne,
+
+    Minus,
+    Bang,
+
 }
