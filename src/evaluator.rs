@@ -6,33 +6,33 @@
 // use crate::Value;
 // use std::collections::HashMap;
 
-// fn eval_expression(expression: &Expr, context: &mut Context) -> Value {
-//     match expression {
-//         Expr::Ident(_, value) => eval_ident_expression(value, context),
+// fn eval_expr(expr: &Expr, context: &mut Context) -> Value {
+//     match expr {
+//         Expr::Ident(_, value) => eval_ident_expr(value, context),
 //         Expr::Integer(_, value) => eval_integer_literal(value),
 //         Expr::Float(_, value) => eval_float_literal(value),
 //         Expr::Boolean(_, value) => eval_boolean_literal(value),
 //         Expr::String(_, value) => eval_string_literal(value),
-//         Expr::Let(token, name, value) => eval_let_expression(token, name, value, context),
-//         Expr::Return(_, value) => eval_return_expression(value, context),
-//         Expr::Unary(token, right) => eval_unary_expression(token, right, context),
-//         Expr::Binary(token, left, right) => eval_binary_expression(token, left, right, context),
-//         Expr::Paren(_, value) => eval_paren_expression(value, context),
+//         Expr::Let(token, name, value) => eval_let_expr(token, name, value, context),
+//         Expr::Return(_, value) => eval_return_expr(value, context),
+//         Expr::Unary(token, right) => eval_unary_expr(token, right, context),
+//         Expr::Binary(token, left, right) => eval_binary_expr(token, left, right, context),
+//         Expr::Paren(_, value) => eval_paren_expr(value, context),
 //         Expr::If(token, condition, consequence, alternative) => {
-//             eval_if_expression(token, condition, consequence, alternative, context)
+//             eval_if_expr(token, condition, consequence, alternative, context)
 //         }
 //         Expr::Function(_, _, parameters, body) => eval_function_literal(parameters, body),
-//         Expr::Call(_, function, arguments) => eval_call_expression(function, arguments, context),
+//         Expr::Call(_, function, arguments) => eval_call_expr(function, arguments, context),
 //         Expr::Array(_, elements) => eval_array_literal(elements, context),
 //         Expr::Map(_, pairs) => eval_map_literal(pairs, context),
-//         Expr::Index(_, left, index) => eval_index_expression(left, index, context),
-//         Expr::Field(_, object, field) => eval_field_expression(object, field, context),
+//         Expr::Index(_, left, index) => eval_index_expr(left, index, context),
+//         Expr::Field(_, object, field) => eval_field_expr(object, field, context),
 //         Expr::Request(_, name, pieces, asserts) => eval_request_literal(name, pieces, asserts),
 //         Expr::Test(_, _, _) => todo!(),
 //     }
 // }
 
-// fn eval_let_expression(
+// fn eval_let_expr(
 //     token: &Token,
 //     name: &Option<String>,
 //     value: &Option<Box<Expr>>,
@@ -45,7 +45,7 @@
 //         return Value::Error(format!("variable:{} name is none", token));
 //     }
 //     if let Some(value) = value {
-//         let value = eval_expression(value, context);
+//         let value = eval_expr(value, context);
 //         if value.is_error() {
 //             return value;
 //         }
@@ -56,19 +56,19 @@
 //     }
 // }
 
-// fn eval_return_expression(value: &Option<Box<Expr>>, context: &mut Context) -> Value {
+// fn eval_return_expr(value: &Option<Box<Expr>>, context: &mut Context) -> Value {
 //     if let Some(value) = value {
-//         let value = eval_expression(value, context);
+//         let value = eval_expr(value, context);
 //         if value.is_error() {
 //             return value;
 //         }
 //         Value::Return(Box::new(value))
 //     } else {
-//         Value::Error("return value expression is none".to_string())
+//         Value::Error("return value expr is none".to_string())
 //     }
 // }
 
-// fn eval_ident_expression(value: &String, context: &mut Context) -> Value {
+// fn eval_ident_expr(value: &String, context: &mut Context) -> Value {
 //     if let Some(value) = context.get(value) {
 //         value
 //     } else {
@@ -104,9 +104,9 @@
 //     Value::String(string.to_owned())
 // }
 
-// fn eval_unary_expression(token: &Token, right: &Option<Box<Expr>>, context: &mut Context) -> Value {
+// fn eval_unary_expr(token: &Token, right: &Option<Box<Expr>>, context: &mut Context) -> Value {
 //     if let Some(right) = right {
-//         let right = eval_expression(right, context);
+//         let right = eval_expr(right, context);
 //         if right.is_error() {
 //             return right;
 //         }
@@ -116,7 +116,7 @@
 //             _ => Value::Error(format!("unknown operator: {}{}", token, right.kind())),
 //         }
 //     } else {
-//         Value::Error(format!("{} unary expression right is none", token))
+//         Value::Error(format!("{} unary expr right is none", token))
 //     }
 // }
 
@@ -135,24 +135,24 @@
 //     }
 // }
 
-// fn eval_binary_expression(
+// fn eval_binary_expr(
 //     token: &Token,
 //     left: &Option<Box<Expr>>,
 //     right: &Option<Box<Expr>>,
 //     context: &mut Context,
 // ) -> Value {
 //     let left = if let Some(left) = left {
-//         eval_expression(left, context)
+//         eval_expr(left, context)
 //     } else {
-//         Value::Error(format!("{} binary expression left is none", token))
+//         Value::Error(format!("{} binary expr left is none", token))
 //     };
 //     if left.is_error() {
 //         return left;
 //     }
 //     let right = if let Some(right) = right {
-//         eval_expression(right, context)
+//         eval_expr(right, context)
 //     } else {
-//         Value::Error(format!("{} binary expression right is none", token))
+//         Value::Error(format!("{} binary expr right is none", token))
 //     };
 //     if right.is_error() {
 //         return right;
@@ -221,19 +221,19 @@
 //     }
 // }
 
-// fn eval_paren_expression(value: &Option<Box<Expr>>, context: &mut Context) -> Value {
+// fn eval_paren_expr(value: &Option<Box<Expr>>, context: &mut Context) -> Value {
 //     if let Some(value) = value {
-//         let value = eval_expression(value, context);
+//         let value = eval_expr(value, context);
 //         if value.is_error() {
 //             return value;
 //         }
 //         value
 //     } else {
-//         Value::Error("paren value expression is none".to_string())
+//         Value::Error("paren value expr is none".to_string())
 //     }
 // }
 
-// fn eval_if_expression(
+// fn eval_if_expr(
 //     token: &Token,
 //     condition: &Option<Box<Expr>>,
 //     consequence: &[Expr],
@@ -241,16 +241,16 @@
 //     context: &mut Context,
 // ) -> Value {
 //     let condition = if let Some(condition) = condition {
-//         eval_expression(condition, context)
+//         eval_expr(condition, context)
 //     } else {
-//         Value::Error(format!("{} if expression condition is none", token))
+//         Value::Error(format!("{} if expr condition is none", token))
 //     };
 //     if condition.is_error() {
 //         return condition;
 //     }
 //     match condition {
-//         Value::Boolean(true) => eval_block_expression(consequence, context),
-//         _ => eval_block_expression(alternative, context),
+//         Value::Boolean(true) => eval_block_expr(consequence, context),
+//         _ => eval_block_expr(alternative, context),
 //     }
 // }
 
@@ -258,7 +258,7 @@
 //     Value::Function(parameters.to_owned(), body.to_owned())
 // }
 
-// fn eval_function_expression(
+// fn eval_function_expr(
 //     parameters: Vec<String>,
 //     arguments: Vec<Value>,
 //     body: Vec<Expr>,
@@ -274,20 +274,20 @@
 //         for (parameter, argument) in parameters.into_iter().zip(arguments.into_iter()) {
 //             context.set(parameter, argument);
 //         }
-//         eval_block_expression(&body, context)
+//         eval_block_expr(&body, context)
 //     }
 // }
 
-// fn eval_call_expression(invoke: &Option<Box<Expr>>, arguments: &[Expr], context: &mut Context) -> Value {
+// fn eval_call_expr(invoke: &Option<Box<Expr>>, arguments: &[Expr], context: &mut Context) -> Value {
 //     let invoke = if let Some(invoke) = invoke {
-//         eval_expression(invoke, context)
+//         eval_expr(invoke, context)
 //     } else {
-//         Value::Error("call expression function is none".to_string())
+//         Value::Error("call expr function is none".to_string())
 //     };
 //     if invoke.is_error() {
 //         return invoke;
 //     }
-//     let arguments = eval_expressions(arguments, context);
+//     let arguments = eval_exprs(arguments, context);
 //     if let Some(last) = arguments.last() {
 //         if last.is_error() {
 //             return last.clone();
@@ -299,19 +299,19 @@
 // fn eval_call_value(invoke: Value, arguments: Vec<Value>, context: &mut Context) -> Value {
 //     if let Value::Function(parameters, body) = invoke {
 //         let mut context = Context::clone(context);
-//         eval_function_expression(parameters, arguments, body, &mut context)
+//         eval_function_expr(parameters, arguments, body, &mut context)
 //     } else if let Value::Native(function) = invoke {
 //         function(arguments)
 //     } else if let Value::Request(name, pieces, asserts) = invoke {
 //         let mut context = Context::clone(context);
-//         eval_request_expression(name, pieces, asserts, &mut context)
+//         eval_request_expr(name, pieces, asserts, &mut context)
 //     } else {
 //         Value::Error(String::from("not a function or request"))
 //     }
 // }
 
 // fn eval_array_literal(elements: &[Expr], context: &mut Context) -> Value {
-//     let elements = eval_expressions(elements, context);
+//     let elements = eval_exprs(elements, context);
 //     if let Some(last) = elements.last() {
 //         if last.is_error() {
 //             return last.clone();
@@ -320,10 +320,10 @@
 //     Value::Array(elements)
 // }
 
-// fn eval_expressions(elements: &[Expr], context: &mut Context) -> Vec<Value> {
+// fn eval_exprs(elements: &[Expr], context: &mut Context) -> Vec<Value> {
 //     let mut objects = Vec::new();
 //     for element in elements {
-//         let value = eval_expression(element, context);
+//         let value = eval_expr(element, context);
 //         objects.push(value.clone());
 //         if value.is_error() {
 //             return objects;
@@ -336,11 +336,11 @@
 //     let mut pairs = HashMap::new();
 
 //     for (key, value) in map {
-//         let key = eval_expression(key, context);
+//         let key = eval_expr(key, context);
 //         if key.is_error() {
 //             return key;
 //         }
-//         let value = eval_expression(value, context);
+//         let value = eval_expr(value, context);
 //         if value.is_error() {
 //             return value;
 //         }
@@ -349,19 +349,19 @@
 //     Value::Map(pairs)
 // }
 
-// fn eval_index_expression(left: &Option<Box<Expr>>, index: &Option<Box<Expr>>, context: &mut Context) -> Value {
+// fn eval_index_expr(left: &Option<Box<Expr>>, index: &Option<Box<Expr>>, context: &mut Context) -> Value {
 //     let left = if let Some(left) = left {
-//         eval_expression(left, context)
+//         eval_expr(left, context)
 //     } else {
-//         Value::Error("index expression left is none".to_string())
+//         Value::Error("index expr left is none".to_string())
 //     };
 //     if left.is_error() {
 //         return left;
 //     }
 //     let index = if let Some(index) = index {
-//         eval_expression(index, context)
+//         eval_expr(index, context)
 //     } else {
-//         Value::Error("index expression index is none".to_string())
+//         Value::Error("index expr index is none".to_string())
 //     };
 //     if index.is_error() {
 //         return index;
@@ -385,11 +385,11 @@
 //     }
 // }
 
-// fn eval_field_expression(object: &Option<Box<Expr>>, field: &Option<String>, context: &mut Context) -> Value {
+// fn eval_field_expr(object: &Option<Box<Expr>>, field: &Option<String>, context: &mut Context) -> Value {
 //     let object = if let Some(object) = object {
-//         eval_expression(object, context)
+//         eval_expr(object, context)
 //     } else {
-//         Value::Error("index expression left is none".to_string())
+//         Value::Error("index expr left is none".to_string())
 //     };
 //     if object.is_error() {
 //         return object;
@@ -407,10 +407,10 @@
 //     }
 // }
 
-// pub fn eval_block_expression(expressions: &[Expr], context: &mut Context) -> Value {
+// pub fn eval_block_expr(exprs: &[Expr], context: &mut Context) -> Value {
 //     let mut result = Value::None;
-//     for expression in expressions.iter() {
-//         result = eval_expression(expression, context);
+//     for expr in exprs.iter() {
+//         result = eval_expr(expr, context);
 //         match result {
 //             Value::Error(_) => return result,
 //             Value::Return(value) => return *value,
@@ -424,10 +424,10 @@
 //     Value::Request(name.to_owned(), pieces.to_owned(), asserts.to_owned())
 // }
 
-// fn eval_request_expression(name: String, pieces: Vec<Expr>, expressions: Vec<Expr>, context: &mut Context) -> Value {
+// fn eval_request_expr(name: String, pieces: Vec<Expr>, exprs: Vec<Expr>, context: &mut Context) -> Value {
 //     let message = pieces
 //         .iter()
-//         .map(|p| eval_expression(p, context).to_string())
+//         .map(|p| eval_expr(p, context).to_string())
 //         .collect::<String>();
 //     let (request, response, time, error) = Client::default().send(&message);
 //     let value = response.to_value();
@@ -436,15 +436,15 @@
 //             .for_each(|(key, value)| context.set(key.clone(), value.clone()))
 //     }
 //     let mut asserts = Vec::new();
-//     for expression in expressions {
-//         if let Expr::Binary(token, left, right) = &expression {
+//     for expr in exprs {
+//         if let Expr::Binary(token, left, right) = &expr {
 //             let left = if let Some(left) = left {
-//                 eval_expression(left, context)
+//                 eval_expr(left, context)
 //             } else {
 //                 Value::None
 //             };
 //             let right = if let Some(right) = right {
-//                 eval_expression(right, context)
+//                 eval_expr(right, context)
 //             } else {
 //                 Value::None
 //             };
@@ -453,11 +453,11 @@
 //             } else {
 //                 false
 //             };
-//             let comparison = token.clone();
+//             let compare = token.clone();
 //             asserts.push(Assert {
-//                 expression,
+//                 expr,
 //                 left,
-//                 comparison,
+//                 compare,
 //                 right,
 //                 result,
 //             })
@@ -490,14 +490,14 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         println!("{} == {}", evaluated, expected);
 //         assert!(evaluated == expected);
 //     }
 // }
 
 // #[test]
-// fn test_eval_integer_expression() {
+// fn test_eval_integer_expr() {
 //     let tests = vec![
 //         ("5", 5),
 //         ("10", 10),
@@ -518,7 +518,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         println!("evaluated = {}", evaluated);
 //         if let Value::Integer(evaluated) = evaluated {
 //             println!("{} == {}", evaluated, expected);
@@ -528,7 +528,7 @@
 // }
 
 // #[test]
-// fn test_eval_float_expression() {
+// fn test_eval_float_expr() {
 //     let tests = vec![
 //         ("0.5", 0.5),
 //         ("0.10", 0.10),
@@ -546,7 +546,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         println!("evaluated = {}", evaluated);
 //         if let Value::Float(evaluated) = evaluated {
 //             println!("{} == {}", evaluated, expected);
@@ -556,7 +556,7 @@
 // }
 
 // #[test]
-// fn test_eval_boolean_expression() {
+// fn test_eval_boolean_expr() {
 //     let tests = vec![
 //         ("true", true),
 //         ("false", false),
@@ -581,7 +581,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         if let Value::Boolean(evaluated) = evaluated {
 //             println!("{} == {}", evaluated, expected);
 //             assert!(evaluated == expected);
@@ -602,7 +602,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         if let Value::Boolean(evaluated) = evaluated {
 //             println!("{} == {}", evaluated, expected);
 //             assert!(evaluated == expected);
@@ -611,7 +611,7 @@
 // }
 
 // #[test]
-// fn test_eval_if_expression() {
+// fn test_eval_if_expr() {
 //     let tests = vec![
 //         ("if (true) { 10 }", Value::Integer(10)),
 //         ("if (false) { 10 }", Value::None),
@@ -624,14 +624,14 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         println!("evaluated:{}", evaluated);
 //         assert!(evaluated == expected);
 //     }
 // }
 
 // #[test]
-// fn test_eval_let_expression() {
+// fn test_eval_let_expr() {
 //     let tests = vec![
 //         ("let a = 5; a;", 5),
 //         ("let a = 5 * 5; a;", 25),
@@ -641,7 +641,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         if let Value::Integer(evaluated) = evaluated {
 //             println!("{} == {}", evaluated, expected);
 //             assert!(evaluated == expected);
@@ -650,7 +650,7 @@
 // }
 
 // #[test]
-// fn test_eval_return_expression() {
+// fn test_eval_return_expr() {
 //     let tests = vec![
 //         ("return 10;", 10),
 //         ("return 10; 9;", 10),
@@ -694,7 +694,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         if let Value::Return(evaluated) = evaluated {
 //             if let Value::Integer(evaluated) = *evaluated {
 //                 println!("{} == {}", evaluated, expected);
@@ -709,7 +709,7 @@
 //     let text = "let a = fn(x) { x + 2; };a";
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     if let Value::Function(parameters, body) = evaluated {
 //         assert!(parameters.len() == 1);
 //         assert!(parameters[0] == "x");
@@ -733,7 +733,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         println!("evaluated:{}:{}", evaluated, evaluated.kind());
 //         if let Value::Integer(evaluated) = evaluated {
 //             println!("{} == {}", evaluated, expected);
@@ -759,7 +759,7 @@
 //     "#;
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     if let Value::Integer(evaluated) = evaluated {
 //         assert!(evaluated == 70);
 //     }
@@ -777,7 +777,7 @@
 //     "#;
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     if let Value::Integer(evaluated) = evaluated {
 //         assert!(evaluated == 4);
 //     }
@@ -801,7 +801,7 @@
 //     "#;
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     println!("evaluated:{}", evaluated);
 //     if let Value::Integer(evaluated) = evaluated {
 //         assert!(evaluated == 17711);
@@ -825,7 +825,7 @@
 //     let text = r#""Hello World!""#;
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     if let Value::String(evaluated) = evaluated {
 //         assert!(evaluated == "Hello World!");
 //     }
@@ -836,7 +836,7 @@
 //     let text = r#""Hello" + " " + "World!""#;
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     if let Value::String(evaluated) = evaluated {
 //         assert!(evaluated == "Hello World!");
 //     }
@@ -847,7 +847,7 @@
 //     let text = "[1, 2 * 2, 3 + 3]";
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     if let Value::Array(elements) = evaluated {
 //         assert!(elements[0] == Value::Integer(1));
 //         assert!(elements[1] == Value::Integer(4));
@@ -856,7 +856,7 @@
 // }
 
 // #[test]
-// fn test_eval_array_index_expression() {
+// fn test_eval_array_index_expr() {
 //     let tests = vec![
 //         ("[1, 2, 3][0]", Value::Integer(1)),
 //         ("[1, 2, 3][1]", Value::Integer(2)),
@@ -878,7 +878,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         println!("{} == {}", evaluated, expected);
 //         assert!(evaluated == expected);
 //     }
@@ -907,7 +907,7 @@
 //     ];
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     if let Value::Map(pairs) = evaluated {
 //         for (key, expected_value) in expected {
 //             if let Value::Integer(evaluated_value) = pairs.get(&key).unwrap().clone() {
@@ -919,7 +919,7 @@
 // }
 
 // #[test]
-// fn test_eval_map_index_expression() {
+// fn test_eval_map_index_expr() {
 //     let tests = vec![
 //         (r#"{"foo": 5}["foo"]"#, Value::Integer(5)),
 //         (r#"{"foo": 5}["bar"]"#, Value::None),
@@ -932,14 +932,14 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         println!("{} == {}", evaluated, expected);
 //         assert!(evaluated == expected);
 //     }
 // }
 
 // #[test]
-// fn test_eval_field_expression() {
+// fn test_eval_field_expr() {
 //     let tests = vec![
 //         (r#"{"foo": 5}.foo]"#, Value::Integer(5)),
 //         (r#"{"foo": 5}.bar]"#, Value::None),
@@ -952,7 +952,7 @@
 //     for (text, expected) in tests {
 //         let source = crate::parser::Parser::new(text).parse();
 //         let mut context = Context::default();
-//         let evaluated = eval_block_expression(&source, &mut context);
+//         let evaluated = eval_block_expr(&source, &mut context);
 //         println!("{} == {}", evaluated, expected);
 //         assert!(evaluated == expected);
 //     }
@@ -971,7 +971,7 @@
 //     request"#;
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     println!("evaluated:{}", evaluated);
 //     if let Value::Request(name, pieces, asserts) = evaluated {
 //         assert!(name == "request");
@@ -986,7 +986,7 @@
 // }
 
 // #[test]
-// fn test_eval_request_expression() {
+// fn test_eval_request_expr() {
 //     let text = r#"
 //     rq request`
 //       GET http://${host}/get
@@ -998,7 +998,7 @@
 //     response.status"#;
 //     let source = crate::parser::Parser::new(text).parse();
 //     let mut context = Context::default();
-//     let evaluated = eval_block_expression(&source, &mut context);
+//     let evaluated = eval_block_expr(&source, &mut context);
 //     println!("evaluated:{}", evaluated);
 //     assert!(evaluated == Value::Integer(200));
 // }

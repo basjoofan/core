@@ -39,9 +39,9 @@ const META: [(&str, &str); 2] = [
                     "name": "assert",
                     "type": "record",
                     "fields": [
-                        {"name": "expression", "type": "string"},
+                        {"name": "expr", "type": "string"},
                         {"name": "left", "type": "string"},
-                        {"name": "comparison", "type": "string"},
+                        {"name": "compare", "type": "string"},
                         {"name": "right", "type": "string"},
                         {"name": "result", "type": "boolean"}
                     ]
@@ -90,9 +90,9 @@ pub struct Record {
 }
 
 pub struct Assert {
-    pub expression: String,
+    pub expr: String,
     pub left: String,
-    pub comparison: String,
+    pub compare: String,
     pub right: String,
     pub result: bool,
 }
@@ -133,9 +133,9 @@ impl From<Record> for Vec<u8> {
         encode_bytes(record.response.body.as_bytes(), &mut data);
         encode_long(record.asserts.len() as i64, &mut data);
         for assert in record.asserts.into_iter() {
-            encode_bytes(assert.expression.as_bytes(), &mut data);
+            encode_bytes(assert.expr.as_bytes(), &mut data);
             encode_bytes(assert.left.as_bytes(), &mut data);
-            encode_bytes(assert.comparison.as_bytes(), &mut data);
+            encode_bytes(assert.compare.as_bytes(), &mut data);
             encode_bytes(assert.right.as_bytes(), &mut data);
             encode_bool(assert.result, &mut data);
         }

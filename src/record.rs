@@ -20,9 +20,9 @@ pub struct Record {
 }
 
 pub struct Assert {
-    pub expression: Expr,
+    pub expr: Expr,
     pub left: Value,
-    pub comparison: Token,
+    pub compare: Token,
     pub right: Value,
     pub result: bool,
 }
@@ -32,7 +32,7 @@ impl Display for Assert {
         write!(
             f,
             "{} => ({} {} {}) => {}",
-            self.expression, self.left, self.comparison, self.right, self.result
+            self.expr, self.left, self.compare, self.right, self.result
         )
     }
 }
@@ -97,13 +97,13 @@ impl Record {
                     .map(|a| {
                         avro::types::Value::Record(vec![
                             (
-                                String::from("expression"),
-                                avro::types::Value::String(a.expression.to_string()),
+                                String::from("expr"),
+                                avro::types::Value::String(a.expr.to_string()),
                             ),
                             (String::from("left"), avro::types::Value::String(a.left.to_string())),
                             (
-                                String::from("comparison"),
-                                avro::types::Value::String(a.comparison.to_string()),
+                                String::from("compare"),
+                                avro::types::Value::String(a.compare.to_string()),
                             ),
                             (String::from("right"), avro::types::Value::String(a.right.to_string())),
                             (String::from("result"), avro::types::Value::Boolean(a.result)),
@@ -171,9 +171,9 @@ const RAW: &str = r#"
                     "name": "assert",
                     "type": "record",
                     "fields": [
-                        {"name": "expression", "type": "string"},
+                        {"name": "expr", "type": "string"},
                         {"name": "left", "type": "string"},
-                        {"name": "comparison", "type": "string"},
+                        {"name": "compare", "type": "string"},
                         {"name": "right", "type": "string"},
                         {"name": "result", "type": "boolean"}
                     ]
@@ -193,7 +193,7 @@ const RAW: &str = r#"
 //         request: Request::default(),
 //         response: Response::default(),
 //         asserts: vec![Assert {
-//             expression: Expr::Binary(
+//             expr: Expr::Binary(
 //                 Token {
 //                     kind: crate::token::Kind::Eq,
 //                     literal: String::from("=="),
@@ -214,7 +214,7 @@ const RAW: &str = r#"
 //                 ))),
 //             ),
 //             left: Value::Integer(200),
-//             comparison: Token {
+//             compare: Token {
 //                 kind: crate::token::Kind::Eq,
 //                 literal: String::from("=="),
 //             },

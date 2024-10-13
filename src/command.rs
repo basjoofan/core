@@ -1,6 +1,6 @@
+use crate::record;
 use crate::Compiler;
 use crate::Parser;
-use crate::record;
 use crate::Record;
 use crate::Stats;
 use crate::Value;
@@ -18,7 +18,7 @@ pub const NAME: &str = env!("CARGO_PKG_NAME");
 
 pub fn repl() {
     let mut lines = stdin().lock().lines();
-    'repl: loop {
+    loop {
         if let Some(Ok(text)) = lines.next() {
             if text == "exit" {
                 break;
@@ -26,19 +26,16 @@ pub fn repl() {
             match Parser::new(&text).parse() {
                 Ok(source) => {
                     let mut compiler = Compiler::new();
-                    for expression in source.iter() {
-                        if let Err(message) = compiler.compile(expression) {
-                            println!("{}", message);
-                            continue 'repl;
-                        }
+                    if let Err(message) = compiler.compile(&source) {
+                        println!("{}", message);
+                        continue;
                     }
                     let mut vm = Vm::new(compiler.constants, compiler.instructions);
                     vm.run();
-                    println!("{}", vm.top().unwrap());
+                    println!("{}", vm.past());
                 }
                 Err(message) => {
                     println!("{}", message);
-                    continue 'repl;
                 }
             };
         }
@@ -48,21 +45,21 @@ pub fn repl() {
 pub fn eval(text: String) {
     // let mut context = Context::default();
     // let source = Parser::new(&text).parse();
-    // print_error(eval_block_expression(&source, &mut context));
+    // print_error(eval_block_expr(&source, &mut context));
 }
 
 pub fn run(path: Option<PathBuf>) {
     // let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
     // let mut context = Context::default();
     // let source = Parser::new(&text).parse();
-    // print_error(eval_block_expression(&source, &mut context));
+    // print_error(eval_block_expr(&source, &mut context));
 }
 
 pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
     //     let text = read_to_string(std::env::current_dir().unwrap());
     //     let mut context = Context::default();
     //     let source = Parser::new(&text).parse();
-    //     print_error(eval_block_expression(&source, &mut context));
+    //     print_error(eval_block_expr(&source, &mut context));
     //     match name {
     //         Some(name) => {
     //             if let Some(block) = source.tests.get(&name) {
@@ -80,10 +77,10 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
     //     }
 }
 
-// fn eval_test(expressions: &[Expr], context: &mut Context) -> Value {
+// fn eval_test(exprs: &[Expr], context: &mut Context) -> Value {
 //     let mut result = Value::None;
-//     for expression in expressions.iter() {
-//         result = eval_expression(expression, context);
+//     for expr in exprs.iter() {
+//         result = eval_expr(expr, context);
 //         match result {
 //             Value::Error(_) => return result,
 //             Value::Return(value) => return *value,
@@ -97,7 +94,7 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
 //     let text = read_to_string(std::env::current_dir().unwrap());
 //     let mut context = Context::default();
 //     let source = Parser::new(&text).parse();
-//     print_error(eval_block_expression(&source, &mut context));
+//     print_error(eval_block_expr(&source, &mut context));
 //     let (sender, receiver) = mpsc::channel();
 //     let continuous = Arc::new(AtomicBool::new(true));
 //     let iterations = iterations / concurrency;
@@ -128,7 +125,7 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
 //     let text = read_to_string(std::env::current_dir().unwrap());
 //     let mut context = Context::default();
 //     let source = Parser::new(&text).parse();
-//     print_error(eval_block_expression(&source, &mut context));
+//     print_error(eval_block_expr(&source, &mut context));
 //     let (sender, receiver) = mpsc::channel();
 //     for test in source.tests.into_iter() {
 //         if let (Some(tags), Some(name)) = match test {

@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     None,
     Error(String),

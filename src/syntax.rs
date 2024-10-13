@@ -25,13 +25,13 @@ pub enum Expr {
     Field(Token, Box<Expr>, String),
     Request(Token, String, Vec<Expr>, Vec<Expr>),
     Test(Token, String, Vec<Expr>),
-    // TODO Assign An assignment expression: a = compute().
-    // TODO Closure A closure expression: |a, b| a + b.
-    // TODO Break A break, with an optional label to break and an optional expression.
+    // TODO Assign An assignment expr: a = compute().
+    // TODO Closure A closure expr: |a, b| a + b.
+    // TODO Break A break, with an optional label to break and an optional expr.
     // TODO Continue A continue, with an optional label.
-    // TODO Const A const expression: const a = 1.
+    // TODO Const A const expr: const a = 1.
     // TODO For A for loop: for pat in expr { ... }.
-    // TODO Range A range expression: 1..2, 1.., ..2, 1..=2, ..=2.
+    // TODO Range A range expr: 1..2, 1.., ..2, 1..=2, ..=2.
     // TODO While A while loop: while expr { ... }.
 }
 

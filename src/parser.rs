@@ -12,7 +12,7 @@ impl Parser {
     pub fn new(text: &str) -> Parser {
         Parser {
             tokens: lexer::segment(text),
-            index: usize::default(),
+            index: usize::MIN,
         }
     }
 

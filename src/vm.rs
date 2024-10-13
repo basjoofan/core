@@ -5,7 +5,7 @@ pub struct Vm {
     constants: Vec<Value>,
     instructions: Vec<Opcode>,
     stack: Vec<Value>,
-    // sp: usize,
+    sp: usize,
 }
 
 impl Vm {
@@ -14,26 +14,26 @@ impl Vm {
             constants,
             instructions,
             stack: Vec::new(),
-            // sp: 0,
+            sp: usize::MIN,
         }
     }
 
     pub fn run(&mut self) {
-        for opcode in self.instructions.iter() {
+        for i in 0..self.instructions.len() {
+            let opcode = self.instructions[i];
             match opcode {
                 Opcode::Constant(index) => {
-                    if let Some(value) = self.constants.get(*index) {
-                        // self.push(value.clone());
-                        self.stack.push(value.clone())
-                    }
+                    let value = self.constants[index].clone();
+                    self.push(value);
+                }
+                Opcode::Pop => {
+                    self.pop();
                 }
                 Opcode::Add => {
-                    let right = self.stack.pop();
-                    let left = self.stack.pop();
+                    let right = self.pop();
+                    let left = self.pop();
                     match (left, right) {
-                        (Some(Value::Integer(left)), Some(Value::Integer(right))) => {
-                            self.stack.push(Value::Integer(left + right))
-                        }
+                        (Value::Integer(left), Value::Integer(right)) => self.push(Value::Integer(left + right)),
                         (_, _) => panic!("Stack underflow!"),
                     }
                 }
@@ -41,8 +41,18 @@ impl Vm {
         }
     }
 
-    pub fn top(&self) -> Option<&Value> {
-        self.stack.last()
+    pub fn push(&mut self, value: Value) {
+        self.stack.insert(self.sp, value);
+        self.sp += 1;
+    }
+
+    pub fn pop(&mut self) -> Value {
+        self.sp -= 1;
+        self.stack[self.sp].clone()
+    }
+
+    pub fn past(&self) -> &Value {
+        &self.stack[self.sp]
     }
 }
 
@@ -56,13 +66,12 @@ mod tests {
         for (text, value) in tests {
             let source = crate::parser::Parser::new(text).parse().unwrap();
             let mut compiler = Compiler::new();
-            for expression in source.iter() {
-                let result = compiler.compile(expression);
-                assert!(result.is_ok(), "{}", result.unwrap_err())
-            }
+            let result = compiler.compile(&source);
+            assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
             let mut vm = Vm::new(compiler.constants, compiler.instructions);
             vm.run();
-            assert!(vm.top().unwrap().clone() == value);
+            println!("{} = {}", vm.past(), value);
+            assert_eq!(vm.past(), &value);
         }
     }
 
