@@ -37,13 +37,19 @@ impl Compiler {
     fn compile_expr(&mut self, expr: &Expr) -> Result<(), String> {
         match expr {
             Expr::Ident(_, _) => todo!(),
-            Expr::Integer(_, value) => {
-                let integer = Value::Integer(*value);
+            Expr::Integer(_, integer) => {
+                let integer = Value::Integer(*integer);
                 let index = self.save(integer);
                 self.emit(Opcode::Const(index));
             }
             Expr::Float(_, _) => todo!(),
-            Expr::Boolean(_, _) => todo!(),
+            Expr::Boolean(_, boolean) => {
+                if *boolean {
+                    self.emit(Opcode::True);
+                } else {
+                    self.emit(Opcode::False);
+                }
+            }
             Expr::String(_, _) => todo!(),
             Expr::Let(_, _, _) => todo!(),
             Expr::Return(_, _) => todo!(),
@@ -119,6 +125,15 @@ mod tests {
                 vec![Value::Integer(2), Value::Integer(1)],
                 vec![Opcode::Const(0), Opcode::Const(1), Opcode::Div, Opcode::Pop],
             ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_boolean_arithmetic() {
+        let tests = vec![
+            ("true", vec![], vec![Opcode::True, Opcode::Pop]),
+            ("false", vec![], vec![Opcode::False, Opcode::Pop]),
         ];
         run_compiler_tests(tests);
     }

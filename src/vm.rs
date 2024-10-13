@@ -51,6 +51,8 @@ impl Vm {
                         ),
                     }
                 }
+                Opcode::True => self.push(Value::Boolean(true)),
+                Opcode::False => self.push(Value::Boolean(false)),
             }
         }
     }
@@ -106,6 +108,12 @@ mod tests {
             ("5 + 2 * 10", Value::Integer(25)),
             ("5 * (2 + 10)", Value::Integer(60)),
         ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_boolean_arithmetic() {
+        let tests = vec![("true", Value::Boolean(true)), ("false", Value::Boolean(false))];
         run_vm_tests(tests);
     }
 }
