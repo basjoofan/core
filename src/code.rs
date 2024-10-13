@@ -10,4 +10,9 @@ pub enum Opcode {
 
     True,
     False,
+
+    Lt,
+    Gt,
+    Eq,
+    Ne,
 }

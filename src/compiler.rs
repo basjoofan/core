@@ -62,6 +62,10 @@ impl Compiler {
                     Kind::Minus => self.emit(Opcode::Sub),
                     Kind::Star => self.emit(Opcode::Mul),
                     Kind::Slash => self.emit(Opcode::Div),
+                    Kind::Lt => self.emit(Opcode::Lt),
+                    Kind::Gt => self.emit(Opcode::Gt),
+                    Kind::Eq => self.emit(Opcode::Eq),
+                    Kind::Ne => self.emit(Opcode::Ne),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
@@ -134,6 +138,36 @@ mod tests {
         let tests = vec![
             ("true", vec![], vec![Opcode::True, Opcode::Pop]),
             ("false", vec![], vec![Opcode::False, Opcode::Pop]),
+            (
+                "1 < 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Lt, Opcode::Pop],
+            ),
+            (
+                "1 > 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Gt, Opcode::Pop],
+            ),
+            (
+                "1 == 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Eq, Opcode::Pop],
+            ),
+            (
+                "1 != 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Ne, Opcode::Pop],
+            ),
+            (
+                "true == false",
+                vec![],
+                vec![Opcode::True, Opcode::False, Opcode::Eq, Opcode::Pop],
+            ),
+            (
+                "true != false",
+                vec![],
+                vec![Opcode::True, Opcode::False, Opcode::Ne, Opcode::Pop],
+            ),
         ];
         run_compiler_tests(tests);
     }

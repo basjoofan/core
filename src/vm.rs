@@ -29,7 +29,14 @@ impl Vm {
                 Opcode::Pop => {
                     self.pop();
                 }
-                Opcode::Add | Opcode::Sub | Opcode::Mul | Opcode::Div => {
+                Opcode::Add
+                | Opcode::Sub
+                | Opcode::Mul
+                | Opcode::Div
+                | Opcode::Lt
+                | Opcode::Gt
+                | Opcode::Eq
+                | Opcode::Ne => {
                     let right = self.pop();
                     let left = self.pop();
                     match (left, right, opcode) {
@@ -44,6 +51,24 @@ impl Vm {
                         }
                         (Value::Integer(left), Value::Integer(right), Opcode::Div) => {
                             self.push(Value::Integer(left / right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Lt) => {
+                            self.push(Value::Boolean(left < right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Gt) => {
+                            self.push(Value::Boolean(left > right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Eq) => {
+                            self.push(Value::Boolean(left == right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Ne) => {
+                            self.push(Value::Boolean(left != right))
+                        }
+                        (Value::Boolean(left), Value::Boolean(right), Opcode::Eq) => {
+                            self.push(Value::Boolean(left == right))
+                        }
+                        (Value::Boolean(left), Value::Boolean(right), Opcode::Ne) => {
+                            self.push(Value::Boolean(left != right))
                         }
                         (left, right, opcode) => panic!(
                             "unsupported types for binary operation: {} {:?} {}",
@@ -113,7 +138,27 @@ mod tests {
 
     #[test]
     fn test_boolean_arithmetic() {
-        let tests = vec![("true", Value::Boolean(true)), ("false", Value::Boolean(false))];
+        let tests = vec![
+            ("true", Value::Boolean(true)),
+            ("false", Value::Boolean(false)),
+            ("1 < 2", Value::Boolean(true)),
+            ("1 > 2", Value::Boolean(false)),
+            ("1 < 1", Value::Boolean(false)),
+            ("1 > 1", Value::Boolean(false)),
+            ("1 == 1", Value::Boolean(true)),
+            ("1 != 1", Value::Boolean(false)),
+            ("1 == 2", Value::Boolean(false)),
+            ("1 != 2", Value::Boolean(true)),
+            ("true == true", Value::Boolean(true)),
+            ("false == false", Value::Boolean(true)),
+            ("true == false", Value::Boolean(false)),
+            ("true != false", Value::Boolean(true)),
+            ("false != true", Value::Boolean(true)),
+            ("(1 < 2) == true", Value::Boolean(true)),
+            ("(1 < 2) == false", Value::Boolean(false)),
+            ("(1 > 2) == true", Value::Boolean(false)),
+            ("(1 > 2) == false", Value::Boolean(true)),
+        ];
         run_vm_tests(tests);
     }
 }
