@@ -23,6 +23,9 @@ pub fn repl() {
             if text == "exit" {
                 break;
             }
+            if text.trim().is_empty() {
+                continue;
+            }
             match Parser::new(&text).parse() {
                 Ok(source) => {
                     let mut compiler = Compiler::new();
@@ -30,7 +33,7 @@ pub fn repl() {
                         println!("{}", message);
                         continue;
                     }
-                    let mut vm = Vm::new(compiler.constants, compiler.instructions);
+                    let mut vm = Vm::new(compiler.consts, compiler.instructions);
                     vm.run();
                     println!("{}", vm.past());
                 }

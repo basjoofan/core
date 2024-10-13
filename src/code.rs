@@ -1,6 +1,9 @@
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Opcode {
-    Constant(usize),
+    Const(usize),
     Pop,
     Add,
+    Sub,
+    Mul,
+    Div,
 }

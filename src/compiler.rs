@@ -5,14 +5,14 @@ use crate::Value;
 
 pub struct Compiler {
     pub instructions: Vec<Opcode>,
-    pub constants: Vec<Value>,
+    pub consts: Vec<Value>,
 }
 
 impl Compiler {
     pub fn new() -> Self {
         Self {
             instructions: Vec::new(),
-            constants: Vec::new(),
+            consts: Vec::new(),
         }
     }
 
@@ -22,8 +22,8 @@ impl Compiler {
     }
 
     fn save(&mut self, value: Value) -> usize {
-        self.constants.push(value);
-        self.constants.len() - 1
+        self.consts.push(value);
+        self.consts.len() - 1
     }
 
     pub fn compile(&mut self, source: &Vec<Expr>) -> Result<(), String> {
@@ -40,7 +40,7 @@ impl Compiler {
             Expr::Integer(_, value) => {
                 let integer = Value::Integer(*value);
                 let index = self.save(integer);
-                self.emit(Opcode::Constant(index));
+                self.emit(Opcode::Const(index));
             }
             Expr::Float(_, _) => todo!(),
             Expr::Boolean(_, _) => todo!(),
@@ -53,10 +53,13 @@ impl Compiler {
                 self.compile_expr(right)?;
                 match token.kind {
                     Kind::Plus => self.emit(Opcode::Add),
+                    Kind::Minus => self.emit(Opcode::Sub),
+                    Kind::Star => self.emit(Opcode::Mul),
+                    Kind::Slash => self.emit(Opcode::Div),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
-            Expr::Paren(_, _) => todo!(),
+            Expr::Paren(_, value) => self.compile_expr(value)?,
             Expr::If(_, _, _, _) => todo!(),
             Expr::Function(_, _, _) => todo!(),
             Expr::Call(_, _, _) => todo!(),
@@ -78,13 +81,13 @@ mod tests {
     use crate::Value;
 
     fn run_compiler_tests(tests: Vec<(&str, Vec<Value>, Vec<Opcode>)>) {
-        for (text, constants, instructions) in tests {
+        for (text, consts, instructions) in tests {
             let source = crate::parser::Parser::new(text).parse().unwrap();
             let mut compiler = Compiler::new();
             let result = compiler.compile(&source);
             assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
             assert_eq!(compiler.instructions, instructions);
-            assert_eq!(compiler.constants, constants);
+            assert_eq!(compiler.consts, consts);
         }
     }
 
@@ -94,12 +97,27 @@ mod tests {
             (
                 "1 + 2",
                 vec![Value::Integer(1), Value::Integer(2)],
-                vec![Opcode::Constant(0), Opcode::Constant(1), Opcode::Add, Opcode::Pop],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Pop],
             ),
             (
                 "1; 2",
                 vec![Value::Integer(1), Value::Integer(2)],
-                vec![Opcode::Constant(0), Opcode::Pop, Opcode::Constant(1), Opcode::Pop],
+                vec![Opcode::Const(0), Opcode::Pop, Opcode::Const(1), Opcode::Pop],
+            ),
+            (
+                "1 - 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Sub, Opcode::Pop],
+            ),
+            (
+                "1 * 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Mul, Opcode::Pop],
+            ),
+            (
+                "2 / 1",
+                vec![Value::Integer(2), Value::Integer(1)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Div, Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);

@@ -2,16 +2,16 @@ use crate::Opcode;
 use crate::Value;
 
 pub struct Vm {
-    constants: Vec<Value>,
+    consts: Vec<Value>,
     instructions: Vec<Opcode>,
     stack: Vec<Value>,
     sp: usize,
 }
 
 impl Vm {
-    pub fn new(constants: Vec<Value>, instructions: Vec<Opcode>) -> Self {
+    pub fn new(consts: Vec<Value>, instructions: Vec<Opcode>) -> Self {
         Self {
-            constants,
+            consts,
             instructions,
             stack: Vec::new(),
             sp: usize::MIN,
@@ -22,19 +22,33 @@ impl Vm {
         for i in 0..self.instructions.len() {
             let opcode = self.instructions[i];
             match opcode {
-                Opcode::Constant(index) => {
-                    let value = self.constants[index].clone();
+                Opcode::Const(index) => {
+                    let value = self.consts[index].clone();
                     self.push(value);
                 }
                 Opcode::Pop => {
                     self.pop();
                 }
-                Opcode::Add => {
+                Opcode::Add | Opcode::Sub | Opcode::Mul | Opcode::Div => {
                     let right = self.pop();
                     let left = self.pop();
-                    match (left, right) {
-                        (Value::Integer(left), Value::Integer(right)) => self.push(Value::Integer(left + right)),
-                        (_, _) => panic!("Stack underflow!"),
+                    match (left, right, opcode) {
+                        (Value::Integer(left), Value::Integer(right), Opcode::Add) => {
+                            self.push(Value::Integer(left + right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Sub) => {
+                            self.push(Value::Integer(left - right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Mul) => {
+                            self.push(Value::Integer(left * right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Div) => {
+                            self.push(Value::Integer(left / right))
+                        }
+                        (left, right, opcode) => panic!(
+                            "unsupported types for binary operation: {} {:?} {}",
+                            left, opcode, right
+                        ),
                     }
                 }
             }
@@ -68,7 +82,7 @@ mod tests {
             let mut compiler = Compiler::new();
             let result = compiler.compile(&source);
             assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
-            let mut vm = Vm::new(compiler.constants, compiler.instructions);
+            let mut vm = Vm::new(compiler.consts, compiler.instructions);
             vm.run();
             println!("{} = {}", vm.past(), value);
             assert_eq!(vm.past(), &value);
@@ -81,6 +95,16 @@ mod tests {
             ("1", Value::Integer(1)),
             ("2", Value::Integer(2)),
             ("1 + 2", Value::Integer(3)),
+            ("1 - 2", Value::Integer(-1)),
+            ("1 * 2", Value::Integer(2)),
+            ("4 / 2", Value::Integer(2)),
+            ("50 / 2 * 2 + 10 - 5", Value::Integer(55)),
+            ("5 * (2 + 10)", Value::Integer(60)),
+            ("5 + 5 + 5 + 5 - 10", Value::Integer(10)),
+            ("2 * 2 * 2 * 2 * 2", Value::Integer(32)),
+            ("5 * 2 + 10", Value::Integer(20)),
+            ("5 + 2 * 10", Value::Integer(25)),
+            ("5 * (2 + 10)", Value::Integer(60)),
         ];
         run_vm_tests(tests);
     }
