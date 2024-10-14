@@ -1,5 +1,6 @@
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Opcode {
+    None,
     Const(usize),
     Pop,
 
@@ -18,5 +19,8 @@ pub enum Opcode {
 
     Minus,
     Bang,
+
+    Judge(usize),
+	Jump(usize),
 
 }

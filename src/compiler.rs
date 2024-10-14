@@ -28,13 +28,13 @@ impl Compiler {
 
     pub fn compile(&mut self, source: &Vec<Expr>) -> Result<(), String> {
         for expr in source.iter() {
-            self.compile_expr(expr)?;
+            self.assemble(expr)?;
             self.emit(Opcode::Pop);
         }
         Ok(())
     }
 
-    fn compile_expr(&mut self, expr: &Expr) -> Result<(), String> {
+    fn assemble(&mut self, expr: &Expr) -> Result<(), String> {
         match expr {
             Expr::Ident(_, _) => todo!(),
             Expr::Integer(_, integer) => {
@@ -54,16 +54,16 @@ impl Compiler {
             Expr::Let(_, _, _) => todo!(),
             Expr::Return(_, _) => todo!(),
             Expr::Unary(token, right) => {
-                self.compile_expr(right)?;
+                self.assemble(right)?;
                 match token.kind {
                     Kind::Minus => self.emit(Opcode::Minus),
                     Kind::Bang => self.emit(Opcode::Bang),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
-            },
+            }
             Expr::Binary(token, left, right) => {
-                self.compile_expr(left)?;
-                self.compile_expr(right)?;
+                self.assemble(left)?;
+                self.assemble(right)?;
                 match token.kind {
                     Kind::Plus => self.emit(Opcode::Add),
                     Kind::Minus => self.emit(Opcode::Sub),
@@ -76,8 +76,32 @@ impl Compiler {
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
-            Expr::Paren(_, value) => self.compile_expr(value)?,
-            Expr::If(_, _, _, _) => todo!(),
+            Expr::Paren(_, value) => self.assemble(value)?,
+            Expr::If(_, condition, consequence, alternative) => {
+                self.assemble(condition)?;
+                let jump_not_truthy_position = self.instructions.len();
+                if consequence.is_empty() {
+                    self.emit(Opcode::None);
+                } else {
+                    for expr in consequence.iter() {
+                        self.assemble(expr)?;
+                    }
+                }
+                self.instructions.insert(
+                    jump_not_truthy_position,
+                    Opcode::Judge(self.instructions.len() + 2),
+                );
+                let jump_position = self.instructions.len();
+                if alternative.is_empty() {
+                    self.emit(Opcode::None);
+                } else {
+                    for expr in alternative.iter() {
+                        self.assemble(expr)?;
+                    }
+                }
+                self.instructions
+                    .insert(jump_position, Opcode::Jump(self.instructions.len() + 1));
+            }
             Expr::Function(_, _, _) => todo!(),
             Expr::Call(_, _, _) => todo!(),
             Expr::Array(_, _) => todo!(),
@@ -181,6 +205,55 @@ mod tests {
                 vec![Opcode::True, Opcode::False, Opcode::Ne, Opcode::Pop],
             ),
             ("!true", vec![], vec![Opcode::True, Opcode::Bang, Opcode::Pop]),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_conditionals() {
+        let tests = vec![
+            (
+                "if (true) { 10 }; 3333;",
+                vec![Value::Integer(10), Value::Integer(3333)],
+                vec![
+                    Opcode::True,
+                    Opcode::Judge(4),
+                    Opcode::Const(0),
+                    Opcode::Jump(5),
+                    Opcode::None,
+                    Opcode::Pop,
+                    Opcode::Const(1),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "if (true) { 10 } else { 20 }; 3333;",
+                vec![Value::Integer(10), Value::Integer(20), Value::Integer(3333)],
+                vec![
+                    Opcode::True,
+                    Opcode::Judge(4),
+                    Opcode::Const(0),
+                    Opcode::Jump(5),
+                    Opcode::Const(1),
+                    Opcode::Pop,
+                    Opcode::Const(2),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "if (true) {} else { 10 }; 3333;",
+                vec![Value::Integer(10), Value::Integer(3333)],
+                vec![
+                    Opcode::True,
+                    Opcode::Judge(4),
+                    Opcode::None,
+                    Opcode::Jump(5),
+                    Opcode::Const(0),
+                    Opcode::Pop,
+                    Opcode::Const(1),
+                    Opcode::Pop,
+                ],
+            ),
         ];
         run_compiler_tests(tests);
     }

@@ -19,9 +19,12 @@ impl Vm {
     }
 
     pub fn run(&mut self) {
-        for i in 0..self.instructions.len() {
-            let opcode = self.instructions[i];
+        let mut ip = usize::MIN;
+        while ip < self.instructions.len() {
+            let opcode = self.instructions[ip];
+            ip += 1;
             match opcode {
+                Opcode::None => self.push(Value::None),
                 Opcode::Const(index) => {
                     let value = self.consts[index].clone();
                     self.push(value);
@@ -88,8 +91,16 @@ impl Vm {
                 Opcode::Bang => {
                     let operand = self.pop();
                     match operand {
-                        Value::Boolean(false) => self.push(Value::Boolean(true)),
+                        Value::Boolean(false) | Value::None => self.push(Value::Boolean(true)),
                         _ => self.push(Value::Boolean(false)),
+                    }
+                }
+                Opcode::Jump(i) => ip = i,
+                Opcode::Judge(i) => {
+                    let condition = self.pop();
+                    match condition {
+                        Value::Boolean(false) | Value::None => ip = i,
+                        _ => {}
                     }
                 }
             }
@@ -123,6 +134,7 @@ mod tests {
             let mut compiler = Compiler::new();
             let result = compiler.compile(&source);
             assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
+            println!("{:?}", compiler.instructions);
             let mut vm = Vm::new(compiler.consts, compiler.instructions);
             vm.run();
             println!("{} = {}", vm.past(), value);
@@ -182,6 +194,25 @@ mod tests {
             ("!!true", Value::Boolean(true)),
             ("!!false", Value::Boolean(false)),
             ("!!5", Value::Boolean(true)),
+            ("!(if (false) { 5; })", Value::Boolean(true)),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_conditionals() {
+        let tests = vec![
+            ("if (true) { 10 }", Value::Integer(10)),
+            ("if (true) { 10 } else { 20 }", Value::Integer(10)),
+            ("if (false) { 10 } else { 20 } ", Value::Integer(20)),
+            ("if (1) { 10 }", Value::Integer(10)),
+            ("if (1 < 2) { 10 }", Value::Integer(10)),
+            ("if (1 < 2) { 10 } else { 20 }", Value::Integer(10)),
+            ("if (1 > 2) { 10 } else { 20 }", Value::Integer(20)),
+            ("if (1 > 2) { 10 }", Value::None),
+            ("if (false) { 10 }", Value::None),
+            ("if ((if (false) { 10 })) { 10 } else { 20 }", Value::Integer(20)),
+            ("if (true) {} else { 10 }", Value::None),
         ];
         run_vm_tests(tests);
     }
