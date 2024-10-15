@@ -5,27 +5,52 @@ use std::collections::HashMap;
 pub struct Vm<'a> {
     consts: &'a Vec<Value>,
     globals: &'a mut Vec<Value>,
-    insts: &'a Vec<Opcode>,
     stack: Vec<Value>,
     sp: usize,
+    frames: Vec<Frame>,
+    index: usize,
+}
+
+struct Frame {
+    opcodes: Vec<Opcode>,
+    fp: usize,
 }
 
 impl<'a> Vm<'a> {
-    pub fn new(consts: &'a Vec<Value>, globals: &'a mut Vec<Value>, insts: &'a Vec<Opcode>) -> Self {
+    pub fn new(consts: &'a Vec<Value>, globals: &'a mut Vec<Value>, opcodes: Vec<Opcode>) -> Self {
         Self {
             consts,
             globals,
-            insts,
             stack: Vec::new(),
             sp: usize::MIN,
+            frames: vec![Frame {
+                opcodes,
+                fp: usize::MIN,
+            }],
+            index: usize::MIN,
         }
     }
 
+    fn frame(&mut self) -> &mut Frame {
+        &mut self.frames[self.index]
+    }
+
+    fn enter(&mut self, frame: Frame) {
+        self.frames.push(frame);
+        self.index += 1;
+    }
+
+    fn leave(&mut self) -> Frame {
+        let frame = self.frames.remove(self.index);
+        self.index -= 1;
+        frame
+    }
+
     pub fn run(&mut self) {
-        let mut ip = usize::MIN;
-        while ip < self.insts.len() {
-            let opcode = self.insts[ip];
-            ip += 1;
+        while self.frame().fp < self.frame().opcodes.len() {
+            let fp = self.frame().fp;
+            let opcode = self.frame().opcodes[fp];
+            self.frame().fp += 1;
             match opcode {
                 Opcode::None => self.push(Value::None),
                 Opcode::Const(index) => {
@@ -101,11 +126,11 @@ impl<'a> Vm<'a> {
                         _ => self.push(Value::Boolean(false)),
                     }
                 }
-                Opcode::Jump(i) => ip = i,
+                Opcode::Jump(i) => self.frame().fp = i,
                 Opcode::Judge(i) => {
                     let condition = self.pop();
                     match condition {
-                        Value::Boolean(false) | Value::None => ip = i,
+                        Value::Boolean(false) | Value::None => self.frame().fp = i,
                         _ => {}
                     }
                 }
@@ -152,6 +177,24 @@ impl<'a> Vm<'a> {
                         (left, index) => panic!("unsupported types for index: {}[{}]", left, index),
                     }
                 }
+                Opcode::Call(_) => {
+                    let function = self.stack.remove(self.sp - 1);
+                    self.sp -= 1;
+                    match function {
+                        Value::Function(opcodes) => {
+                            self.enter(Frame {
+                                opcodes,
+                                fp: usize::MIN,
+                            });
+                        }
+                        left => panic!("unsupported types for call: {}", left.kind()),
+                    };
+                }
+                Opcode::Return => {
+                    let value = self.pop();
+                    self.leave();
+                    self.push(value);
+                }
             }
         }
     }
@@ -188,10 +231,10 @@ mod tests {
             let mut compiler = Compiler::new(&mut consts, &mut symbols);
             let result = compiler.compile(&source);
             assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
-            println!("{:?}", compiler.insts);
+            let opcodes = compiler.opcodes();
+            println!("opcodes: {:?}", opcodes);
             let mut globals = Vec::new();
-            let insts = compiler.insts;
-            let mut vm = Vm::new(&consts, &mut globals, &insts);
+            let mut vm = Vm::new(&consts, &mut globals, opcodes);
             vm.run();
             println!("{} = {}", vm.past(), value);
             assert_eq!(vm.past(), &value);
@@ -256,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conditional_judgment() {
+    fn test_test_if_conditional() {
         let tests = vec![
             ("if (true) { 10 }", Value::Integer(10)),
             ("if (true) { 10 } else { 20 }", Value::Integer(10)),
@@ -269,6 +312,7 @@ mod tests {
             ("if (false) { 10 }", Value::None),
             ("if ((if (false) { 10 })) { 10 } else { 20 }", Value::Integer(20)),
             ("if (true) {} else { 10 }", Value::None),
+            ("if (true) { 1; 2 } else { 3 }", Value::Integer(2)),
         ];
         run_vm_tests(tests);
     }
@@ -347,6 +391,53 @@ mod tests {
             ("{1: 1, 2: 2}[2]", Value::Integer(2)),
             ("{1: 1}[0]", Value::None),
             ("{}[0]", Value::None),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_call_function() {
+        let tests = vec![
+            (
+                "let fivePlusTen = fn() { 5 + 10; };
+                 fivePlusTen();",
+                Value::Integer(15),
+            ),
+            (
+                "let one = fn() { 1; };
+                 let two = fn() { 2; };
+                 one() + two()",
+                Value::Integer(3),
+            ),
+            (
+                "let a = fn() { 1 };
+                 let b = fn() { a() + 1 };
+                 let c = fn() { b() + 1 };
+                 c();",
+                Value::Integer(3),
+            ),
+            (
+                "let earlyExit = fn() { return 99; 100; };
+		         earlyExit();",
+                Value::Integer(99),
+            ),
+            (
+                "let earlyExit = fn() { return 99; return 100; };
+		         earlyExit();",
+                Value::Integer(99),
+            ),
+            (
+                "let noReturn = fn() { };
+		         noReturn();",
+                Value::None,
+            ),
+            (
+                "let noReturn = fn() { };
+		         let noReturnTwo = fn() { noReturn(); };
+		         noReturn();
+		         noReturnTwo();",
+                Value::None,
+            ),
         ];
         run_vm_tests(tests);
     }

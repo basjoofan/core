@@ -5,23 +5,49 @@ use crate::Table;
 use crate::Value;
 
 pub struct Compiler<'a> {
-    pub insts: Vec<Opcode>,
     pub consts: &'a mut Vec<Value>,
     pub symbols: &'a mut Table,
+    // pub opcodes: Vec<Opcode>,
+    scopes: Vec<Scope>,
+    index: usize,
+}
+
+struct Scope {
+    opcodes: Vec<Opcode>,
 }
 
 impl<'a> Compiler<'a> {
     pub fn new(consts: &'a mut Vec<Value>, symbols: &'a mut Table) -> Self {
         Self {
-            insts: Vec::new(),
             consts,
             symbols,
+            scopes: vec![Scope { opcodes: vec![] }],
+            index: usize::MIN,
         }
     }
 
+    pub fn opcodes(&mut self) -> Vec<Opcode> {
+        self.scopes.remove(self.index).opcodes
+    }
+
+    fn scope(&mut self) -> &mut Scope {
+        &mut self.scopes[self.index]
+    }
+
+    fn enter(&mut self) {
+        self.scopes.push(Scope { opcodes: vec![] });
+        self.index += 1;
+    }
+
+    fn leave(&mut self) -> Vec<Opcode> {
+        let scope = self.scopes.remove(self.index);
+        self.index -= 1;
+        scope.opcodes
+    }
+
     fn emit(&mut self, opcode: Opcode) -> usize {
-        self.insts.push(opcode);
-        self.insts.len() - 1
+        self.scope().opcodes.push(opcode);
+        self.scope().opcodes.len() - 1
     }
 
     fn save(&mut self, value: Value) -> usize {
@@ -33,7 +59,7 @@ impl<'a> Compiler<'a> {
         for expr in source.iter() {
             self.assemble(expr)?;
             match expr {
-                Expr::Let(..) => {}
+                Expr::Let(..) | Expr::Return(..) => {}
                 _ => {
                     self.emit(Opcode::Pop);
                 }
@@ -73,7 +99,10 @@ impl<'a> Compiler<'a> {
                 let index = self.symbols.define(name);
                 self.emit(Opcode::SetGlobal(index));
             }
-            Expr::Return(_, _) => todo!(),
+            Expr::Return(_, value) => {
+                self.assemble(value)?;
+                self.emit(Opcode::Return);
+            }
             Expr::Unary(token, right) => {
                 self.assemble(right)?;
                 match token.kind {
@@ -100,27 +129,59 @@ impl<'a> Compiler<'a> {
             Expr::Paren(_, value) => self.assemble(value)?,
             Expr::If(_, condition, consequence, alternative) => {
                 self.assemble(condition)?;
-                let judge_position = self.insts.len();
+                let judge_index = self.scope().opcodes.len();
                 if consequence.is_empty() {
                     self.emit(Opcode::None);
                 } else {
-                    for expr in consequence.iter() {
-                        self.assemble(expr)?;
+                    self.compile(consequence)?;
+                    if let Some(Opcode::Pop) = self.scope().opcodes.last() {
+                        self.scope().opcodes.pop();
                     }
                 }
-                self.insts.insert(judge_position, Opcode::Judge(self.insts.len() + 2));
-                let jump_position = self.insts.len();
+                let judge_position = self.scope().opcodes.len() + 2;
+                self.scope().opcodes.insert(judge_index, Opcode::Judge(judge_position));
+                let jump_index = self.scope().opcodes.len();
                 if alternative.is_empty() {
                     self.emit(Opcode::None);
                 } else {
-                    for expr in alternative.iter() {
-                        self.assemble(expr)?;
+                    self.compile(alternative)?;
+                    if let Some(Opcode::Pop) = self.scope().opcodes.last() {
+                        self.scope().opcodes.pop();
                     }
                 }
-                self.insts.insert(jump_position, Opcode::Jump(self.insts.len() + 1));
+                let jump_position = self.scope().opcodes.len() + 1;
+                self.scope().opcodes.insert(jump_index, Opcode::Jump(jump_position));
             }
-            Expr::Function(_, _, _) => todo!(),
-            Expr::Call(_, _, _) => todo!(),
+            Expr::Function(_, parameters, body) => {
+                self.enter();
+                for parameter in parameters.iter() {
+                    self.symbols.define(parameter);
+                }
+                if body.is_empty() {
+                    self.emit(Opcode::None);
+                }else {
+                    self.compile(body)?;
+                    if let Some(Opcode::Pop) = self.scope().opcodes.last() {
+                        self.scope().opcodes.pop();
+                    }
+                }
+                match self.scope().opcodes.last() {
+                    Some(Opcode::Return) => {}
+                    _ => {
+                        self.emit(Opcode::Return);
+                    }
+                }
+                let opcodes = self.leave();
+                let index = self.save(Value::Function(opcodes));
+                self.emit(Opcode::Const(index));
+            }
+            Expr::Call(_, function, arguments) => {
+                self.assemble(function)?;
+                for arg in arguments.iter() {
+                    self.assemble(arg)?;
+                }
+                self.emit(Opcode::Call(arguments.len()));
+            }
             Expr::Array(_, elements) => {
                 for expr in elements.iter() {
                     self.assemble(expr)?;
@@ -134,11 +195,11 @@ impl<'a> Compiler<'a> {
                 }
                 self.emit(Opcode::Map(pairs.len()));
             }
-            Expr::Index(_,  left, index) => {
+            Expr::Index(_, left, index) => {
                 self.assemble(left)?;
                 self.assemble(index)?;
                 self.emit(Opcode::Index);
-            },
+            }
             Expr::Field(_, _, _) => todo!(),
             Expr::Request(_, _, _, _) => todo!(),
             Expr::Test(_, _, _) => todo!(),
@@ -155,14 +216,14 @@ mod tests {
     use crate::Value;
 
     fn run_compiler_tests(tests: Vec<(&str, Vec<Value>, Vec<Opcode>)>) {
-        for (text, constants, insts) in tests {
+        for (text, constants, opcodes) in tests {
             let source = crate::parser::Parser::new(text).parse().unwrap();
             let mut consts = Vec::new();
             let mut symbols = Table::new();
             let mut compiler = Compiler::new(&mut consts, &mut symbols);
             let result = compiler.compile(&source);
             assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
-            assert_eq!(compiler.insts, insts);
+            assert_eq!(compiler.opcodes(), opcodes);
             assert_eq!(consts, constants);
         }
     }
@@ -245,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conditional_judgment() {
+    fn test_if_conditional() {
         let tests = vec![
             (
                 "if (true) { 10 }; 3333;",
@@ -286,6 +347,33 @@ mod tests {
                     Opcode::Const(0),
                     Opcode::Pop,
                     Opcode::Const(1),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "if (true) { 0; 1; 2 } else { 3; 4; 5 }",
+                vec![
+                    Value::Integer(0),
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                    Value::Integer(4),
+                    Value::Integer(5),
+                ],
+                vec![
+                    Opcode::True,
+                    Opcode::Judge(8),
+                    Opcode::Const(0),
+                    Opcode::Pop,
+                    Opcode::Const(1),
+                    Opcode::Pop,
+                    Opcode::Const(2),
+                    Opcode::Jump(13),
+                    Opcode::Const(3),
+                    Opcode::Pop,
+                    Opcode::Const(4),
+                    Opcode::Pop,
+                    Opcode::Const(5),
                     Opcode::Pop,
                 ],
             ),
@@ -487,6 +575,74 @@ mod tests {
                     Opcode::Const(3),
                     Opcode::Sub,
                     Opcode::Index,
+                    Opcode::Pop,
+                ],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_function_literal() {
+        let tests = vec![
+            (
+                "fn() { return 5 + 10 }",
+                vec![
+                    Value::Integer(5),
+                    Value::Integer(10),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return]),
+                ],
+                vec![Opcode::Const(2), Opcode::Pop],
+            ),
+            (
+                "fn() { 6 + 8 }",
+                vec![
+                    Value::Integer(6),
+                    Value::Integer(8),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return]),
+                ],
+                vec![Opcode::Const(2), Opcode::Pop],
+            ),
+            (
+                "fn() { 1; 2 }",
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Pop, Opcode::Const(1), Opcode::Return]),
+                ],
+                vec![Opcode::Const(2), Opcode::Pop],
+            ),
+            (
+                "fn() { }",
+                vec![Value::Function(vec![Opcode::None, Opcode::Return])],
+                vec![Opcode::Const(0), Opcode::Pop],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_call_function() {
+        let tests = vec![
+            (
+                "fn() { 2 }();",
+                vec![
+                    Value::Integer(2),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Return]),
+                ],
+                vec![Opcode::Const(1), Opcode::Call(0), Opcode::Pop],
+            ),
+            (
+                "let no_arg = fn() { 22 }; no_arg();",
+                vec![
+                    Value::Integer(22),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Return]),
+                ],
+                vec![
+                    Opcode::Const(1),
+                    Opcode::SetGlobal(0),
+                    Opcode::GetGlobal(0),
+                    Opcode::Call(0),
                     Opcode::Pop,
                 ],
             ),

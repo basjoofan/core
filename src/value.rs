@@ -1,4 +1,5 @@
 use crate::Expr;
+use crate::Opcode;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -15,7 +16,7 @@ pub enum Value {
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
     Return(Box<Value>),
-    Function(Vec<String>, Vec<Expr>),
+    Function(Vec<Opcode>),
     Native(fn(Vec<Value>) -> Value),
     Request(String, Vec<Expr>, Vec<Expr>),
 }
@@ -71,13 +72,8 @@ impl Display for Value {
                     .join(", ")
             ),
             Value::Return(value) => write!(f, "{}", value),
-            Value::Function(parameters, body) => {
-                write!(
-                    f,
-                    "fn ({}) {{ {} }}",
-                    parameters.join(", "),
-                    body.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
-                )
+            Value::Function(opcodes) => {
+                write!(f, "{:?}", opcodes)
             }
             Value::Native(function) => write!(f, "{:?}", function),
             Value::Request(name, pieces, asserts) => write!(

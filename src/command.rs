@@ -38,8 +38,8 @@ pub fn repl() {
                         continue;
                     }
 
-                    let insts = compiler.insts;
-                    let mut vm = Vm::new(&consts, &mut globals, &insts);
+                    let opcodes = compiler.opcodes();
+                    let mut vm = Vm::new(&consts, &mut globals, opcodes);
                     vm.run();
                     println!("{}", vm.past());
                 }
