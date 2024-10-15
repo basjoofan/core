@@ -21,6 +21,8 @@ pub enum Opcode {
     Bang,
 
     Judge(usize),
-	Jump(usize),
+    Jump(usize),
 
+    GetGlobal(usize),
+    SetGlobal(usize),
 }

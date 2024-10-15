@@ -1,24 +1,27 @@
 use crate::Expr;
 use crate::Kind;
 use crate::Opcode;
+use crate::Table;
 use crate::Value;
 
-pub struct Compiler {
-    pub instructions: Vec<Opcode>,
-    pub consts: Vec<Value>,
+pub struct Compiler<'a> {
+    pub insts: Vec<Opcode>,
+    pub consts: &'a mut Vec<Value>,
+    pub symbols: &'a mut Table,
 }
 
-impl Compiler {
-    pub fn new() -> Self {
+impl<'a> Compiler<'a> {
+    pub fn new(consts: &'a mut Vec<Value>, symbols: &'a mut Table) -> Self {
         Self {
-            instructions: Vec::new(),
-            consts: Vec::new(),
+            insts: Vec::new(),
+            consts,
+            symbols,
         }
     }
 
     fn emit(&mut self, opcode: Opcode) -> usize {
-        self.instructions.push(opcode);
-        self.instructions.len() - 1
+        self.insts.push(opcode);
+        self.insts.len() - 1
     }
 
     fn save(&mut self, value: Value) -> usize {
@@ -29,14 +32,24 @@ impl Compiler {
     pub fn compile(&mut self, source: &Vec<Expr>) -> Result<(), String> {
         for expr in source.iter() {
             self.assemble(expr)?;
-            self.emit(Opcode::Pop);
+            match expr {
+                Expr::Let(..) => {}
+                _ => {
+                    self.emit(Opcode::Pop);
+                }
+            }
         }
         Ok(())
     }
 
     fn assemble(&mut self, expr: &Expr) -> Result<(), String> {
         match expr {
-            Expr::Ident(_, _) => todo!(),
+            Expr::Ident(_, name) => match self.symbols.resolve(name) {
+                Some(symbol) => {
+                    self.emit(Opcode::GetGlobal(symbol.index));
+                }
+                None => Err(format!("Undefined variable: {}", name))?,
+            },
             Expr::Integer(_, integer) => {
                 let integer = Value::Integer(*integer);
                 let index = self.save(integer);
@@ -51,7 +64,11 @@ impl Compiler {
                 }
             }
             Expr::String(_, _) => todo!(),
-            Expr::Let(_, _, _) => todo!(),
+            Expr::Let(_, name, value) => {
+                self.assemble(value)?;
+                let index = self.symbols.define(name);
+                self.emit(Opcode::SetGlobal(index));
+            }
             Expr::Return(_, _) => todo!(),
             Expr::Unary(token, right) => {
                 self.assemble(right)?;
@@ -79,7 +96,7 @@ impl Compiler {
             Expr::Paren(_, value) => self.assemble(value)?,
             Expr::If(_, condition, consequence, alternative) => {
                 self.assemble(condition)?;
-                let jump_not_truthy_position = self.instructions.len();
+                let judge_position = self.insts.len();
                 if consequence.is_empty() {
                     self.emit(Opcode::None);
                 } else {
@@ -87,11 +104,8 @@ impl Compiler {
                         self.assemble(expr)?;
                     }
                 }
-                self.instructions.insert(
-                    jump_not_truthy_position,
-                    Opcode::Judge(self.instructions.len() + 2),
-                );
-                let jump_position = self.instructions.len();
+                self.insts.insert(judge_position, Opcode::Judge(self.insts.len() + 2));
+                let jump_position = self.insts.len();
                 if alternative.is_empty() {
                     self.emit(Opcode::None);
                 } else {
@@ -99,8 +113,7 @@ impl Compiler {
                         self.assemble(expr)?;
                     }
                 }
-                self.instructions
-                    .insert(jump_position, Opcode::Jump(self.instructions.len() + 1));
+                self.insts.insert(jump_position, Opcode::Jump(self.insts.len() + 1));
             }
             Expr::Function(_, _, _) => todo!(),
             Expr::Call(_, _, _) => todo!(),
@@ -119,16 +132,19 @@ impl Compiler {
 mod tests {
     use crate::Compiler;
     use crate::Opcode;
+    use crate::Table;
     use crate::Value;
 
     fn run_compiler_tests(tests: Vec<(&str, Vec<Value>, Vec<Opcode>)>) {
-        for (text, consts, instructions) in tests {
+        for (text, constants, insts) in tests {
             let source = crate::parser::Parser::new(text).parse().unwrap();
-            let mut compiler = Compiler::new();
+            let mut consts = Vec::new();
+            let mut symbols = Table::new();
+            let mut compiler = Compiler::new(&mut consts, &mut symbols);
             let result = compiler.compile(&source);
             assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
-            assert_eq!(compiler.instructions, instructions);
-            assert_eq!(compiler.consts, consts);
+            assert_eq!(compiler.insts, insts);
+            assert_eq!(consts, constants);
         }
     }
 
@@ -251,6 +267,45 @@ mod tests {
                     Opcode::Const(0),
                     Opcode::Pop,
                     Opcode::Const(1),
+                    Opcode::Pop,
+                ],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_global_let_expr() {
+        let tests = vec![
+            (
+                "let one = 1;let two = 2;",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::SetGlobal(0),
+                    Opcode::Const(1),
+                    Opcode::SetGlobal(1),
+                ],
+            ),
+            (
+                "let one = 1;one;",
+                vec![Value::Integer(1)],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::SetGlobal(0),
+                    Opcode::GetGlobal(0),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "let one = 1;let two = one;two;",
+                vec![Value::Integer(1)],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::SetGlobal(0),
+                    Opcode::GetGlobal(0),
+                    Opcode::SetGlobal(1),
+                    Opcode::GetGlobal(1),
                     Opcode::Pop,
                 ],
             ),

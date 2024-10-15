@@ -1,18 +1,20 @@
 use crate::Opcode;
 use crate::Value;
 
-pub struct Vm {
-    consts: Vec<Value>,
-    instructions: Vec<Opcode>,
+pub struct Vm<'a> {
+    consts: &'a Vec<Value>,
+    globals: &'a mut Vec<Value>,
+    insts: &'a Vec<Opcode>,
     stack: Vec<Value>,
     sp: usize,
 }
 
-impl Vm {
-    pub fn new(consts: Vec<Value>, instructions: Vec<Opcode>) -> Self {
+impl<'a> Vm<'a> {
+    pub fn new(consts: &'a Vec<Value>, globals: &'a mut Vec<Value>, insts: &'a Vec<Opcode>) -> Self {
         Self {
             consts,
-            instructions,
+            globals,
+            insts,
             stack: Vec::new(),
             sp: usize::MIN,
         }
@@ -20,8 +22,8 @@ impl Vm {
 
     pub fn run(&mut self) {
         let mut ip = usize::MIN;
-        while ip < self.instructions.len() {
-            let opcode = self.instructions[ip];
+        while ip < self.insts.len() {
+            let opcode = self.insts[ip];
             ip += 1;
             match opcode {
                 Opcode::None => self.push(Value::None),
@@ -103,6 +105,13 @@ impl Vm {
                         _ => {}
                     }
                 }
+                Opcode::GetGlobal(index) => {
+                    self.push(self.globals[index].clone());
+                }
+                Opcode::SetGlobal(index) => {
+                    let value = self.pop();
+                    self.globals.insert(index, value);
+                }
             }
         }
     }
@@ -125,17 +134,22 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use crate::Compiler;
+    use crate::Table;
     use crate::Value;
     use crate::Vm;
 
     fn run_vm_tests(tests: Vec<(&str, Value)>) {
         for (text, value) in tests {
             let source = crate::parser::Parser::new(text).parse().unwrap();
-            let mut compiler = Compiler::new();
+            let mut consts = Vec::new();
+            let mut symbols = Table::new();
+            let mut compiler = Compiler::new(&mut consts, &mut symbols);
             let result = compiler.compile(&source);
             assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
-            println!("{:?}", compiler.instructions);
-            let mut vm = Vm::new(compiler.consts, compiler.instructions);
+            println!("{:?}", compiler.insts);
+            let mut globals = Vec::new();
+            let insts = compiler.insts;
+            let mut vm = Vm::new(&consts, &mut globals, &insts);
             vm.run();
             println!("{} = {}", vm.past(), value);
             assert_eq!(vm.past(), &value);
@@ -213,6 +227,19 @@ mod tests {
             ("if (false) { 10 }", Value::None),
             ("if ((if (false) { 10 })) { 10 } else { 20 }", Value::Integer(20)),
             ("if (true) {} else { 10 }", Value::None),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_global_let_expr() {
+        let tests = vec![
+            ("let one = 1; one", Value::Integer(1)),
+            ("let one = 1; let two = 2; one + two", Value::Integer(3)),
+            ("let one = 1; let two = one + one; one + two", Value::Integer(3)),
+            ("let one = 1; one;", Value::Integer(1)),
+            ("let one = 1; let two = 2; one + two;", Value::Integer(3)),
+            ("let one = 1; let two = one + one; one + two;", Value::Integer(3)),
         ];
         run_vm_tests(tests);
     }

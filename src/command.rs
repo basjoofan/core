@@ -3,6 +3,7 @@ use crate::Compiler;
 use crate::Parser;
 use crate::Record;
 use crate::Stats;
+use crate::Table;
 use crate::Value;
 use crate::Vm;
 use std::io::stdin;
@@ -18,6 +19,9 @@ pub const NAME: &str = env!("CARGO_PKG_NAME");
 
 pub fn repl() {
     let mut lines = stdin().lock().lines();
+    let mut consts = Vec::new();
+    let mut symbols = Table::new();
+    let mut globals = Vec::new();
     loop {
         if let Some(Ok(text)) = lines.next() {
             if text == "exit" {
@@ -28,12 +32,14 @@ pub fn repl() {
             }
             match Parser::new(&text).parse() {
                 Ok(source) => {
-                    let mut compiler = Compiler::new();
+                    let mut compiler = Compiler::new(&mut consts, &mut symbols);
                     if let Err(message) = compiler.compile(&source) {
                         println!("{}", message);
                         continue;
                     }
-                    let mut vm = Vm::new(compiler.consts, compiler.instructions);
+
+                    let insts = compiler.insts;
+                    let mut vm = Vm::new(&consts, &mut globals, &insts);
                     vm.run();
                     println!("{}", vm.past());
                 }
