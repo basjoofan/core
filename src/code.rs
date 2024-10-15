@@ -25,4 +25,6 @@ pub enum Opcode {
 
     GetGlobal(usize),
     SetGlobal(usize),
+
+    Array(usize),
 }

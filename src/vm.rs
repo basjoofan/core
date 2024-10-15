@@ -115,6 +115,14 @@ impl<'a> Vm<'a> {
                     let value = self.pop();
                     self.globals.insert(index, value);
                 }
+                Opcode::Array(length) => {
+                    let mut array = Vec::with_capacity(length);
+                    for index in self.sp - length..self.sp {
+                        array.push(self.stack[index].clone());
+                    }
+                    self.sp -= length;
+                    self.push(Value::Array(array));
+                }
             }
         }
     }
@@ -253,6 +261,22 @@ mod tests {
             (r#""hello world""#, Value::String(String::from("hello world"))),
             (r#""hello" + " world""#, Value::String(String::from("hello world"))),
             (r#""hello"+" world"+"!""#, Value::String(String::from("hello world!"))),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_array_literal() {
+        let tests = vec![
+            ("[]", Value::Array(vec![])),
+            (
+                "[1, 2, 3]",
+                Value::Array(vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)]),
+            ),
+            (
+                "[1 + 2, 3 - 4, 5 * 6]",
+                Value::Array(vec![Value::Integer(3), Value::Integer(-1), Value::Integer(30)]),
+            ),
         ];
         run_vm_tests(tests);
     }

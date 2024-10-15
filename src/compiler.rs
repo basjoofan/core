@@ -121,7 +121,12 @@ impl<'a> Compiler<'a> {
             }
             Expr::Function(_, _, _) => todo!(),
             Expr::Call(_, _, _) => todo!(),
-            Expr::Array(_, _) => todo!(),
+            Expr::Array(_, elements) => {
+                for expr in elements.iter() {
+                    self.assemble(expr)?;
+                }
+                self.emit(Opcode::Array(elements.len()));
+            }
             Expr::Map(_, _) => todo!(),
             Expr::Index(_, _, _) => todo!(),
             Expr::Field(_, _, _) => todo!(),
@@ -332,6 +337,49 @@ mod tests {
                     Value::String(String::from(" world")),
                 ],
                 vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Pop],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_array_literal() {
+        let tests = vec![
+            ("[]", vec![], vec![Opcode::Array(0), Opcode::Pop]),
+            (
+                "[1, 2, 3]",
+                vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::Const(1),
+                    Opcode::Const(2),
+                    Opcode::Array(3),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "[1 + 2, 3 - 4, 5 * 6]",
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                    Value::Integer(4),
+                    Value::Integer(5),
+                    Value::Integer(6),
+                ],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::Const(1),
+                    Opcode::Add,
+                    Opcode::Const(2),
+                    Opcode::Const(3),
+                    Opcode::Sub,
+                    Opcode::Const(4),
+                    Opcode::Const(5),
+                    Opcode::Mul,
+                    Opcode::Array(3),
+                    Opcode::Pop,
+                ],
             ),
         ];
         run_compiler_tests(tests);
