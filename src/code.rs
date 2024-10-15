@@ -28,4 +28,5 @@ pub enum Opcode {
 
     Array(usize),
     Map(usize),
+    Index,
 }

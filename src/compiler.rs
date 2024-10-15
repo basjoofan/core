@@ -134,7 +134,11 @@ impl<'a> Compiler<'a> {
                 }
                 self.emit(Opcode::Map(pairs.len()));
             }
-            Expr::Index(_, _, _) => todo!(),
+            Expr::Index(_,  left, index) => {
+                self.assemble(left)?;
+                self.assemble(index)?;
+                self.emit(Opcode::Index);
+            },
             Expr::Field(_, _, _) => todo!(),
             Expr::Request(_, _, _, _) => todo!(),
             Expr::Test(_, _, _) => todo!(),
@@ -436,6 +440,53 @@ mod tests {
                     Opcode::Const(5),
                     Opcode::Mul,
                     Opcode::Map(2),
+                    Opcode::Pop,
+                ],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_index_value() {
+        let tests = vec![
+            (
+                "[1, 2, 3][1 + 1]",
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                    Value::Integer(1),
+                    Value::Integer(1),
+                ],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::Const(1),
+                    Opcode::Const(2),
+                    Opcode::Array(3),
+                    Opcode::Const(3),
+                    Opcode::Const(4),
+                    Opcode::Add,
+                    Opcode::Index,
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "{1: 2}[2 - 1]",
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(2),
+                    Value::Integer(1),
+                ],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::Const(1),
+                    Opcode::Map(1),
+                    Opcode::Const(2),
+                    Opcode::Const(3),
+                    Opcode::Sub,
+                    Opcode::Index,
                     Opcode::Pop,
                 ],
             ),

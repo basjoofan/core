@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use crate::Opcode;
 use crate::Value;
+use std::collections::HashMap;
 
 pub struct Vm<'a> {
     consts: &'a Vec<Value>,
@@ -134,6 +133,24 @@ impl<'a> Vm<'a> {
                     }
                     self.sp -= length * 2;
                     self.push(Value::Map(map));
+                }
+                Opcode::Index => {
+                    let index = self.pop();
+                    let left = self.pop();
+                    match (left, index) {
+                        (Value::Array(array), Value::Integer(index)) => {
+                            if index < 0 || index as usize >= array.len() {
+                                self.push(Value::None);
+                            } else {
+                                self.push(array[index as usize].clone());
+                            }
+                        }
+                        (Value::Map(map), key) => match map.get(key.to_string().as_str()) {
+                            Some(value) => self.push(value.clone()),
+                            None => self.push(Value::None),
+                        },
+                        (left, index) => panic!("unsupported types for index: {}[{}]", left, index),
+                    }
                 }
             }
         }
@@ -313,6 +330,23 @@ mod tests {
                     (String::from("6"), Value::Integer(16)),
                 ])),
             ),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_index_value() {
+        let tests = vec![
+            ("[1, 2, 3][1]", Value::Integer(2)),
+            ("[1, 2, 3][0 + 2]", Value::Integer(3)),
+            ("[[1, 1, 1]][0][0]", Value::Integer(1)),
+            ("[][0]", Value::None),
+            ("[1, 2, 3][99]", Value::None),
+            ("[1][-1]", Value::None),
+            ("{1: 1, 2: 2}[1]", Value::Integer(1)),
+            ("{1: 1, 2: 2}[2]", Value::Integer(2)),
+            ("{1: 1}[0]", Value::None),
+            ("{}[0]", Value::None),
         ];
         run_vm_tests(tests);
     }
