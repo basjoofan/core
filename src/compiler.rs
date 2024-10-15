@@ -127,7 +127,13 @@ impl<'a> Compiler<'a> {
                 }
                 self.emit(Opcode::Array(elements.len()));
             }
-            Expr::Map(_, _) => todo!(),
+            Expr::Map(_, pairs) => {
+                for (key, value) in pairs.iter() {
+                    self.assemble(key)?;
+                    self.assemble(value)?;
+                }
+                self.emit(Opcode::Map(pairs.len()));
+            }
             Expr::Index(_, _, _) => todo!(),
             Expr::Field(_, _, _) => todo!(),
             Expr::Request(_, _, _, _) => todo!(),
@@ -378,6 +384,58 @@ mod tests {
                     Opcode::Const(5),
                     Opcode::Mul,
                     Opcode::Array(3),
+                    Opcode::Pop,
+                ],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_map_literal() {
+        let tests = vec![
+            ("{}", vec![], vec![Opcode::Map(0), Opcode::Pop]),
+            (
+                "{1: 2, 3: 4, 5: 6}",
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                    Value::Integer(4),
+                    Value::Integer(5),
+                    Value::Integer(6),
+                ],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::Const(1),
+                    Opcode::Const(2),
+                    Opcode::Const(3),
+                    Opcode::Const(4),
+                    Opcode::Const(5),
+                    Opcode::Map(3),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "{1: 2 + 3, 4: 5 * 6}",
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                    Value::Integer(4),
+                    Value::Integer(5),
+                    Value::Integer(6),
+                ],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::Const(1),
+                    Opcode::Const(2),
+                    Opcode::Add,
+                    Opcode::Const(3),
+                    Opcode::Const(4),
+                    Opcode::Const(5),
+                    Opcode::Mul,
+                    Opcode::Map(2),
                     Opcode::Pop,
                 ],
             ),

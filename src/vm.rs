@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::Opcode;
 use crate::Value;
 
@@ -123,6 +125,16 @@ impl<'a> Vm<'a> {
                     self.sp -= length;
                     self.push(Value::Array(array));
                 }
+                Opcode::Map(length) => {
+                    let mut map = HashMap::new();
+                    for index in (self.sp - length * 2..self.sp).step_by(2) {
+                        let key = self.stack[index].clone();
+                        let value = self.stack[index + 1].clone();
+                        map.insert(key.to_string(), value);
+                    }
+                    self.sp -= length * 2;
+                    self.push(Value::Map(map));
+                }
             }
         }
     }
@@ -144,6 +156,8 @@ impl<'a> Vm<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::Compiler;
     use crate::Table;
     use crate::Value;
@@ -276,6 +290,28 @@ mod tests {
             (
                 "[1 + 2, 3 - 4, 5 * 6]",
                 Value::Array(vec![Value::Integer(3), Value::Integer(-1), Value::Integer(30)]),
+            ),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_map_literal() {
+        let tests = vec![
+            ("{}", Value::Map(HashMap::new())),
+            (
+                "{1: 2, 2: 3}",
+                Value::Map(HashMap::from_iter(vec![
+                    (String::from("1"), Value::Integer(2)),
+                    (String::from("2"), Value::Integer(3)),
+                ])),
+            ),
+            (
+                "{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
+                Value::Map(HashMap::from_iter(vec![
+                    (String::from("2"), Value::Integer(4)),
+                    (String::from("6"), Value::Integer(16)),
+                ])),
             ),
         ];
         run_vm_tests(tests);
