@@ -75,6 +75,9 @@ impl<'a> Vm<'a> {
                         (Value::Boolean(left), Value::Boolean(right), Opcode::Ne) => {
                             self.push(Value::Boolean(left != right))
                         }
+                        (Value::String(left), Value::String(right), Opcode::Add) => {
+                            self.push(Value::String(format!("{}{}", left, right)))
+                        }
                         (left, right, opcode) => panic!(
                             "unsupported types for binary operation: {} {:?} {}",
                             left, opcode, right
@@ -214,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conditionals() {
+    fn test_conditional_judgment() {
         let tests = vec![
             ("if (true) { 10 }", Value::Integer(10)),
             ("if (true) { 10 } else { 20 }", Value::Integer(10)),
@@ -232,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn test_global_let_expr() {
+    fn test_let_global() {
         let tests = vec![
             ("let one = 1; one", Value::Integer(1)),
             ("let one = 1; let two = 2; one + two", Value::Integer(3)),
@@ -240,6 +243,16 @@ mod tests {
             ("let one = 1; one;", Value::Integer(1)),
             ("let one = 1; let two = 2; one + two;", Value::Integer(3)),
             ("let one = 1; let two = one + one; one + two;", Value::Integer(3)),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_string_literal() {
+        let tests = vec![
+            (r#""hello world""#, Value::String(String::from("hello world"))),
+            (r#""hello" + " world""#, Value::String(String::from("hello world"))),
+            (r#""hello"+" world"+"!""#, Value::String(String::from("hello world!"))),
         ];
         run_vm_tests(tests);
     }

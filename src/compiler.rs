@@ -63,7 +63,11 @@ impl<'a> Compiler<'a> {
                     self.emit(Opcode::False);
                 }
             }
-            Expr::String(_, _) => todo!(),
+            Expr::String(_, string) => {
+                let string = Value::String(string.clone());
+                let index = self.save(string);
+                self.emit(Opcode::Const(index));
+            }
             Expr::Let(_, name, value) => {
                 self.assemble(value)?;
                 let index = self.symbols.define(name);
@@ -226,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conditionals() {
+    fn test_conditional_judgment() {
         let tests = vec![
             (
                 "if (true) { 10 }; 3333;",
@@ -275,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn test_global_let_expr() {
+    fn test_let_global() {
         let tests = vec![
             (
                 "let one = 1;let two = 2;",
@@ -308,6 +312,26 @@ mod tests {
                     Opcode::GetGlobal(1),
                     Opcode::Pop,
                 ],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_string_literal() {
+        let tests = vec![
+            (
+                r#""hello world""#,
+                vec![Value::String(String::from("hello world"))],
+                vec![Opcode::Const(0), Opcode::Pop],
+            ),
+            (
+                r#""hello" + " world""#,
+                vec![
+                    Value::String(String::from("hello")),
+                    Value::String(String::from(" world")),
+                ],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
