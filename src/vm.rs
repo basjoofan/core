@@ -11,9 +11,11 @@ pub struct Vm<'a> {
     index: usize,
 }
 
+#[derive(Debug)]
 struct Frame {
     opcodes: Vec<Opcode>,
     fp: usize,
+    bp: usize,
 }
 
 impl<'a> Vm<'a> {
@@ -26,6 +28,7 @@ impl<'a> Vm<'a> {
             frames: vec![Frame {
                 opcodes,
                 fp: usize::MIN,
+                bp: usize::MIN,
             }],
             index: usize::MIN,
         }
@@ -72,7 +75,7 @@ impl<'a> Vm<'a> {
                     let left = self.pop();
                     match (left, right, opcode) {
                         (Value::Integer(left), Value::Integer(right), Opcode::Add) => {
-                            self.push(Value::Integer(left + right))
+                            self.push(Value::Integer(left + right));
                         }
                         (Value::Integer(left), Value::Integer(right), Opcode::Sub) => {
                             self.push(Value::Integer(left - right))
@@ -181,26 +184,40 @@ impl<'a> Vm<'a> {
                     let function = self.stack.remove(self.sp - 1);
                     self.sp -= 1;
                     match function {
-                        Value::Function(opcodes) => {
+                        Value::Function(opcodes, length) => {
                             self.enter(Frame {
                                 opcodes,
                                 fp: usize::MIN,
+                                bp: self.sp,
                             });
+                            self.sp += length;
+                            self.stack.resize(self.sp, Value::None);
                         }
                         left => panic!("unsupported types for call: {}", left.kind()),
                     };
                 }
                 Opcode::Return => {
                     let value = self.pop();
-                    self.leave();
+                    let frame = self.leave();
+                    self.sp = frame.bp;
                     self.push(value);
+                }
+                Opcode::GetLocal(mut index) => {
+                    index += self.frame().bp;
+                    self.push(self.stack[index].clone());
+                }
+                Opcode::SetLocal(mut index) => {
+                    let value = self.pop();
+                    index += self.frame().bp;
+                    self.stack.insert(index, value);
                 }
             }
         }
     }
 
     pub fn push(&mut self, value: Value) {
-        self.stack.insert(self.sp, value);
+        self.stack.resize(self.sp + 1, Value::None);
+        self.stack[self.sp] = value;
         self.sp += 1;
     }
 
@@ -216,28 +233,27 @@ impl<'a> Vm<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use crate::Compiler;
-    use crate::Table;
+    use crate::Parser;
     use crate::Value;
     use crate::Vm;
+    use std::collections::HashMap;
 
     fn run_vm_tests(tests: Vec<(&str, Value)>) {
         for (text, value) in tests {
-            let source = crate::parser::Parser::new(text).parse().unwrap();
-            let mut consts = Vec::new();
-            let mut symbols = Table::new();
-            let mut compiler = Compiler::new(&mut consts, &mut symbols);
-            let result = compiler.compile(&source);
-            assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
-            let opcodes = compiler.opcodes();
-            println!("opcodes: {:?}", opcodes);
+            let source = Parser::new(text).parse().unwrap();
+            let mut compiler = Compiler::new();
             let mut globals = Vec::new();
-            let mut vm = Vm::new(&consts, &mut globals, opcodes);
-            vm.run();
-            println!("{} = {}", vm.past(), value);
-            assert_eq!(vm.past(), &value);
+            match compiler.compile(&source) {
+                Ok(opcodes) => {
+                    println!("opcodes: {:?}", opcodes);
+                    let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
+                    vm.run();
+                    println!("{} = {}", vm.past(), value);
+                    assert_eq!(vm.past(), &value);
+                }
+                Err(message) => panic!("compile error: {}", message),
+            }
         }
     }
 
@@ -437,6 +453,63 @@ mod tests {
 		         noReturn();
 		         noReturnTwo();",
                 Value::None,
+            ),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_let_local() {
+        let tests = vec![
+            (
+                "let one = fn() { let one = 1; one };
+                 one();",
+                Value::Integer(1),
+            ),
+            (
+                "let oneAndTwo = fn() { let one = 1; let two = 2; one + two; };
+                 oneAndTwo();",
+                Value::Integer(3),
+            ),
+            (
+                "let oneAndTwo = fn() { let one = 1; let two = 2; one + two; };
+		         let threeAndFour = fn() { let three = 3; let four = 4; three + four; };
+		         oneAndTwo() + threeAndFour();",
+                Value::Integer(10),
+            ),
+            (
+                "let firstFoobar = fn() { let foobar = 50; foobar; };
+		         let secondFoobar = fn() { let foobar = 100; foobar; };
+		         firstFoobar() + secondFoobar();",
+                Value::Integer(150),
+            ),
+            (
+                "let globalSeed = 50;
+                 let minusOne = fn() { let num = 1; globalSeed - num; }
+                 let minusTwo = fn() { let num = 2; globalSeed - num; }
+                 minusOne() + minusTwo();",
+                Value::Integer(97),
+            ),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_function_nesting() {
+        let tests = vec![
+            (
+                "let returnsOne = fn() { 1; };
+		         let returnsOneReturner = fn() { returnsOne; };
+		         returnsOneReturner()();",
+                Value::Integer(1),
+            ),
+            (
+                "let returnsOneReturner = fn() {
+			     let returnsOne = fn() { 1; };
+			         returnsOne;
+		         };
+		         returnsOneReturner()();",
+                Value::Integer(1),
             ),
         ];
         run_vm_tests(tests);

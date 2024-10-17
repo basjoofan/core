@@ -3,7 +3,6 @@ use crate::Compiler;
 use crate::Parser;
 use crate::Record;
 use crate::Stats;
-use crate::Table;
 use crate::Value;
 use crate::Vm;
 use std::io::stdin;
@@ -19,9 +18,8 @@ pub const NAME: &str = env!("CARGO_PKG_NAME");
 
 pub fn repl() {
     let mut lines = stdin().lock().lines();
-    let mut consts = Vec::new();
-    let mut symbols = Table::new();
     let mut globals = Vec::new();
+    let mut compiler = Compiler::new();
     loop {
         if let Some(Ok(text)) = lines.next() {
             if text == "exit" {
@@ -31,37 +29,39 @@ pub fn repl() {
                 continue;
             }
             match Parser::new(&text).parse() {
-                Ok(source) => {
-                    let mut compiler = Compiler::new(&mut consts, &mut symbols);
-                    if let Err(message) = compiler.compile(&source) {
-                        println!("{}", message);
-                        continue;
+                Ok(source) => match compiler.compile(&source) {
+                    Ok(opcodes) => {
+                        let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
+                        vm.run();
+                        println!("{}", vm.past());
                     }
-
-                    let opcodes = compiler.opcodes();
-                    let mut vm = Vm::new(&consts, &mut globals, opcodes);
-                    vm.run();
-                    println!("{}", vm.past());
-                }
-                Err(message) => {
-                    println!("{}", message);
-                }
+                    Err(message) => println!("{}", message),
+                },
+                Err(message) => println!("{}", message),
             };
         }
     }
 }
 
 pub fn eval(text: String) {
-    // let mut context = Context::default();
-    // let source = Parser::new(&text).parse();
-    // print_error(eval_block_expr(&source, &mut context));
+    let mut globals = Vec::new();
+    let mut compiler = Compiler::new();
+    match Parser::new(&text).parse() {
+        Ok(source) => match compiler.compile(&source) {
+            Ok(opcodes) => {
+                let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
+                vm.run();
+                println!("{}", vm.past());
+            }
+            Err(message) => println!("{}", message),
+        },
+        Err(message) => println!("{}", message),
+    };
 }
 
 pub fn run(path: Option<PathBuf>) {
-    // let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
-    // let mut context = Context::default();
-    // let source = Parser::new(&text).parse();
-    // print_error(eval_block_expr(&source, &mut context));
+    let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
+    eval(text);
 }
 
 pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {

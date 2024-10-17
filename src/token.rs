@@ -79,8 +79,6 @@ impl Token {
             Kind::Lp => 7,     // function()
             Kind::Ls => 8,     // array[index]
             Kind::Dot => 8,    // object.field
-            Kind::Let => 9,    // let
-            Kind::Return => 9, // return
             _ => 0,
         }
     }

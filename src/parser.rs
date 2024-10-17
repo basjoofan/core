@@ -78,11 +78,11 @@ impl Parser {
             Kind::True | Kind::False => self.parse_boolean_literal()?,
             Kind::String => self.parse_string_literal(),
             Kind::Let => {
-                precedence = self.current_precedence();
+                precedence = u8::MAX;
                 self.parse_let_expr()?
             }
             Kind::Return => {
-                precedence = self.current_precedence();
+                precedence = u8::MAX;
                 self.parse_return_expr()?
             }
             Kind::Bang | Kind::Minus => self.parse_unary_expr()?,
@@ -408,6 +408,7 @@ fn divide_template_pieces(message: String) -> Result<Vec<Expr>, String> {
 fn test_parse_let_expr() {
     let tests = vec![
         ("let x =  5;", 1, "let x 5"),
+        ("let x =  5 let y = 6", 2, "let x 5"),
         ("let y  = true;", 1, "let y true"),
         ("let  foobar = y;", 1, "let foobar y"),
         ("let i = 0; [1][i];", 2, "let i 0"),
@@ -416,11 +417,13 @@ fn test_parse_let_expr() {
         match Parser::new(text).parse() {
             Ok(source) => {
                 println!("{}", source.len());
+                println!("{:?}", source);
                 assert!(source.len() == len);
                 if let Some(expr) = source.first() {
                     println!("{}", expr);
                     if let Expr::Let(token, name, value) = expr {
                         let parsed = format!("{} {} {}", token, name, value);
+                        println!("{}={}", expected, parsed);
                         assert!(expected == parsed);
                     } else {
                         unreachable!("let expr parse failed")

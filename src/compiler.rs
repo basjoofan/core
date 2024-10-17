@@ -1,33 +1,34 @@
 use crate::Expr;
 use crate::Kind;
 use crate::Opcode;
-use crate::Table;
+use crate::Symbol;
+use crate::Symbols;
 use crate::Value;
 
-pub struct Compiler<'a> {
-    pub consts: &'a mut Vec<Value>,
-    pub symbols: &'a mut Table,
-    // pub opcodes: Vec<Opcode>,
+pub struct Compiler {
+    consts: Vec<Value>,
+    symbols: Symbols,
     scopes: Vec<Scope>,
     index: usize,
 }
 
+#[derive(Debug)]
 struct Scope {
     opcodes: Vec<Opcode>,
 }
 
-impl<'a> Compiler<'a> {
-    pub fn new(consts: &'a mut Vec<Value>, symbols: &'a mut Table) -> Self {
+impl Compiler {
+    pub fn new() -> Self {
         Self {
-            consts,
-            symbols,
+            consts: Vec::new(),
+            symbols: Symbols::new(),
             scopes: vec![Scope { opcodes: vec![] }],
             index: usize::MIN,
         }
     }
 
-    pub fn opcodes(&mut self) -> Vec<Opcode> {
-        self.scopes.remove(self.index).opcodes
+    pub fn consts(&self) -> &Vec<Value> {
+        &self.consts
     }
 
     fn scope(&mut self) -> &mut Scope {
@@ -35,11 +36,13 @@ impl<'a> Compiler<'a> {
     }
 
     fn enter(&mut self) {
+        self.symbols = self.symbols.clone().wrap();
         self.scopes.push(Scope { opcodes: vec![] });
         self.index += 1;
     }
 
     fn leave(&mut self) -> Vec<Opcode> {
+        self.symbols = self.symbols.clone().peel();
         let scope = self.scopes.remove(self.index);
         self.index -= 1;
         scope.opcodes
@@ -55,7 +58,14 @@ impl<'a> Compiler<'a> {
         self.consts.len() - 1
     }
 
-    pub fn compile(&mut self, source: &Vec<Expr>) -> Result<(), String> {
+    pub fn compile(&mut self, source: &Vec<Expr>) -> Result<Vec<Opcode>, String> {
+        self.batch(source)?;
+        let opcodes = self.scopes.remove(self.index).opcodes;
+        self.scopes = vec![Scope { opcodes: vec![] }];
+        Ok(opcodes)
+    }
+
+    fn batch(&mut self, source: &Vec<Expr>) -> Result<(), String> {
         for expr in source.iter() {
             self.assemble(expr)?;
             match expr {
@@ -70,12 +80,13 @@ impl<'a> Compiler<'a> {
 
     fn assemble(&mut self, expr: &Expr) -> Result<(), String> {
         match expr {
-            Expr::Ident(_, name) => match self.symbols.resolve(name) {
-                Some(symbol) => {
-                    self.emit(Opcode::GetGlobal(symbol.index));
-                }
-                None => Err(format!("Undefined variable: {}", name))?,
-            },
+            Expr::Ident(_, name) => {
+                match self.symbols.resolve(name) {
+                    Some(Symbol::Global(index)) => self.emit(Opcode::GetGlobal(*index)),
+                    Some(Symbol::Local(index)) => self.emit(Opcode::GetLocal(*index)),
+                    None => Err(format!("Undefined variable: {}", name))?,
+                };
+            }
             Expr::Integer(_, integer) => {
                 let integer = Value::Integer(*integer);
                 let index = self.save(integer);
@@ -96,8 +107,12 @@ impl<'a> Compiler<'a> {
             }
             Expr::Let(_, name, value) => {
                 self.assemble(value)?;
-                let index = self.symbols.define(name);
-                self.emit(Opcode::SetGlobal(index));
+                let symbol = self.symbols.define(name);
+                let opcode = match symbol {
+                    Symbol::Global(index) => Opcode::SetGlobal(*index),
+                    Symbol::Local(index) => Opcode::SetLocal(*index),
+                };
+                self.emit(opcode);
             }
             Expr::Return(_, value) => {
                 self.assemble(value)?;
@@ -133,7 +148,7 @@ impl<'a> Compiler<'a> {
                 if consequence.is_empty() {
                     self.emit(Opcode::None);
                 } else {
-                    self.compile(consequence)?;
+                    self.batch(consequence)?;
                     if let Some(Opcode::Pop) = self.scope().opcodes.last() {
                         self.scope().opcodes.pop();
                     }
@@ -144,7 +159,7 @@ impl<'a> Compiler<'a> {
                 if alternative.is_empty() {
                     self.emit(Opcode::None);
                 } else {
-                    self.compile(alternative)?;
+                    self.batch(alternative)?;
                     if let Some(Opcode::Pop) = self.scope().opcodes.last() {
                         self.scope().opcodes.pop();
                     }
@@ -159,8 +174,8 @@ impl<'a> Compiler<'a> {
                 }
                 if body.is_empty() {
                     self.emit(Opcode::None);
-                }else {
-                    self.compile(body)?;
+                } else {
+                    self.batch(body)?;
                     if let Some(Opcode::Pop) = self.scope().opcodes.last() {
                         self.scope().opcodes.pop();
                     }
@@ -171,8 +186,9 @@ impl<'a> Compiler<'a> {
                         self.emit(Opcode::Return);
                     }
                 }
+                let length = self.symbols.length();
                 let opcodes = self.leave();
-                let index = self.save(Value::Function(opcodes));
+                let index = self.save(Value::Function(opcodes, length));
                 self.emit(Opcode::Const(index));
             }
             Expr::Call(_, function, arguments) => {
@@ -211,20 +227,24 @@ impl<'a> Compiler<'a> {
 #[cfg(test)]
 mod tests {
     use crate::Compiler;
+    use crate::Expr;
+    use crate::Kind;
     use crate::Opcode;
-    use crate::Table;
+    use crate::Parser;
+    use crate::Token;
     use crate::Value;
 
     fn run_compiler_tests(tests: Vec<(&str, Vec<Value>, Vec<Opcode>)>) {
-        for (text, constants, opcodes) in tests {
-            let source = crate::parser::Parser::new(text).parse().unwrap();
-            let mut consts = Vec::new();
-            let mut symbols = Table::new();
-            let mut compiler = Compiler::new(&mut consts, &mut symbols);
-            let result = compiler.compile(&source);
-            assert!(result.is_ok(), "compile error: {}", result.unwrap_err());
-            assert_eq!(compiler.opcodes(), opcodes);
-            assert_eq!(consts, constants);
+        for (text, consts, ops) in tests {
+            let source = Parser::new(text).parse().unwrap();
+            let mut compiler = Compiler::new();
+            match compiler.compile(&source) {
+                Ok(opcodes) => {
+                    assert_eq!(opcodes, ops);
+                    assert_eq!(compiler.consts, consts);
+                }
+                Err(message) => panic!("compile error: {}", message),
+            }
         }
     }
 
@@ -590,7 +610,7 @@ mod tests {
                 vec![
                     Value::Integer(5),
                     Value::Integer(10),
-                    Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return]),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return], 0),
                 ],
                 vec![Opcode::Const(2), Opcode::Pop],
             ),
@@ -599,7 +619,7 @@ mod tests {
                 vec![
                     Value::Integer(6),
                     Value::Integer(8),
-                    Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return]),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return], 0),
                 ],
                 vec![Opcode::Const(2), Opcode::Pop],
             ),
@@ -608,13 +628,13 @@ mod tests {
                 vec![
                     Value::Integer(1),
                     Value::Integer(2),
-                    Value::Function(vec![Opcode::Const(0), Opcode::Pop, Opcode::Const(1), Opcode::Return]),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Pop, Opcode::Const(1), Opcode::Return], 0),
                 ],
                 vec![Opcode::Const(2), Opcode::Pop],
             ),
             (
                 "fn() { }",
-                vec![Value::Function(vec![Opcode::None, Opcode::Return])],
+                vec![Value::Function(vec![Opcode::None, Opcode::Return], 0)],
                 vec![Opcode::Const(0), Opcode::Pop],
             ),
         ];
@@ -628,7 +648,7 @@ mod tests {
                 "fn() { 2 }();",
                 vec![
                     Value::Integer(2),
-                    Value::Function(vec![Opcode::Const(0), Opcode::Return]),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Return], 0),
                 ],
                 vec![Opcode::Const(1), Opcode::Call(0), Opcode::Pop],
             ),
@@ -636,7 +656,7 @@ mod tests {
                 "let no_arg = fn() { 22 }; no_arg();",
                 vec![
                     Value::Integer(22),
-                    Value::Function(vec![Opcode::Const(0), Opcode::Return]),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Return], 0),
                 ],
                 vec![
                     Opcode::Const(1),
@@ -645,6 +665,98 @@ mod tests {
                     Opcode::Call(0),
                     Opcode::Pop,
                 ],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_compiler_scope() {
+        let mut compiler = Compiler::new();
+        assert_eq!(compiler.index, 0);
+        let _ = compiler.assemble(&Expr::Let(
+            Token {
+                kind: Kind::Let,
+                literal: String::from("let"),
+            },
+            String::from("a"),
+            Box::new(Expr::Integer(
+                Token {
+                    kind: Kind::Integer,
+                    literal: String::from("2"),
+                },
+                2,
+            )),
+        ));
+        assert_eq!(compiler.scope().opcodes.last(), Some(&Opcode::SetGlobal(0)));
+        compiler.emit(Opcode::Mul);
+        compiler.enter();
+        assert_eq!(compiler.index, 1);
+        compiler.emit(Opcode::Sub);
+        assert_eq!(compiler.scope().opcodes.len(), 1);
+        assert_eq!(compiler.scope().opcodes.last(), Some(&Opcode::Sub));
+        compiler.leave();
+        assert_eq!(compiler.index, 0);
+        compiler.emit(Opcode::Add);
+        assert_eq!(compiler.scope().opcodes.len(), 4);
+        assert_eq!(compiler.scope().opcodes.last(), Some(&Opcode::Add));
+    }
+
+    #[test]
+    fn test_let_local() {
+        let tests = vec![
+            (
+                "let num = 55;
+			     fn() { num }",
+                vec![
+                    Value::Integer(55),
+                    Value::Function(vec![Opcode::GetGlobal(0), Opcode::Return], 0),
+                ],
+                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Const(1), Opcode::Pop],
+            ),
+            (
+                "fn() {
+				   let num = 55;
+				   num
+			     }",
+                vec![
+                    Value::Integer(55),
+                    Value::Function(
+                        vec![
+                            Opcode::Const(0),
+                            Opcode::SetLocal(0),
+                            Opcode::GetLocal(0),
+                            Opcode::Return,
+                        ],
+                        1,
+                    ),
+                ],
+                vec![Opcode::Const(1), Opcode::Pop],
+            ),
+            (
+                "fn() {
+				   let a = 55;
+				   let b = 77;
+				   a + b
+			     }",
+                vec![
+                    Value::Integer(55),
+                    Value::Integer(77),
+                    Value::Function(
+                        vec![
+                            Opcode::Const(0),
+                            Opcode::SetLocal(0),
+                            Opcode::Const(1),
+                            Opcode::SetLocal(1),
+                            Opcode::GetLocal(0),
+                            Opcode::GetLocal(1),
+                            Opcode::Add,
+                            Opcode::Return,
+                        ],
+                        2,
+                    ),
+                ],
+                vec![Opcode::Const(2), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);

@@ -32,4 +32,7 @@ pub enum Opcode {
 
     Return,
     Call(usize),
+
+    GetLocal(usize),
+    SetLocal(usize),
 }

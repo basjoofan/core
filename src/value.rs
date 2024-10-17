@@ -16,7 +16,7 @@ pub enum Value {
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
     Return(Box<Value>),
-    Function(Vec<Opcode>),
+    Function(Vec<Opcode>, usize),
     Native(fn(Vec<Value>) -> Value),
     Request(String, Vec<Expr>, Vec<Expr>),
 }
@@ -72,7 +72,7 @@ impl Display for Value {
                     .join(", ")
             ),
             Value::Return(value) => write!(f, "{}", value),
-            Value::Function(opcodes) => {
+            Value::Function(opcodes, _) => {
                 write!(f, "{:?}", opcodes)
             }
             Value::Native(function) => write!(f, "{:?}", function),
