@@ -180,20 +180,23 @@ impl<'a> Vm<'a> {
                         (left, index) => panic!("unsupported types for index: {}[{}]", left, index),
                     }
                 }
-                Opcode::Call(_) => {
-                    let function = self.stack.remove(self.sp - 1);
+                Opcode::Call(number) => {
+                    let function = self.stack.remove(self.sp - 1 - number);
                     self.sp -= 1;
                     match function {
-                        Value::Function(opcodes, length) => {
+                        Value::Function(opcodes, length, arity) => {
+                            if number != arity {
+                                panic!("wrong number of arguments: want={}, got={}", arity, number);
+                            }
                             self.enter(Frame {
                                 opcodes,
                                 fp: usize::MIN,
-                                bp: self.sp,
+                                bp: self.sp - number,
                             });
                             self.sp += length;
                             self.stack.resize(self.sp, Value::None);
                         }
-                        left => panic!("unsupported types for call: {}", left.kind()),
+                        non => panic!("calling non function: {}", non.kind()),
                     };
                 }
                 Opcode::Return => {
@@ -252,7 +255,7 @@ mod tests {
                     println!("{} = {}", vm.past(), value);
                     assert_eq!(vm.past(), &value);
                 }
-                Err(message) => panic!("compile error: {}", message),
+                Err(message) => panic!("vm error: {}", message),
             }
         }
     }
@@ -412,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn test_call_function() {
+    fn test_function_call() {
         let tests = vec![
             (
                 "let fivePlusTen = fn() { 5 + 10; };
@@ -513,5 +516,75 @@ mod tests {
             ),
         ];
         run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_function_arguments() {
+        let tests = vec![
+            (
+                "let identity = fn(a) { a; };
+		         identity(4);",
+                Value::Integer(4),
+            ),
+            (
+                "let sum = fn(a, b) { a + b; };
+		         sum(1, 2);",
+                Value::Integer(3),
+            ),
+            (
+                "let sum = fn(a, b) {
+			        let c = a + b;
+			        c;
+		         };
+		         sum(2, 3);",
+                Value::Integer(5),
+            ),
+            (
+                "let sum = fn(a, b) {
+			        let c = a + b;
+			        c;
+		         };
+		         sum(1, 2) + sum(3, 4);",
+                Value::Integer(10),
+            ),
+            (
+                "let sum = fn(a, b) {
+			        let c = a + b;
+			        c;
+		         };
+                 let outer = fn() {
+		            sum(1, 2) + sum(3, 4);
+                 };
+                 outer();",
+                Value::Integer(10),
+            ),
+            (
+                "let globalNum = 10;
+                 let sum = fn(a, b) {
+                     let c = a + b;
+                     c + globalNum;
+                 };
+                 let outer = fn() {
+                     sum(1, 2) + sum(3, 4) + globalNum;
+                 };
+                 outer() + globalNum;",
+                Value::Integer(50),
+            ),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_function_panic() {
+        let tests = vec![
+            ("fn() { 1; }(1);", "wrong number of arguments: want=0, got=1"),
+            ("fn(a) { a; }();", "wrong number of arguments: want=1, got=0"),
+            ("fn(a, b) { a + b; }(1);", "wrong number of arguments: want=2, got=1"),
+        ];
+        for (text, message) in tests {
+            let result = std::panic::catch_unwind(|| run_vm_tests(vec![(text, Value::None)]));
+            assert!(result.is_err());
+            assert_eq!(*result.unwrap_err().downcast::<String>().unwrap(), message);
+        }
     }
 }
