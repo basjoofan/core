@@ -1,20 +1,26 @@
 use crate::Value;
 
-pub fn println(objects: Vec<Value>) -> Value {
+pub const NATIVES: &[(&str, Value)] = &[
+    ("print", Value::Native(print)),
+    ("println", Value::Native(println)),
+    ("length", Value::Native(length)),
+];
+
+fn println(objects: Vec<Value>) -> Value {
     if let Some(object) = objects.first() {
         println!("{}", object)
     }
     Value::None
 }
 
-pub fn print(objects: Vec<Value>) -> Value {
+fn print(objects: Vec<Value>) -> Value {
     if let Some(object) = objects.first() {
         print!("{}", object)
     }
     Value::None
 }
 
-pub fn length(objects: Vec<Value>) -> Value {
+fn length(objects: Vec<Value>) -> Value {
     if objects.len() != 1 {
         Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
     } else if let Some(object) = objects.first() {

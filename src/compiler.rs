@@ -4,10 +4,13 @@ use crate::Opcode;
 use crate::Symbol;
 use crate::Symbols;
 use crate::Value;
+use crate::NATIVES;
+use std::collections::HashMap;
 
 pub struct Compiler {
     consts: Vec<Value>,
     symbols: Symbols,
+    natives: HashMap<String, usize>,
     scopes: Vec<Scope>,
     index: usize,
 }
@@ -19,7 +22,12 @@ struct Scope {
 
 impl Compiler {
     pub fn new() -> Self {
+        let mut natives = HashMap::new();
+        for (index, (name, _)) in NATIVES.iter().enumerate() {
+            natives.insert(name.to_string(), index);
+        }
         Self {
+            natives,
             consts: Vec::new(),
             symbols: Symbols::new(),
             scopes: vec![Scope { opcodes: vec![] }],
@@ -84,7 +92,10 @@ impl Compiler {
                 match self.symbols.resolve(name) {
                     Some(Symbol::Global(index)) => self.emit(Opcode::GetGlobal(*index)),
                     Some(Symbol::Local(index)) => self.emit(Opcode::GetLocal(*index)),
-                    None => Err(format!("Undefined variable: {}", name))?,
+                    None => match self.natives.get(name) {
+                        Some(index) => self.emit(Opcode::Native(*index)),
+                        None => Err(format!("Undefined variable: {}", name))?,
+                    },
                 };
             }
             Expr::Integer(_, integer) => {
@@ -819,6 +830,43 @@ mod tests {
                     ),
                 ],
                 vec![Opcode::Const(2), Opcode::Pop],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_function_native() {
+        let tests = vec![
+            (
+                r#"
+                length([]);
+                println("Hello world!");
+                "#,
+                vec![Value::String(String::from("Hello world!"))],
+                vec![
+                    Opcode::Native(2),
+                    Opcode::Array(0),
+                    Opcode::Call(1),
+                    Opcode::Pop,
+                    Opcode::Native(1),
+                    Opcode::Const(0),
+                    Opcode::Call(1),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                r#"
+                fn() { length([]) }
+                "#,
+                vec![
+                    Value::Function(
+                        vec![Opcode::Native(2), Opcode::Array(0), Opcode::Call(1), Opcode::Return],
+                        0,
+                        0,
+                    ),
+                ],
+                vec![Opcode::Const(0), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);

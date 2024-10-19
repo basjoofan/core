@@ -1,5 +1,6 @@
 use crate::Opcode;
 use crate::Value;
+use crate::NATIVES;
 use std::collections::HashMap;
 
 pub struct Vm<'a> {
@@ -196,6 +197,12 @@ impl<'a> Vm<'a> {
                             self.sp += length;
                             self.stack.resize(self.sp, Value::None);
                         }
+                        Value::Native(function) => {
+                            let arguments = self.stack[self.sp - number..self.sp].to_vec();
+                            self.sp -= number;
+                            self.push(function(arguments));
+
+                        }
                         non => panic!("calling non function: {}", non.kind()),
                     };
                 }
@@ -213,6 +220,10 @@ impl<'a> Vm<'a> {
                     let value = self.pop();
                     index += self.frame().bp;
                     self.stack.insert(index, value);
+                }
+                Opcode::Native(index) => {
+                    let (_, value) = &NATIVES[index];
+                    self.push(value.clone());
                 }
             }
         }
@@ -586,5 +597,25 @@ mod tests {
             assert!(result.is_err());
             assert_eq!(*result.unwrap_err().downcast::<String>().unwrap(), message);
         }
+    }
+
+    #[test]
+    fn test_function_native() {
+        let tests = vec![
+            ("length(\"\")", Value::Integer(0)),
+            ("length(\"two\")", Value::Integer(3)),
+            ("length(\"hello world\")", Value::Integer(11)),
+            (
+                "length(1)",
+                Value::Error(String::from("function length not supported type Integer")),
+            ),
+            (
+                "length(\"one\", \"two\")",
+                Value::Error(String::from("wrong number of arguments. got=2, want=1")),
+            ),
+            ("length([])", Value::Integer(0)),
+            ("length([1, 2, 3])", Value::Integer(3)),
+        ];
+        run_vm_tests(tests);
     }
 }

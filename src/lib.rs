@@ -18,11 +18,12 @@ mod writer;
 
 use code::Opcode;
 use compiler::Compiler;
+use native::NATIVES;
 use parser::Parser;
 use record::Record;
 use stat::Stats;
-use symbol::Symbols;
 use symbol::Symbol;
+use symbol::Symbols;
 use syntax::Expr;
 use token::Kind;
 use token::Token;
