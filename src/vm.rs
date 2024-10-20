@@ -76,7 +76,7 @@ impl<'a> Vm<'a> {
                     let left = self.pop();
                     match (left, right, opcode) {
                         (Value::Integer(left), Value::Integer(right), Opcode::Add) => {
-                            self.push(Value::Integer(left + right));
+                            self.push(Value::Integer(left + right))
                         }
                         (Value::Integer(left), Value::Integer(right), Opcode::Sub) => {
                             self.push(Value::Integer(left - right))
@@ -194,14 +194,13 @@ impl<'a> Vm<'a> {
                                 fp: usize::MIN,
                                 bp: self.sp - number,
                             });
-                            self.sp += length;
+                            self.sp = self.frame().bp + length;
                             self.stack.resize(self.sp, Value::None);
                         }
                         Value::Native(function) => {
                             let arguments = self.stack[self.sp - number..self.sp].to_vec();
                             self.sp -= number;
                             self.push(function(arguments));
-
                         }
                         non => panic!("calling non function: {}", non.kind()),
                     };
