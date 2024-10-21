@@ -748,13 +748,13 @@
 //     let first = 10;
 //     let second = 10;
 //     let third = 10;
-    
+
 //     let ourFunction = fn(first) {
 //     let second = 20;
-    
+
 //     first + second + third;
 //     };
-    
+
 //     ourFunction(20) + first + second;
 //     "#;
 //     let source = crate::parser::Parser::new(text).parse();
@@ -771,7 +771,7 @@
 //     let newAdder = fn(x) {
 //         fn(y) { x + y };
 //     };
-      
+
 //     let addTwo = newAdder(2);
 //     addTwo(2);
 //     "#;
@@ -796,7 +796,7 @@
 //             fibonacci(x - 1) + fibonacci(x -2)
 //           }
 //         }
-//       };  
+//       };
 //     fibonacci(22);
 //     "#;
 //     let source = crate::parser::Parser::new(text).parse();

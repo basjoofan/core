@@ -17,6 +17,7 @@ pub enum Value {
     Map(HashMap<String, Value>),
     Return(Box<Value>),
     Function(Vec<Opcode>, usize, usize),
+    Closure(Vec<Opcode>, usize, usize, Vec<Value>),
     Native(fn(Vec<Value>) -> Value),
     Request(String, Vec<Expr>, Vec<Expr>),
 }
@@ -38,6 +39,7 @@ impl Value {
             Value::Map(_) => "Map",
             Value::Return(_) => "Return",
             Value::Function(..) => "Function",
+            Value::Closure(..) => "Closure",
             Value::Native(_) => "Native",
             Value::Request(..) => "Request",
         }
@@ -74,6 +76,9 @@ impl Display for Value {
             Value::Return(value) => write!(f, "{}", value),
             Value::Function(opcodes, length, number) => {
                 write!(f, "({}:{}){:?}", length, number, opcodes)
+            }
+            Value::Closure(opcodes, length, number, frees) => {
+                write!(f, "({}:{}:{}){:?}", length, number, frees.len(), opcodes)
             }
             Value::Native(function) => write!(f, "{:?}", function),
             Value::Request(name, pieces, asserts) => write!(

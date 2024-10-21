@@ -37,4 +37,7 @@ pub enum Opcode {
     SetLocal(usize),
 
     Native(usize),
+
+    Closure(usize, usize),
+    GetFree(usize),
 }

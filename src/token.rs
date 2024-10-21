@@ -75,10 +75,10 @@ impl Token {
             Kind::Star => 5,  // 8*6
             Kind::Slash => 5, // 8/6
             // Kind::Minus => 6,  -X unary minus +2
-            Kind::Bang => 6,   // !X
-            Kind::Lp => 7,     // function()
-            Kind::Ls => 8,     // array[index]
-            Kind::Dot => 8,    // object.field
+            Kind::Bang => 6, // !X
+            Kind::Lp => 7,   // function()
+            Kind::Ls => 8,   // array[index]
+            Kind::Dot => 8,  // object.field
             _ => 0,
         }
     }

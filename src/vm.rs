@@ -17,6 +17,7 @@ struct Frame {
     opcodes: Vec<Opcode>,
     fp: usize,
     bp: usize,
+    frees: Vec<Value>,
 }
 
 impl<'a> Vm<'a> {
@@ -30,6 +31,7 @@ impl<'a> Vm<'a> {
                 opcodes,
                 fp: usize::MIN,
                 bp: usize::MIN,
+                frees: vec![],
             }],
             index: usize::MIN,
         }
@@ -185,7 +187,7 @@ impl<'a> Vm<'a> {
                     let function = self.stack.remove(self.sp - 1 - number);
                     self.sp -= 1;
                     match function {
-                        Value::Function(opcodes, length, arity) => {
+                        Value::Closure(opcodes, length, arity, frees) => {
                             if number != arity {
                                 panic!("wrong number of arguments: want={}, got={}", arity, number);
                             }
@@ -193,6 +195,7 @@ impl<'a> Vm<'a> {
                                 opcodes,
                                 fp: usize::MIN,
                                 bp: self.sp - number,
+                                frees,
                             });
                             self.sp = self.frame().bp + length;
                             self.stack.resize(self.sp, Value::None);
@@ -223,6 +226,20 @@ impl<'a> Vm<'a> {
                 Opcode::Native(index) => {
                     let (_, value) = &NATIVES[index];
                     self.push(value.clone());
+                }
+                Opcode::Closure(index, count) => match self.consts[index].clone() {
+                    Value::Function(opcodes, length, arity) => {
+                        let mut frees = Vec::with_capacity(count);
+                        for i in 0..count {
+                            frees.insert(i, self.stack[self.sp - count + i].clone());
+                        }
+                        self.push(Value::Closure(opcodes, length, arity, frees));
+                    }
+                    non => panic!("non function: {}", non.kind()),
+                },
+                Opcode::GetFree(index) => {
+                    let value = self.frame().frees[index].clone();
+                    self.push(value)
                 }
             }
         }
@@ -614,6 +631,85 @@ mod tests {
             ),
             ("length([])", Value::Integer(0)),
             ("length([1, 2, 3])", Value::Integer(3)),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_function_closure() {
+        let tests = vec![
+            (
+                "
+                let newClosure = fn(a) {
+                    fn() { a; };
+                };
+                let closure = newClosure(99);
+                closure();
+                 ",
+                Value::Integer(99),
+            ),
+            (
+                "
+                let newAdder = fn(a, b) {
+                    fn(c) { a + b + c };
+                };
+                let adder = newAdder(1, 2);
+                adder(8);
+                ",
+                Value::Integer(11),
+            ),
+            (
+                "
+                let newAdder = fn(a, b) {
+                    let c = a + b;
+                    fn(d) { c + d };
+                };
+                let adder = newAdder(1, 2);
+                adder(8);
+                ",
+                Value::Integer(11),
+            ),
+            (
+                "
+                let newAdderOuter = fn(a, b) {
+                    let c = a + b;
+                    fn(d) {
+                        let e = d + c;
+                        fn(f) { e + f; };
+                    };
+                };
+                let newAdderInner = newAdderOuter(1, 2)
+                let adder = newAdderInner(3);
+                adder(8);
+                ",
+                Value::Integer(14),
+            ),
+            (
+                "
+                let a = 1;
+                let newAdderOuter = fn(b) {
+                    fn(c) {
+                        fn(d) { a + b + c + d };
+                    };
+                };
+                let newAdderInner = newAdderOuter(2)
+                let adder = newAdderInner(3);
+                adder(8);
+                ",
+                Value::Integer(14),
+            ),
+            (
+                "
+                let newClosure = fn(a, b) {
+                    let one = fn() { a; };
+                    let two = fn() { b; };
+                    fn() { one() + two(); };
+                };
+                let closure = newClosure(9, 90);
+                closure();
+                ",
+                Value::Integer(99),
+            ),
         ];
         run_vm_tests(tests);
     }

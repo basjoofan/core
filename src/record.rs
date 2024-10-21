@@ -96,10 +96,7 @@ impl Record {
                     .into_iter()
                     .map(|a| {
                         avro::types::Value::Record(vec![
-                            (
-                                String::from("expr"),
-                                avro::types::Value::String(a.expr.to_string()),
-                            ),
+                            (String::from("expr"), avro::types::Value::String(a.expr.to_string())),
                             (String::from("left"), avro::types::Value::String(a.left.to_string())),
                             (
                                 String::from("compare"),

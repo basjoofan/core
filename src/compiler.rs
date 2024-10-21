@@ -61,19 +61,32 @@ impl Compiler {
         self.scope().opcodes.len() - 1
     }
 
+    fn symbol(&mut self, symbol: Symbol) -> usize {
+        match symbol {
+            Symbol::Global(index) => self.emit(Opcode::GetGlobal(index)),
+            Symbol::Local(index, free) => {
+                if free {
+                    self.emit(Opcode::GetFree(index))
+                } else {
+                    self.emit(Opcode::GetLocal(index))
+                }
+            }
+        }
+    }
+
     fn save(&mut self, value: Value) -> usize {
         self.consts.push(value);
         self.consts.len() - 1
     }
 
-    pub fn compile(&mut self, source: &Vec<Expr>) -> Result<Vec<Opcode>, String> {
+    pub fn compile(&mut self, source: &[Expr]) -> Result<Vec<Opcode>, String> {
         self.batch(source)?;
         let opcodes = self.scopes.remove(self.index).opcodes;
         self.scopes = vec![Scope { opcodes: vec![] }];
         Ok(opcodes)
     }
 
-    fn batch(&mut self, source: &Vec<Expr>) -> Result<(), String> {
+    fn batch(&mut self, source: &[Expr]) -> Result<(), String> {
         for expr in source.iter() {
             self.assemble(expr)?;
             match expr {
@@ -90,8 +103,7 @@ impl Compiler {
         match expr {
             Expr::Ident(_, name) => {
                 match self.symbols.resolve(name) {
-                    Some(Symbol::Global(index)) => self.emit(Opcode::GetGlobal(*index)),
-                    Some(Symbol::Local(index)) => self.emit(Opcode::GetLocal(*index)),
+                    Some(symbol) => self.symbol(symbol),
                     None => match self.natives.get(name) {
                         Some(index) => self.emit(Opcode::Native(*index)),
                         None => Err(format!("Undefined variable: {}", name))?,
@@ -121,7 +133,7 @@ impl Compiler {
                 let symbol = self.symbols.define(name);
                 let opcode = match symbol {
                     Symbol::Global(index) => Opcode::SetGlobal(*index),
-                    Symbol::Local(index) => Opcode::SetLocal(*index),
+                    Symbol::Local(index, _) => Opcode::SetLocal(*index),
                 };
                 self.emit(opcode);
             }
@@ -197,11 +209,16 @@ impl Compiler {
                         self.emit(Opcode::Return);
                     }
                 }
+                let frees = self.symbols.frees();
+                let count = frees.len();
                 let length = self.symbols.length();
                 let opcodes = self.leave();
+                for free in frees {
+                    self.symbol(free);
+                }
                 let number = parameters.len();
                 let index = self.save(Value::Function(opcodes, length, number));
-                self.emit(Opcode::Const(index));
+                self.emit(Opcode::Closure(index, count));
             }
             Expr::Call(_, function, arguments) => {
                 self.assemble(function)?;
@@ -628,7 +645,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Const(2), Opcode::Pop],
+                vec![Opcode::Closure(2, 0), Opcode::Pop],
             ),
             (
                 "fn() { 6 + 8 }",
@@ -641,7 +658,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Const(2), Opcode::Pop],
+                vec![Opcode::Closure(2, 0), Opcode::Pop],
             ),
             (
                 "fn() { 1; 2 }",
@@ -654,12 +671,12 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Const(2), Opcode::Pop],
+                vec![Opcode::Closure(2, 0), Opcode::Pop],
             ),
             (
                 "fn() { }",
                 vec![Value::Function(vec![Opcode::None, Opcode::Return], 0, 0)],
-                vec![Opcode::Const(0), Opcode::Pop],
+                vec![Opcode::Closure(0, 0), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
@@ -674,7 +691,7 @@ mod tests {
                     Value::Integer(2),
                     Value::Function(vec![Opcode::Const(0), Opcode::Return], 0, 0),
                 ],
-                vec![Opcode::Const(1), Opcode::Call(0), Opcode::Pop],
+                vec![Opcode::Closure(1, 0), Opcode::Call(0), Opcode::Pop],
             ),
             (
                 "let no_arg = fn() { 22 }; no_arg();",
@@ -683,7 +700,7 @@ mod tests {
                     Value::Function(vec![Opcode::Const(0), Opcode::Return], 0, 0),
                 ],
                 vec![
-                    Opcode::Const(1),
+                    Opcode::Closure(1, 0),
                     Opcode::SetGlobal(0),
                     Opcode::GetGlobal(0),
                     Opcode::Call(0),
@@ -698,7 +715,7 @@ mod tests {
                     Value::Integer(2),
                 ],
                 vec![
-                    Opcode::Const(0),
+                    Opcode::Closure(0, 0),
                     Opcode::SetGlobal(0),
                     Opcode::GetGlobal(0),
                     Opcode::Const(1),
@@ -727,7 +744,7 @@ mod tests {
                     Value::Integer(8),
                 ],
                 vec![
-                    Opcode::Const(0),
+                    Opcode::Closure(0, 0),
                     Opcode::SetGlobal(0),
                     Opcode::GetGlobal(0),
                     Opcode::Const(1),
@@ -783,7 +800,12 @@ mod tests {
                     Value::Integer(55),
                     Value::Function(vec![Opcode::GetGlobal(0), Opcode::Return], 0, 0),
                 ],
-                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Const(1), Opcode::Pop],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::SetGlobal(0),
+                    Opcode::Closure(1, 0),
+                    Opcode::Pop,
+                ],
             ),
             (
                 "fn() {
@@ -803,7 +825,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Const(1), Opcode::Pop],
+                vec![Opcode::Closure(1, 0), Opcode::Pop],
             ),
             (
                 "fn() {
@@ -829,7 +851,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Const(2), Opcode::Pop],
+                vec![Opcode::Closure(2, 0), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
@@ -859,14 +881,140 @@ mod tests {
                 r#"
                 fn() { length([]) }
                 "#,
+                vec![Value::Function(
+                    vec![Opcode::Native(2), Opcode::Array(0), Opcode::Call(1), Opcode::Return],
+                    0,
+                    0,
+                )],
+                vec![Opcode::Closure(0, 0), Opcode::Pop],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_function_closure() {
+        let tests = vec![
+            (
+                "
+                fn(a) {
+                    fn(b) {
+                        a + b
+                    }
+                }
+                 ",
                 vec![
                     Value::Function(
-                        vec![Opcode::Native(2), Opcode::Array(0), Opcode::Call(1), Opcode::Return],
+                        vec![Opcode::GetFree(0), Opcode::GetLocal(0), Opcode::Add, Opcode::Return],
+                        2,
+                        1,
+                    ),
+                    Value::Function(vec![Opcode::GetLocal(0), Opcode::Closure(0, 1), Opcode::Return], 1, 1),
+                ],
+                vec![Opcode::Closure(1, 0), Opcode::Pop],
+            ),
+            (
+                "
+                fn(a) {
+                    fn(b) {
+                        fn(c) {
+                            a + b + c
+                        }
+                    }
+			    };
+                ",
+                vec![
+                    Value::Function(
+                        vec![
+                            Opcode::GetFree(0),
+                            Opcode::GetFree(1),
+                            Opcode::Add,
+                            Opcode::GetLocal(0),
+                            Opcode::Add,
+                            Opcode::Return,
+                        ],
+                        3,
+                        1,
+                    ),
+                    Value::Function(
+                        vec![
+                            Opcode::GetFree(0),
+                            Opcode::GetLocal(0),
+                            Opcode::Closure(0, 2),
+                            Opcode::Return,
+                        ],
+                        2,
+                        1,
+                    ),
+                    Value::Function(vec![Opcode::GetLocal(0), Opcode::Closure(1, 1), Opcode::Return], 1, 1),
+                ],
+                vec![Opcode::Closure(2, 0), Opcode::Pop],
+            ),
+            (
+                "
+                let global = 55;
+                fn() {
+                    let a = 66;
+                    fn() {
+                        let b = 77;
+                        fn() {
+                            let c = 88;
+                            global + a + b + c;
+                        }
+                    }
+                }
+                ",
+                vec![
+                    Value::Integer(55),
+                    Value::Integer(66),
+                    Value::Integer(77),
+                    Value::Integer(88),
+                    Value::Function(
+                        vec![
+                            Opcode::Const(3),
+                            Opcode::SetLocal(0),
+                            Opcode::GetGlobal(0),
+                            Opcode::GetFree(0),
+                            Opcode::Add,
+                            Opcode::GetFree(1),
+                            Opcode::Add,
+                            Opcode::GetLocal(0),
+                            Opcode::Add,
+                            Opcode::Return,
+                        ],
+                        3,
                         0,
+                    ),
+                    Value::Function(
+                        vec![
+                            Opcode::Const(2),
+                            Opcode::SetLocal(0),
+                            Opcode::GetFree(0),
+                            Opcode::GetLocal(0),
+                            Opcode::Closure(4, 2),
+                            Opcode::Return,
+                        ],
+                        2,
+                        0,
+                    ),
+                    Value::Function(
+                        vec![
+                            Opcode::Const(1),
+                            Opcode::SetLocal(0),
+                            Opcode::GetLocal(0),
+                            Opcode::Closure(5, 1),
+                            Opcode::Return,
+                        ],
+                        1,
                         0,
                     ),
                 ],
-                vec![Opcode::Const(0), Opcode::Pop],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::SetGlobal(0),
+                    Opcode::Closure(6, 0),
+                    Opcode::Pop,
+                ],
             ),
         ];
         run_compiler_tests(tests);
