@@ -172,7 +172,10 @@ impl Parser {
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Assign)?;
         self.next_token();
-        let value = self.parse_expr(u8::MIN)?;
+        let value = match self.parse_expr(u8::MIN)? {
+            Expr::Function(token, _, parameters, body) => Expr::Function(token, Some(name.clone()), parameters, body),
+            expr => expr,
+        };
         if self.peek_token_is(Kind::Semi) {
             self.next_token();
         }
@@ -236,7 +239,7 @@ impl Parser {
         self.peek_token_expect(Kind::Lp)?;
         let parameters = self.parse_ident_list(Kind::Rp)?;
         let body = self.parse_block_expr()?;
-        Ok(Expr::Function(token, parameters, body))
+        Ok(Expr::Function(token, None, parameters, body))
     }
 
     fn parse_ident_list(&mut self, end: Kind) -> Result<Vec<String>, String> {
@@ -729,7 +732,7 @@ fn test_parse_function_literal() {
         if let Ok(source) = Parser::new(text).parse() {
             if let Some(function) = source.first() {
                 println!("{}", function);
-                if let Expr::Function(_, parameters, body) = function {
+                if let Expr::Function(_, _, parameters, body) = function {
                     assert!(parameters == &expected_parameters);
                     assert!(body[0].to_string() == expected_body);
                 } else {
@@ -753,7 +756,7 @@ fn test_parse_function_parameter() {
         if let Ok(source) = Parser::new(text).parse() {
             if let Some(function) = source.first() {
                 println!("{}", function);
-                if let Expr::Function(_, parameters, _) = function {
+                if let Expr::Function(_, _, parameters, _) = function {
                     assert!(parameters == &expected);
                 } else {
                     unreachable!("function literal parse failed")

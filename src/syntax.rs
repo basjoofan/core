@@ -16,7 +16,7 @@ pub enum Expr {
     Binary(Token, Box<Expr>, Box<Expr>),
     Paren(Token, Box<Expr>),
     If(Token, Box<Expr>, Vec<Expr>, Vec<Expr>),
-    Function(Token, Vec<String>, Vec<Expr>),
+    Function(Token, Option<String>, Vec<String>, Vec<Expr>),
     Call(Token, Box<Expr>, Vec<Expr>),
     Array(Token, Vec<Expr>),
     Map(Token, Vec<(Expr, Expr)>),
@@ -79,10 +79,11 @@ impl Display for Expr {
                 write!(f, " }}")?;
                 Ok(())
             }
-            Expr::Function(token, parameters, body) => write!(
+            Expr::Function(token, name, parameters, body) => write!(
                 f,
-                "{} ({}) {{ {} }}",
+                "{} {:?} ({}) {{ {} }}",
                 token,
+                name,
                 parameters
                     .iter()
                     .map(|e| e.to_string())

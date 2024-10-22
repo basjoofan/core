@@ -40,4 +40,5 @@ pub enum Opcode {
 
     Closure(usize, usize),
     GetFree(usize),
+    Current,
 }

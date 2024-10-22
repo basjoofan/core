@@ -4,6 +4,7 @@ use std::collections::HashMap;
 pub enum Symbol {
     Global(usize),
     Local(usize, bool),
+    Function,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -11,6 +12,7 @@ pub struct Symbols {
     outer: Option<Box<Symbols>>,
     inner: HashMap<String, Symbol>,
     frees: Vec<Symbol>,
+    index: usize,
 }
 
 impl Symbols {
@@ -19,6 +21,7 @@ impl Symbols {
             outer: None,
             inner: HashMap::new(),
             frees: Vec::new(),
+            index: usize::MIN,
         }
     }
 
@@ -27,6 +30,7 @@ impl Symbols {
             outer: Some(Box::new(self)),
             inner: HashMap::new(),
             frees: Vec::new(),
+            index: usize::MIN,
         }
     }
 
@@ -38,15 +42,21 @@ impl Symbols {
     }
 
     pub fn length(&self) -> usize {
-        self.inner.len()
+        self.index
     }
 
     pub fn frees(&self) -> Vec<Symbol> {
         self.frees.clone()
     }
 
+    pub fn function(&mut self, name: &str) -> &Symbol {
+        self.inner.insert(name.to_string(), Symbol::Function);
+        self.inner.get(name).unwrap()
+    }
+
     pub fn define(&mut self, name: &str) -> &Symbol {
-        let index = self.inner.len();
+        let index = self.index;
+        self.index += 1;
         let symbol = match self.outer {
             Some(_) => Symbol::Local(index, false),
             None => Symbol::Global(index),

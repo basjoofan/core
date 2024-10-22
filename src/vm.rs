@@ -18,6 +18,8 @@ struct Frame {
     fp: usize,
     bp: usize,
     frees: Vec<Value>,
+    length: usize,
+    number: usize,
 }
 
 impl<'a> Vm<'a> {
@@ -32,6 +34,8 @@ impl<'a> Vm<'a> {
                 fp: usize::MIN,
                 bp: usize::MIN,
                 frees: vec![],
+                length: usize::MIN,
+                number: usize::MIN,
             }],
             index: usize::MIN,
         }
@@ -196,6 +200,8 @@ impl<'a> Vm<'a> {
                                 fp: usize::MIN,
                                 bp: self.sp - number,
                                 frees,
+                                length,
+                                number,
                             });
                             self.sp = self.frame().bp + length;
                             self.stack.resize(self.sp, Value::None);
@@ -241,6 +247,13 @@ impl<'a> Vm<'a> {
                     let value = self.frame().frees[index].clone();
                     self.push(value)
                 }
+                Opcode::Current => {
+                    let opcodes = self.frame().opcodes.clone();
+                    let length = self.frame().length;
+                    let number = self.frame().number;
+                    let frees = self.frame().frees.clone();
+                    self.push(Value::Closure(opcodes, length, number, frees))
+                }
             }
         }
     }
@@ -277,6 +290,7 @@ mod tests {
             match compiler.compile(&source) {
                 Ok(opcodes) => {
                     println!("opcodes: {:?}", opcodes);
+                    println!("consts: {:?}", compiler.consts());
                     let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
                     vm.run();
                     println!("{} = {}", vm.past(), value);
@@ -345,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn test_test_if_conditional() {
+    fn test_if_conditional() {
         let tests = vec![
             ("if (true) { 10 }", Value::Integer(10)),
             ("if (true) { 10 } else { 20 }", Value::Integer(10)),
@@ -711,6 +725,80 @@ mod tests {
                 Value::Integer(99),
             ),
         ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_function_recursive() {
+        let tests = vec![
+            (
+                "
+                let countDown = fn(x) {
+                    if (x == 0) {
+                        return 0;
+                    } else {
+                        countDown(x - 1);
+                    }
+                };
+                countDown(1);
+                ",
+                Value::Integer(0),
+            ),
+            (
+                "
+                let countDown = fn(x) {
+                    if (x == 0) {
+                        return 0;
+                    } else {
+                        countDown(x - 1);
+                    }
+                };
+                let wrapper = fn() {
+                    countDown(1);
+                };
+                wrapper();
+                ",
+                Value::Integer(0),
+            ),
+            (
+                "
+                let wrapper = fn() {
+                    let countDown = fn(x) {
+                        if (x == 0) {
+                            return 0;
+                        } else {
+                            countDown(x - 1);
+                        }
+                    };
+                    countDown(1);
+                };
+                wrapper();
+                ",
+                Value::Integer(0),
+            ),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_function_fibonacci() {
+        let tests = vec![(
+            "
+            let fibonacci = fn(x) {
+                if (x == 0) {
+                    return 0;
+                } else {
+                    if (x == 1) {
+                        return 1;
+                    } else {
+                        fibonacci(x - 1) + fibonacci(x - 2);
+                    }
+                }
+            };
+            fibonacci(15);
+            ",
+            Value::Integer(610),
+        )];
         run_vm_tests(tests);
     }
 }

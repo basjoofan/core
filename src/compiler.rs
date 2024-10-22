@@ -71,6 +71,7 @@ impl Compiler {
                     self.emit(Opcode::GetLocal(index))
                 }
             }
+            Symbol::Function => self.emit(Opcode::Current),
         }
     }
 
@@ -129,12 +130,13 @@ impl Compiler {
                 self.emit(Opcode::Const(index));
             }
             Expr::Let(_, name, value) => {
-                self.assemble(value)?;
                 let symbol = self.symbols.define(name);
                 let opcode = match symbol {
                     Symbol::Global(index) => Opcode::SetGlobal(*index),
                     Symbol::Local(index, _) => Opcode::SetLocal(*index),
+                    Symbol::Function => Err(format!("Cannot redefine function: {}", name))?,
                 };
+                self.assemble(value)?;
                 self.emit(opcode);
             }
             Expr::Return(_, value) => {
@@ -167,7 +169,7 @@ impl Compiler {
             Expr::Paren(_, value) => self.assemble(value)?,
             Expr::If(_, condition, consequence, alternative) => {
                 self.assemble(condition)?;
-                let judge_index = self.scope().opcodes.len();
+                let judge_index = self.emit(Opcode::Judge(usize::MAX));
                 if consequence.is_empty() {
                     self.emit(Opcode::None);
                 } else {
@@ -176,9 +178,11 @@ impl Compiler {
                         self.scope().opcodes.pop();
                     }
                 }
-                let judge_position = self.scope().opcodes.len() + 2;
-                self.scope().opcodes.insert(judge_index, Opcode::Judge(judge_position));
-                let jump_index = self.scope().opcodes.len();
+                let jump_index = self.emit(Opcode::Jump(usize::MAX));
+                let judge_position = self.scope().opcodes.len();
+                if let Some(opcode) = self.scope().opcodes.get_mut(judge_index) {
+                    *opcode = Opcode::Judge(judge_position)
+                }
                 if alternative.is_empty() {
                     self.emit(Opcode::None);
                 } else {
@@ -187,11 +191,16 @@ impl Compiler {
                         self.scope().opcodes.pop();
                     }
                 }
-                let jump_position = self.scope().opcodes.len() + 1;
-                self.scope().opcodes.insert(jump_index, Opcode::Jump(jump_position));
+                let jump_position = self.scope().opcodes.len();
+                if let Some(opcode) = self.scope().opcodes.get_mut(jump_index) {
+                    *opcode = Opcode::Jump(jump_position)
+                }
             }
-            Expr::Function(_, parameters, body) => {
+            Expr::Function(_, name, parameters, body) => {
                 self.enter();
+                if let Some(name) = name {
+                    self.symbols.function(name);
+                }
                 for parameter in parameters.iter() {
                     self.symbols.define(parameter);
                 }
@@ -423,6 +432,31 @@ mod tests {
                     Opcode::Const(4),
                     Opcode::Pop,
                     Opcode::Const(5),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "
+                if (false) { 0 } else { if (false) { 1 } else { 2 } }; 3;
+                ",
+                vec![
+                    Value::Integer(0),
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                ],
+                vec![
+                    Opcode::False,
+                    Opcode::Judge(4),
+                    Opcode::Const(0),
+                    Opcode::Jump(9),
+                    Opcode::False,
+                    Opcode::Judge(8),
+                    Opcode::Const(1),
+                    Opcode::Jump(9),
+                    Opcode::Const(2),
+                    Opcode::Pop,
+                    Opcode::Const(3),
                     Opcode::Pop,
                 ],
             ),
@@ -906,7 +940,7 @@ mod tests {
                 vec![
                     Value::Function(
                         vec![Opcode::GetFree(0), Opcode::GetLocal(0), Opcode::Add, Opcode::Return],
-                        2,
+                        1,
                         1,
                     ),
                     Value::Function(vec![Opcode::GetLocal(0), Opcode::Closure(0, 1), Opcode::Return], 1, 1),
@@ -933,7 +967,7 @@ mod tests {
                             Opcode::Add,
                             Opcode::Return,
                         ],
-                        3,
+                        1,
                         1,
                     ),
                     Value::Function(
@@ -943,7 +977,7 @@ mod tests {
                             Opcode::Closure(0, 2),
                             Opcode::Return,
                         ],
-                        2,
+                        1,
                         1,
                     ),
                     Value::Function(vec![Opcode::GetLocal(0), Opcode::Closure(1, 1), Opcode::Return], 1, 1),
@@ -982,7 +1016,7 @@ mod tests {
                             Opcode::Add,
                             Opcode::Return,
                         ],
-                        3,
+                        1,
                         0,
                     ),
                     Value::Function(
@@ -994,7 +1028,7 @@ mod tests {
                             Opcode::Closure(4, 2),
                             Opcode::Return,
                         ],
-                        2,
+                        1,
                         0,
                     ),
                     Value::Function(
@@ -1013,6 +1047,87 @@ mod tests {
                     Opcode::Const(0),
                     Opcode::SetGlobal(0),
                     Opcode::Closure(6, 0),
+                    Opcode::Pop,
+                ],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_function_recursive() {
+        let tests = vec![
+            (
+                "
+                let countDown = fn(x) { countDown(x - 1); };
+                countDown(1);
+                ",
+                vec![
+                    Value::Integer(1),
+                    Value::Function(
+                        vec![
+                            Opcode::Current,
+                            Opcode::GetLocal(0),
+                            Opcode::Const(0),
+                            Opcode::Sub,
+                            Opcode::Call(1),
+                            Opcode::Return,
+                        ],
+                        1,
+                        1,
+                    ),
+                    Value::Integer(1),
+                ],
+                vec![
+                    Opcode::Closure(1, 0),
+                    Opcode::SetGlobal(0),
+                    Opcode::GetGlobal(0),
+                    Opcode::Const(2),
+                    Opcode::Call(1),
+                    Opcode::Pop,
+                ],
+            ),
+            (
+                "
+                let wrapper = fn() {
+                    let countDown = fn(x) { countDown(x - 1); };
+                    countDown(1);
+                };
+                wrapper();
+                ",
+                vec![
+                    Value::Integer(1),
+                    Value::Function(
+                        vec![
+                            Opcode::Current,
+                            Opcode::GetLocal(0),
+                            Opcode::Const(0),
+                            Opcode::Sub,
+                            Opcode::Call(1),
+                            Opcode::Return,
+                        ],
+                        1,
+                        1,
+                    ),
+                    Value::Integer(1),
+                    Value::Function(
+                        vec![
+                            Opcode::Closure(1, 0),
+                            Opcode::SetLocal(0),
+                            Opcode::GetLocal(0),
+                            Opcode::Const(2),
+                            Opcode::Call(1),
+                            Opcode::Return,
+                        ],
+                        1,
+                        0,
+                    ),
+                ],
+                vec![
+                    Opcode::Closure(3, 0),
+                    Opcode::SetGlobal(0),
+                    Opcode::GetGlobal(0),
+                    Opcode::Call(0),
                     Opcode::Pop,
                 ],
             ),
