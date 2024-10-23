@@ -91,12 +91,30 @@ impl Compiler {
         for expr in source.iter() {
             self.assemble(expr)?;
             match expr {
-                Expr::Let(..) | Expr::Return(..) => {}
+                Expr::Let(..) | Expr::Return(..) | Expr::Test(..) => {}
                 _ => {
                     self.emit(Opcode::Pop);
                 }
             }
         }
+        Ok(())
+    }
+
+    fn block(&mut self, body: &[Expr], flag: bool) -> Result<(), String> {
+        if body.is_empty() {
+            self.emit(Opcode::None);
+        } else {
+            self.batch(body)?;
+            if let Some(Opcode::Pop) = self.scope().opcodes.last() {
+                self.scope().opcodes.pop();
+            }
+        }
+        flag.then(|| match self.scope().opcodes.last() {
+            Some(Opcode::Return) => {}
+            _ => {
+                self.emit(Opcode::Return);
+            }
+        });
         Ok(())
     }
 
@@ -170,27 +188,13 @@ impl Compiler {
             Expr::If(_, condition, consequence, alternative) => {
                 self.assemble(condition)?;
                 let judge_index = self.emit(Opcode::Judge(usize::MAX));
-                if consequence.is_empty() {
-                    self.emit(Opcode::None);
-                } else {
-                    self.batch(consequence)?;
-                    if let Some(Opcode::Pop) = self.scope().opcodes.last() {
-                        self.scope().opcodes.pop();
-                    }
-                }
+                self.block(consequence, false)?;
                 let jump_index = self.emit(Opcode::Jump(usize::MAX));
                 let judge_position = self.scope().opcodes.len();
                 if let Some(opcode) = self.scope().opcodes.get_mut(judge_index) {
                     *opcode = Opcode::Judge(judge_position)
                 }
-                if alternative.is_empty() {
-                    self.emit(Opcode::None);
-                } else {
-                    self.batch(alternative)?;
-                    if let Some(Opcode::Pop) = self.scope().opcodes.last() {
-                        self.scope().opcodes.pop();
-                    }
-                }
+                self.block(alternative, false)?;
                 let jump_position = self.scope().opcodes.len();
                 if let Some(opcode) = self.scope().opcodes.get_mut(jump_index) {
                     *opcode = Opcode::Jump(jump_position)
@@ -204,20 +208,7 @@ impl Compiler {
                 for parameter in parameters.iter() {
                     self.symbols.define(parameter);
                 }
-                if body.is_empty() {
-                    self.emit(Opcode::None);
-                } else {
-                    self.batch(body)?;
-                    if let Some(Opcode::Pop) = self.scope().opcodes.last() {
-                        self.scope().opcodes.pop();
-                    }
-                }
-                match self.scope().opcodes.last() {
-                    Some(Opcode::Return) => {}
-                    _ => {
-                        self.emit(Opcode::Return);
-                    }
-                }
+                self.block(body, true)?;
                 let frees = self.symbols.frees();
                 let count = frees.len();
                 let length = self.symbols.length();
@@ -256,7 +247,20 @@ impl Compiler {
             }
             Expr::Field(_, _, _) => todo!(),
             Expr::Request(_, _, _, _) => todo!(),
-            Expr::Test(_, _, _) => todo!(),
+            Expr::Test(_, name, block) => {
+                self.enter();
+                self.block(block, true)?;
+                let opcodes = self.leave();
+                let index = self.save(Value::Function(opcodes, usize::MIN, usize::MIN));
+                self.emit(Opcode::Closure(index, usize::MIN));
+                let symbol = self.symbols.define(name);
+                let opcode = match symbol {
+                    Symbol::Global(index) => Opcode::SetGlobal(*index),
+                    Symbol::Local(_, _) => Err(format!("Cannot define test in local: {}", name))?,
+                    Symbol::Function => Err(format!("Cannot redefine function: {}", name))?,
+                };
+                self.emit(opcode);
+            }
         }
         Ok(())
     }
@@ -1132,6 +1136,28 @@ mod tests {
                 ],
             ),
         ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_test_block() {
+        let tests = vec![(
+            "
+            test case { 2 }
+            case();
+            ",
+            vec![
+                Value::Integer(2),
+                Value::Function(vec![Opcode::Const(0), Opcode::Return], 0, 0),
+            ],
+            vec![
+                Opcode::Closure(1, 0),
+                Opcode::SetGlobal(0),
+                Opcode::GetGlobal(0),
+                Opcode::Call(0),
+                Opcode::Pop,
+            ],
+        )];
         run_compiler_tests(tests);
     }
 }

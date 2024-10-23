@@ -801,4 +801,16 @@ mod tests {
         )];
         run_vm_tests(tests);
     }
+
+    #[test]
+    fn test_test_block() {
+        let tests = vec![(
+            "
+            test case { 2 }
+            case();
+            ",
+            Value::Integer(2),
+        )];
+        run_vm_tests(tests);
+    }
 }
