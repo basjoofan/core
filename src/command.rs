@@ -1,17 +1,9 @@
-use crate::record;
 use crate::Compiler;
 use crate::Parser;
-use crate::Record;
-use crate::Stats;
-use crate::Value;
 use crate::Vm;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
 use std::time::Duration;
 
 pub const NAME: &str = env!("CARGO_PKG_NAME");
@@ -64,7 +56,7 @@ pub fn run(path: Option<PathBuf>) {
     eval(text);
 }
 
-pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iterations: u32, file: Option<PathBuf>) {
+pub fn test(_: Option<String>, _: u32, _: Duration, _: u32, _: Option<PathBuf>) {
     //     let text = read_to_string(std::env::current_dir().unwrap());
     //     let mut context = Context::default();
     //     let source = Parser::new(&text).parse();
@@ -156,41 +148,41 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
 //     process_record(receiver, file);
 // }
 
-fn process_record(receiver: Receiver<(String, String, Record)>, file: Option<PathBuf>) {
-    let schema = record::schema();
-    let mut writer = record::writer(&schema, file);
-    let mut stats = Stats::default();
-    for (id, name, record) in receiver {
-        // print record
-        println!("=== TEST  {}/{}", name, record.name);
-        let mut result = true;
-        record.asserts.iter().for_each(|assert| {
-            result &= assert.result;
-            println!("{}", assert);
-        });
-        if result {
-            println!("--- PASS  {}/{} ({:?})", name, record.name, record.time.total);
-        } else {
-            println!("--- FAIL  {}/{} ({:?})", name, record.name, record.time.total);
-        }
-        // stat record
-        stats.add(&record.name, record.time.total.as_millis());
-        // store record
-        if let Some(ref mut writer) = writer {
-            let _ = writer.append(record.to(id, name, &schema));
-        }
-    }
-    if let Some(ref mut writer) = writer {
-        let _ = writer.flush();
-    }
-    print!("{}", stats);
-}
+// fn process_record(receiver: Receiver<(String, String, Record)>, file: Option<PathBuf>) {
+//     let schema = record::schema();
+//     let mut writer = record::writer(&schema, file);
+//     let mut stats = Stats::default();
+//     for (id, name, record) in receiver {
+//         // print record
+//         println!("=== TEST  {}/{}", name, record.name);
+//         let mut result = true;
+//         record.asserts.iter().for_each(|assert| {
+//             result &= assert.result;
+//             println!("{}", assert);
+//         });
+//         if result {
+//             println!("--- PASS  {}/{} ({:?})", name, record.name, record.time.total);
+//         } else {
+//             println!("--- FAIL  {}/{} ({:?})", name, record.name, record.time.total);
+//         }
+//         // stat record
+//         stats.add(&record.name, record.time.total.as_millis());
+//         // store record
+//         if let Some(ref mut writer) = writer {
+//             let _ = writer.append(record.to(id, name, &schema));
+//         }
+//     }
+//     if let Some(ref mut writer) = writer {
+//         let _ = writer.flush();
+//     }
+//     print!("{}", stats);
+// }
 
-fn print_error(value: Value) {
-    if value.is_error() {
-        println!("{}", value)
-    }
-}
+// fn print_error(value: Value) {
+//     if value.is_error() {
+//         println!("{}", value)
+//     }
+// }
 
 fn read_to_string(path: PathBuf) -> String {
     let mut text = String::new();
@@ -209,8 +201,8 @@ fn read(path: PathBuf, text: &mut String) -> std::io::Result<()> {
     Ok(())
 }
 
-fn handle_ctrlc(continuous: Arc<AtomicBool>) {
-    let _ = ctrlc::set_handler(move || {
-        continuous.store(false, Ordering::Relaxed);
-    });
-}
+// fn handle_ctrlc(continuous: Arc<AtomicBool>) {
+//     let _ = ctrlc::set_handler(move || {
+//         continuous.store(false, Ordering::Relaxed);
+//     });
+// }
