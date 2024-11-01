@@ -271,6 +271,17 @@ impl<'a> Vm<'a> {
                     let frees = self.frame().frees.clone();
                     self.push(Value::Closure(opcodes, length, number, frees))
                 }
+                Opcode::Field => {
+                    let field = self.pop();
+                    let object = self.pop();
+                    match (object, field) {
+                        (Value::Map(object), Value::String(field)) => match object.get(field.as_str()) {
+                            Some(value) => self.push(value.clone()),
+                            None => self.push(Value::None),
+                        },
+                        (object, field) => panic!("unsupported types for field: {}.{}", object, field),
+                    }
+                }
             }
         }
     }
@@ -852,6 +863,12 @@ mod tests {
             ",
             Value::Integer(2),
         )];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_object_field() {
+        let tests = vec![("{\"a\": 2}.a", Value::Integer(2))];
         run_vm_tests(tests);
     }
 }

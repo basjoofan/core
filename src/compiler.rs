@@ -249,7 +249,13 @@ impl Compiler {
                 self.assemble(index)?;
                 self.emit(Opcode::Index);
             }
-            Expr::Field(_, _, _) => todo!(),
+            Expr::Field(_, object, field) => {
+                self.assemble(object)?;
+                let field = Value::String(field.clone());
+                let index = self.save(field);
+                self.emit(Opcode::Const(index));
+                self.emit(Opcode::Field);
+            },
             Expr::Request(_, _, _, _) => todo!(),
             Expr::Test(_, name, block) => {
                 self.enter();
@@ -1199,6 +1205,27 @@ mod tests {
                 Opcode::Pop,
             ],
         )];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_object_field() {
+        let tests = vec![(
+            "{\"a\": 2}.a",
+            vec![
+                Value::String(String::from("a")),
+                Value::Integer(2),
+                Value::String(String::from("a")),
+            ],
+            vec![
+                Opcode::Const(0),
+                Opcode::Const(1),
+                Opcode::Map(1),
+                Opcode::Const(2),
+                Opcode::Field,
+                Opcode::Pop,
+            ],
+        ),];
         run_compiler_tests(tests);
     }
 }
