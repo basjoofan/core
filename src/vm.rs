@@ -105,6 +105,22 @@ impl<'a> Vm<'a> {
                         (Value::Integer(left), Value::Integer(right), Opcode::Ne) => {
                             self.push(Value::Boolean(left != right))
                         }
+                        (Value::Float(left), Value::Float(right), Opcode::Add) => self.push(Value::Float(left + right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Sub) => self.push(Value::Float(left - right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Mul) => self.push(Value::Float(left * right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Div) => self.push(Value::Float(left / right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Lt) => {
+                            self.push(Value::Boolean(left < right))
+                        }
+                        (Value::Float(left), Value::Float(right), Opcode::Gt) => {
+                            self.push(Value::Boolean(left > right))
+                        }
+                        (Value::Float(left), Value::Float(right), Opcode::Eq) => {
+                            self.push(Value::Boolean(left == right))
+                        }
+                        (Value::Float(left), Value::Float(right), Opcode::Ne) => {
+                            self.push(Value::Boolean(left != right))
+                        }
                         (Value::Boolean(left), Value::Boolean(right), Opcode::Eq) => {
                             self.push(Value::Boolean(left == right))
                         }
@@ -126,6 +142,7 @@ impl<'a> Vm<'a> {
                     let operand = self.pop();
                     match operand {
                         Value::Integer(value) => self.push(Value::Integer(-value)),
+                        Value::Float(value) => self.push(Value::Float(-value)),
                         _ => panic!("unsupported types for negation: {}", operand),
                     }
                 }
@@ -321,6 +338,30 @@ mod tests {
             ("-10", Value::Integer(-10)),
             ("-50 + 100 + -50", Value::Integer(0)),
             ("(5 + 10 * 2 + 15 / 3) * 2 + -10", Value::Integer(50)),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_float_arithmetic() {
+        let tests = vec![
+            ("1.0", Value::Float(1.0)),
+            ("0.2", Value::Float(0.2)),
+            ("1.0 + 0.2", Value::Float(1.2)),
+            ("1.2 - 1.0", Value::Float(0.19999999999999996)),
+            ("0.1 * 0.2", Value::Float(0.020000000000000004)),
+            ("4.0 / 2.0", Value::Float(2.0)),
+            ("5.0 / 2.0 * 2.0 + 1.0 - 0.5", Value::Float(5.5)),
+            ("5.0 * (0.2 + 1.0)", Value::Float(6.0)),
+            ("0.5 + 0.5 + 0.5 + 0.5 - 1.0", Value::Float(1.0)),
+            ("0.2 * 0.2 * 0.2 * 0.2 * 0.2", Value::Float(0.00032000000000000013)),
+            ("0.5 * 2.2 + 1.1", Value::Float(2.2)),
+            ("0.5 + 0.2 * 10.0", Value::Float(2.5)),
+            ("0.5 * (2.0 + 10.0)", Value::Float(6.0)),
+            ("-0.5", Value::Float(-0.5)),
+            ("-1.0", Value::Float(-1.0)),
+            ("-5.0 + 10.0 + -5.0", Value::Float(0.0)),
+            ("(0.5 + 1.5 * 0.2 + 1.5 / 3.0) * 2.0 + -1.0", Value::Float(1.6)),
         ];
         run_vm_tests(tests);
     }

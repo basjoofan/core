@@ -134,7 +134,11 @@ impl Compiler {
                 let index = self.save(integer);
                 self.emit(Opcode::Const(index));
             }
-            Expr::Float(_, _) => todo!(),
+            Expr::Float(_, float) => {
+                let float = Value::Float(*float);
+                let index = self.save(float);
+                self.emit(Opcode::Const(index));
+            }
             Expr::Boolean(_, boolean) => {
                 if *boolean {
                     self.emit(Opcode::True);
@@ -321,6 +325,43 @@ mod tests {
             (
                 "-1",
                 vec![Value::Integer(1)],
+                vec![Opcode::Const(0), Opcode::Minus, Opcode::Pop],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_float_arithmetic() {
+        let tests = vec![
+            (
+                "1.0 + 2.0",
+                vec![Value::Float(1.0), Value::Float(2.0)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Pop],
+            ),
+            (
+                "1.0; 0.20",
+                vec![Value::Float(1.0), Value::Float(0.20)],
+                vec![Opcode::Const(0), Opcode::Pop, Opcode::Const(1), Opcode::Pop],
+            ),
+            (
+                "1.0 - 0.2",
+                vec![Value::Float(1.0), Value::Float(0.2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Sub, Opcode::Pop],
+            ),
+            (
+                "1.0 * 2.0",
+                vec![Value::Float(1.0), Value::Float(2.0)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Mul, Opcode::Pop],
+            ),
+            (
+                "1.0 / 2.0",
+                vec![Value::Float(1.0), Value::Float(2.0)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Div, Opcode::Pop],
+            ),
+            (
+                "-1.0",
+                vec![Value::Float(1.0)],
                 vec![Opcode::Const(0), Opcode::Minus, Opcode::Pop],
             ),
         ];
