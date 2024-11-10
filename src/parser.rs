@@ -319,17 +319,12 @@ impl Parser {
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Template)?;
         let message = self.parse_current_string();
-        let pieces = divide_template_pieces(message.trim().lines().fold(String::new(), |mut string, str| {
-            string.push_str(str.trim());
-            string.push('\n');
-            string
-        }))?;
         let mut asserts = Vec::new();
         if self.peek_token_is(Kind::Ls) {
             self.next_token();
             asserts = self.parse_expr_list(Kind::Rs)?;
         }
-        Ok(Expr::Request(token, name, pieces, asserts))
+        Ok(Expr::Request(token, name, message, asserts))
     }
 
     fn parse_test_literal(&mut self) -> Result<Expr, String> {
@@ -353,58 +348,6 @@ impl Parser {
         self.peek_token_expect(Kind::Rb)?;
         Ok(exprs)
     }
-}
-
-fn divide_template_pieces(message: String) -> Result<Vec<Expr>, String> {
-    let mut exprs = Vec::new();
-    let mut chars = message.chars().peekable();
-    while let Some(char) = chars.next() {
-        match (char, chars.peek()) {
-            ('$', Some('{')) => {
-                let mut closed = false;
-                let mut string = String::new();
-                chars.next();
-                for char in chars.by_ref() {
-                    if char == '}' {
-                        closed = true;
-                        break;
-                    } else {
-                        string.push(char);
-                    }
-                }
-                if closed {
-                    exprs.push(Parser::new(&string).parse_expr(u8::MIN)?);
-                } else {
-                    string.insert_str(0, "${");
-                    exprs.push(Expr::String(
-                        Token {
-                            kind: Kind::String,
-                            literal: string.clone(),
-                        },
-                        string,
-                    ));
-                }
-            }
-            _ => {
-                let mut string = String::from(char);
-                while let Some(peek) = chars.peek() {
-                    if *peek == '$' {
-                        break;
-                    } else {
-                        string.push(chars.next().unwrap());
-                    }
-                }
-                exprs.push(Expr::String(
-                    Token {
-                        kind: Kind::String,
-                        literal: string.clone(),
-                    },
-                    string,
-                ));
-            }
-        }
-    }
-    Ok(exprs)
 }
 
 #[test]
@@ -1050,49 +993,24 @@ fn test_parse_map_literal_with_expr() {
 }
 
 #[test]
-fn test_parse_template_pieces() {
-    let tests = vec![
-        (
-            "s${a}xdefe${b}efe${c}x$xx",
-            vec![r#""s""#, "a", r#""xdefe""#, "b", r#""efe""#, "c", r#""x""#, r#""$xx""#],
-        ),
-        (
-            "s${a}xdefe${b}efe${cxxx",
-            vec![r#""s""#, "a", r#""xdefe""#, "b", r#""efe""#, r#""${cxxx""#],
-        ),
-        (
-            "s${a + b}xdefe${b*c+d}efe${c()}",
-            vec![r#""s""#, "(a + b)", r#""xdefe""#, "((b * c) + d)", r#""efe""#, "c()"],
-        ),
-    ];
-    for (message, expected_pieces) in tests {
-        if let Ok(pieces) = divide_template_pieces(message.to_string()) {
-            pieces.iter().for_each(|piece| println!("{}", piece));
-            assert!(pieces.iter().map(|piece| piece.to_string()).collect::<Vec<String>>() == expected_pieces);
-        }
-    }
-}
-
-#[test]
 fn test_parse_request_literal() {
     let tests = vec![
         (
             "rq request`\nGET http://${host}/api\nHost: example.com\n`",
             1,
             "request",
-            vec!["\"GET http://\"", "host", "\"/api\nHost: example.com\n\""],
+            "\nGET http://${host}/api\nHost: example.com\n",
         ),
-        ("rq request`POST`", 1, "request", vec!["\"POST\n\""]),
+        ("rq request`POST`", 1, "request", "POST"),
     ];
-    for (text, expected_len, expected_name, expected_pieces) in tests {
+    for (text, expected_len, expected_name, expected_message) in tests {
         if let Ok(source) = Parser::new(text).parse() {
             assert!(source.len() == expected_len);
             if let Some(request) = source.first() {
                 println!("request:{}", request);
-                if let Expr::Request(_, name, pieces, asserts) = request.clone() {
+                if let Expr::Request(_, name, message, asserts) = request.clone() {
                     assert!(name == expected_name);
-                    pieces.iter().for_each(|piece| println!("{}", piece));
-                    assert!(pieces.iter().map(|piece| piece.to_string()).collect::<Vec<String>>() == expected_pieces);
+                    assert!(message == expected_message);
                     assert!(asserts.is_empty());
                 } else {
                     unreachable!("request literal parse failed")
