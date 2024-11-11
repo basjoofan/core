@@ -3,6 +3,7 @@ use crate::Kind;
 use crate::Opcode;
 use crate::Symbol;
 use crate::Symbols;
+use crate::Token;
 use crate::Value;
 use crate::NATIVES;
 use std::collections::HashMap;
@@ -91,7 +92,7 @@ impl Compiler {
         for expr in source.iter() {
             self.assemble(expr)?;
             match expr {
-                Expr::Let(..) | Expr::Return(..) | Expr::Test(..) => {}
+                Expr::Let(..) | Expr::Return(..) | Expr::Request(..) | Expr::Test(..) => {}
                 _ => {
                     self.emit(Opcode::Pop);
                 }
@@ -255,8 +256,56 @@ impl Compiler {
                 let index = self.save(field);
                 self.emit(Opcode::Const(index));
                 self.emit(Opcode::Field);
-            },
-            Expr::Request(_, _, _, _) => todo!(),
+            }
+            Expr::Request(token, name, parameters, message, asserts) => {
+                let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
+                let matches = regex.find_iter(&message);
+                let mut places = Vec::new();
+                places.push(Expr::String(
+                    Token {
+                        kind: Kind::Ident,
+                        literal: String::from(message),
+                    },
+                    String::from(message),
+                ));
+                matches.for_each(|m| {
+                    let literal = &m.as_str()[1..m.as_str().len() - 1];
+                    places.push(Expr::Ident(
+                        Token {
+                            kind: Kind::Ident,
+                            literal: String::from(literal),
+                        },
+                        String::from(literal),
+                    ))
+                });
+                let body = vec![Expr::Call(
+                    Token {
+                        kind: Kind::Lp,
+                        literal: String::from("("),
+                    },
+                    Box::new(Expr::Ident(
+                        Token {
+                            kind: Kind::Ident,
+                            literal: String::from("format"),
+                        },
+                        String::from("format"),
+                    )),
+                    places,
+                )];
+                self.assemble(&Expr::Let(
+                    Token {
+                        kind: Kind::Let,
+                        literal: String::from("let"),
+                    },
+                    name.clone(),
+                    Box::new(Expr::Function(
+                        token.clone(),
+                        Some(name.clone()),
+                        parameters.clone(),
+                        body,
+                    )),
+                ))?;
+            }
             Expr::Test(_, name, block) => {
                 self.enter();
                 self.block(block, true)?;
@@ -1225,7 +1274,44 @@ mod tests {
                 Opcode::Field,
                 Opcode::Pop,
             ],
-        ),];
+        )];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_request_literal() {
+        let tests = vec![
+            (
+                "rq request(host)`\nGET http://{host}/api\nHost: example.com\n`",
+                vec![
+                    Value::String(String::from("\nGET http://{host}/api\nHost: example.com\n")),
+                    Value::Function(
+                        vec![
+                            Opcode::Native(3),
+                            Opcode::Const(0),
+                            Opcode::GetLocal(0),
+                            Opcode::Call(2),
+                            Opcode::Return,
+                        ],
+                        1,
+                        1,
+                    ),
+                ],
+                vec![Opcode::Closure(1, 0), Opcode::SetGlobal(0)],
+            ),
+            (
+                "rq request()`POST`",
+                vec![
+                    Value::String(String::from("POST")),
+                    Value::Function(
+                        vec![Opcode::Native(3), Opcode::Const(0), Opcode::Call(1), Opcode::Return],
+                        0,
+                        0,
+                    ),
+                ],
+                vec![Opcode::Closure(1, 0), Opcode::SetGlobal(0)],
+            ),
+        ];
         run_compiler_tests(tests);
     }
 }

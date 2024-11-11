@@ -317,6 +317,8 @@ impl Parser {
         let token = self.current_token().clone();
         self.peek_token_expect(Kind::Ident)?;
         let name = self.parse_current_string();
+        self.peek_token_expect(Kind::Lp)?;
+        let parameters = self.parse_ident_list(Kind::Rp)?;
         self.peek_token_expect(Kind::Template)?;
         let message = self.parse_current_string();
         let mut asserts = Vec::new();
@@ -324,7 +326,7 @@ impl Parser {
             self.next_token();
             asserts = self.parse_expr_list(Kind::Rs)?;
         }
-        Ok(Expr::Request(token, name, message, asserts))
+        Ok(Expr::Request(token, name, parameters, message, asserts))
     }
 
     fn parse_test_literal(&mut self) -> Result<Expr, String> {
@@ -996,21 +998,23 @@ fn test_parse_map_literal_with_expr() {
 fn test_parse_request_literal() {
     let tests = vec![
         (
-            "rq request`\nGET http://${host}/api\nHost: example.com\n`",
+            "rq request(host)`\nGET http://{host}/api\nHost: example.com\n`",
             1,
             "request",
-            "\nGET http://${host}/api\nHost: example.com\n",
+            vec!["host"],
+            "\nGET http://{host}/api\nHost: example.com\n",
         ),
-        ("rq request`POST`", 1, "request", "POST"),
+        ("rq request()`POST`", 1, "request", vec![], "POST"),
     ];
-    for (text, expected_len, expected_name, expected_message) in tests {
+    for (text, expected_len, expected_name, expected_parameters, expected_message) in tests {
         if let Ok(source) = Parser::new(text).parse() {
             assert!(source.len() == expected_len);
             if let Some(request) = source.first() {
                 println!("request:{}", request);
-                if let Expr::Request(_, name, message, asserts) = request.clone() {
+                if let Expr::Request(_, name, parameters, message, asserts) = request.clone() {
                     assert!(name == expected_name);
                     assert!(message == expected_message);
+                    assert!(parameters == expected_parameters);
                     assert!(asserts.is_empty());
                 } else {
                     unreachable!("request literal parse failed")
@@ -1018,6 +1022,8 @@ fn test_parse_request_literal() {
             } else {
                 unreachable!("source expr none")
             }
+        } else {
+            unreachable!("source expr error")
         }
     }
 }
@@ -1026,7 +1032,7 @@ fn test_parse_request_literal() {
 fn test_parse_request_asserts() {
     let tests = vec![
         (
-            r#"rq request`\nGET http://${host}/api\nHost: example.com\n`[
+            r#"rq request()`\nGET http://${host}/api\nHost: example.com\n`[
                status == 200,
                regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22"
                ]"#,
@@ -1036,13 +1042,13 @@ fn test_parse_request_asserts() {
                 r#"(regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22")"#,
             ],
         ),
-        (r#"rq request`POST`[]"#, 0, vec![]),
+        (r#"rq request()`POST`[]"#, 0, vec![]),
     ];
     for (text, expected_len, expected_asserts) in tests {
         if let Ok(source) = Parser::new(text).parse() {
             if let Some(request) = source.first() {
                 println!("request:{}", request);
-                if let Expr::Request(_, _, _, asserts) = request.clone() {
+                if let Expr::Request(_, _, _, _, asserts) = request.clone() {
                     assert!(asserts.len() == expected_len);
                     assert!(
                         asserts.iter().map(|assert| assert.to_string()).collect::<Vec<String>>() == expected_asserts
@@ -1053,6 +1059,8 @@ fn test_parse_request_asserts() {
             } else {
                 unreachable!("source expr none")
             }
+        } else {
+            unreachable!("source expr error")
         }
     }
 }

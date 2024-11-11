@@ -19,7 +19,7 @@ pub enum Value {
     Function(Vec<Opcode>, usize, usize),
     Closure(Vec<Opcode>, usize, usize, Vec<Value>),
     Native(fn(Vec<Value>) -> Value),
-    Request(String, Vec<Expr>, Vec<Expr>),
+    Request(String, Vec<Expr>),
 }
 
 impl Value {
@@ -81,20 +81,10 @@ impl Display for Value {
                 write!(f, "({}:{}:{}){:?}", length, number, frees.len(), opcodes)
             }
             Value::Native(function) => write!(f, "{:?}", function),
-            Value::Request(name, pieces, asserts) => write!(
+            Value::Request(message, asserts) => write!(
                 f,
-                "{} {}[{}]",
-                name,
-                pieces
-                    .iter()
-                    .map(|e| {
-                        if let Expr::String(token, _) = e {
-                            token.to_string()
-                        } else {
-                            format!("${{{}}}", e)
-                        }
-                    })
-                    .collect::<String>(),
+                "{}[{}]",
+                message,
                 asserts
                     .iter()
                     .map(|e| e.to_string())

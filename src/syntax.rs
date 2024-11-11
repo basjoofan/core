@@ -23,7 +23,7 @@ pub enum Expr {
     Index(Token, Box<Expr>, Box<Expr>),
     // Field Access of a named field (object.field)
     Field(Token, Box<Expr>, String),
-    Request(Token, String, String, Vec<Expr>),
+    Request(Token, String, Vec<String>, String, Vec<Expr>),
     Test(Token, String, Vec<Expr>),
     // TODO Assign An assignment expr: a = compute().
     // TODO Closure A closure expr: |a, b| a + b.
@@ -121,12 +121,17 @@ impl Display for Expr {
             ),
             Expr::Index(_, left, index) => write!(f, "({}[{}])", left, index),
             Expr::Field(token, object, field) => write!(f, "{}{}{}", object, token, field),
-            Expr::Request(token, name, message, asserts) => {
+            Expr::Request(token, name,parameters, message, asserts) => {
                 write!(
                     f,
-                    "{} {} `{}`[{}]",
+                    "{} {} ({})`{}`[{}]",
                     token,
                     name,
+                    parameters
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", "),
                     message,
                     asserts
                         .iter()

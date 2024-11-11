@@ -871,4 +871,23 @@ mod tests {
         let tests = vec![("{\"a\": 2}.a", Value::Integer(2))];
         run_vm_tests(tests);
     }
+
+    #[test]
+    fn test_request_literal() {
+        let tests = vec![
+            (
+                "rq request(host)`\nGET http://{host}/api\nHost: example.com\n`
+                 request(\"example.com\");
+                ",
+                Value::String(String::from("\nGET http://example.com/api\nHost: example.com\n")),
+            ),
+            (
+                "rq request()`POST`
+                 request();
+                ",
+                Value::String(String::from("POST")),
+            ),
+        ];
+        run_vm_tests(tests);
+    }
 }
