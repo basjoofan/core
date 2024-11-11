@@ -1,4 +1,3 @@
-use crate::Expr;
 use crate::Opcode;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -15,18 +14,12 @@ pub enum Value {
     String(String),
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
-    Return(Box<Value>),
     Function(Vec<Opcode>, usize, usize),
     Closure(Vec<Opcode>, usize, usize, Vec<Value>),
     Native(fn(Vec<Value>) -> Value),
-    Request(String, Vec<Expr>),
 }
 
 impl Value {
-    pub fn is_error(&self) -> bool {
-        matches!(self, Value::Error(_))
-    }
-
     pub fn kind(&self) -> &str {
         match self {
             Value::None => "None",
@@ -37,11 +30,9 @@ impl Value {
             Value::String(_) => "String",
             Value::Array(_) => "Array",
             Value::Map(_) => "Map",
-            Value::Return(_) => "Return",
             Value::Function(..) => "Function",
             Value::Closure(..) => "Closure",
             Value::Native(_) => "Native",
-            Value::Request(..) => "Request",
         }
     }
 }
@@ -73,7 +64,6 @@ impl Display for Value {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            Value::Return(value) => write!(f, "{}", value),
             Value::Function(opcodes, length, number) => {
                 write!(f, "({}:{}){:?}", length, number, opcodes)
             }
@@ -81,16 +71,6 @@ impl Display for Value {
                 write!(f, "({}:{}:{}){:?}", length, number, frees.len(), opcodes)
             }
             Value::Native(function) => write!(f, "{:?}", function),
-            Value::Request(message, asserts) => write!(
-                f,
-                "{}[{}]",
-                message,
-                asserts
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
         }
     }
 }
