@@ -5,26 +5,26 @@ use std::fmt::Result;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    Ident(Token, String),
-    Integer(Token, i64),
-    Float(Token, f64),
-    Boolean(Token, bool),
-    String(Token, String),
-    Let(Token, String, Box<Expr>),
-    Return(Token, Box<Expr>),
+    Ident(String),
+    Integer(i64),
+    Float(f64),
+    Boolean(bool),
+    String(String),
+    Let(String, Box<Expr>),
+    Return(Box<Expr>),
     Unary(Token, Box<Expr>),
     Binary(Token, Box<Expr>, Box<Expr>),
-    Paren(Token, Box<Expr>),
-    If(Token, Box<Expr>, Vec<Expr>, Vec<Expr>),
-    Function(Token, Option<String>, Vec<String>, Vec<Expr>),
-    Call(Token, Box<Expr>, Vec<Expr>),
-    Array(Token, Vec<Expr>),
-    Map(Token, Vec<(Expr, Expr)>),
-    Index(Token, Box<Expr>, Box<Expr>),
+    Paren(Box<Expr>),
+    If(Box<Expr>, Vec<Expr>, Vec<Expr>),
+    Function(Option<String>, Vec<String>, Vec<Expr>),
+    Call(Box<Expr>, Vec<Expr>),
+    Array(Vec<Expr>),
+    Map(Vec<(Expr, Expr)>),
+    Index(Box<Expr>, Box<Expr>),
     // Field Access of a named field (object.field)
-    Field(Token, Box<Expr>, String),
-    Request(Token, String, Vec<String>, String, Vec<Expr>),
-    Test(Token, String, Vec<Expr>),
+    Field(Box<Expr>, String),
+    Request(String, Vec<String>, String, Vec<Expr>),
+    Test(String, Vec<Expr>),
     // TODO Assign An assignment expr: a = compute().
     // TODO Closure A closure expr: |a, b| a + b.
     // TODO Break A break, with an optional label to break and an optional expr.
@@ -38,24 +38,25 @@ pub enum Expr {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Expr::Ident(token, _) => write!(f, "{}", token),
-            Expr::Integer(token, _) => write!(f, "{}", token),
-            Expr::Float(token, _) => write!(f, "{}", token),
-            Expr::Boolean(token, _) => write!(f, "{}", token),
-            Expr::String(token, _) => write!(f, "\"{}\"", token),
-            Expr::Let(token, name, value) => {
-                write!(f, "{} {} = {}", token, name, value)
+            Expr::Ident(ident) => write!(f, "{}", ident),
+            Expr::Integer(integer) => write!(f, "{}", integer),
+            Expr::Float(float) => write!(f, "{}", float),
+            Expr::Boolean(boolean) => write!(f, "{}", boolean),
+            Expr::String(string) => write!(f, "\"{}\"", string),
+            Expr::Let(name, value) => {
+                write!(f, "let {} = {}", name, value)
             }
-            Expr::Return(token, value) => {
-                write!(f, "{} {}", token, value)
+            Expr::Return(value) => {
+                write!(f, "return {}", value)
             }
             Expr::Unary(token, right) => write!(f, "({}{})", token, right),
             Expr::Binary(token, left, right) => {
                 write!(f, "({} {} {})", left, token, right)
             }
-            Expr::Paren(_, value) => write!(f, "{}", value),
-            Expr::If(token, condition, consequence, alternative) => {
-                write!(f, "{} ({}) {{ ", token, condition)?;
+            // TODO Paren A paren expr: (expr).
+            Expr::Paren(value) => write!(f, "{}", value),
+            Expr::If(condition, consequence, alternative) => {
+                write!(f, "if ({}) {{ ", condition)?;
                 write!(
                     f,
                     "{}",
@@ -79,10 +80,9 @@ impl Display for Expr {
                 write!(f, " }}")?;
                 Ok(())
             }
-            Expr::Function(token, name, parameters, body) => write!(
+            Expr::Function(name, parameters, body) => write!(
                 f,
-                "{} {:?} ({}) {{ {} }}",
-                token,
+                "fn {:?} ({}) {{ {} }}",
                 name,
                 parameters
                     .iter()
@@ -91,7 +91,7 @@ impl Display for Expr {
                     .join(", "),
                 body.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
             ),
-            Expr::Call(_, function, arguments) => write!(
+            Expr::Call(function, arguments) => write!(
                 f,
                 "{}({})",
                 function,
@@ -101,7 +101,7 @@ impl Display for Expr {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            Expr::Array(_, elements) => write!(
+            Expr::Array(elements) => write!(
                 f,
                 "[{}]",
                 elements
@@ -110,7 +110,7 @@ impl Display for Expr {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            Expr::Map(_, pairs) => write!(
+            Expr::Map(pairs) => write!(
                 f,
                 "{{{}}}",
                 pairs
@@ -119,19 +119,18 @@ impl Display for Expr {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
-            Expr::Index(_, left, index) => write!(f, "({}[{}])", left, index),
-            Expr::Field(token, object, field) => write!(f, "{}{}{}", object, token, field),
-            Expr::Request(token, name,parameters, message, asserts) => {
+            Expr::Index(left, index) => write!(f, "({}[{}])", left, index),
+            Expr::Field(object, field) => write!(f, "{}.{}", object, field),
+            Expr::Request(name, parameters, message, asserts) => {
                 write!(
                     f,
-                    "{} {} ({})`{}`[{}]",
-                    token,
+                    "rq {} ({})`{}`[{}]",
                     name,
                     parameters
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", "),
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", "),
                     message,
                     asserts
                         .iter()
@@ -140,10 +139,9 @@ impl Display for Expr {
                         .join(", ")
                 )
             }
-            Expr::Test(token, name, block) => write!(
+            Expr::Test(name, block) => write!(
                 f,
-                "{} {} {{ {} }}",
-                token,
+                "test {} {{ {} }}",
                 name,
                 block.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
             ),
