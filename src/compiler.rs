@@ -278,7 +278,7 @@ impl Compiler {
                         String::from(literal),
                     ))
                 });
-                let body = vec![Expr::Call(
+                let format = Expr::Call(
                     Token {
                         kind: Kind::Lp,
                         literal: String::from("("),
@@ -291,6 +291,20 @@ impl Compiler {
                         String::from("format"),
                     )),
                     places,
+                );
+                let body = vec![Expr::Call(
+                    Token {
+                        kind: Kind::Lp,
+                        literal: String::from("("),
+                    },
+                    Box::new(Expr::Ident(
+                        Token {
+                            kind: Kind::Ident,
+                            literal: String::from("http"),
+                        },
+                        String::from("http"),
+                    )),
+                    vec![format],
                 )];
                 self.assemble(&Expr::Let(
                     Token {
@@ -1287,10 +1301,12 @@ mod tests {
                     Value::String(String::from("\nGET http://{host}/api\nHost: example.com\n")),
                     Value::Function(
                         vec![
+                            Opcode::Native(4),
                             Opcode::Native(3),
                             Opcode::Const(0),
                             Opcode::GetLocal(0),
                             Opcode::Call(2),
+                            Opcode::Call(1),
                             Opcode::Return,
                         ],
                         1,
@@ -1304,7 +1320,14 @@ mod tests {
                 vec![
                     Value::String(String::from("POST")),
                     Value::Function(
-                        vec![Opcode::Native(3), Opcode::Const(0), Opcode::Call(1), Opcode::Return],
+                        vec![
+                            Opcode::Native(4),
+                            Opcode::Native(3),
+                            Opcode::Const(0),
+                            Opcode::Call(1),
+                            Opcode::Call(1),
+                            Opcode::Return,
+                        ],
                         0,
                         0,
                     ),

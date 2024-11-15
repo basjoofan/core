@@ -876,16 +876,17 @@ mod tests {
     fn test_request_literal() {
         let tests = vec![
             (
-                "rq request(host)`\nGET http://{host}/api\nHost: example.com\n`
-                 request(\"example.com\");
+                "rq request(host)`\nGET http://{host}/get\nHost: {host}\nConnection: close\n`
+                 request(\"httpbin.org\").status;
                 ",
-                Value::String(String::from("\nGET http://example.com/api\nHost: example.com\n")),
+                Value::Integer(200),
             ),
             (
-                "rq request()`POST`
-                 request();
+                "let host = \"httpbin.org\";
+                 rq request()`POST http://{host}/post\nHost: {host}\nConnection: close\n`
+                 request().status;
                 ",
-                Value::String(String::from("POST")),
+                Value::Integer(200),
             ),
         ];
         run_vm_tests(tests);

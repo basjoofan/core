@@ -8,7 +8,6 @@ mod stream;
 mod time;
 mod url;
 
-// use client::Client;
 use content::Content;
 use error::Error;
 use header::Header;
@@ -16,6 +15,7 @@ use header::Headers;
 use stream::Stream;
 use url::Url;
 
+pub use client::Client;
 pub use request::Request;
 pub use response::Response;
 pub use time::Time;

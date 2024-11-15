@@ -1,3 +1,4 @@
+use crate::http;
 use crate::Value;
 
 pub const NATIVES: &[(&str, Value)] = &[
@@ -5,6 +6,7 @@ pub const NATIVES: &[(&str, Value)] = &[
     ("println", Value::Native(println)),
     ("length", Value::Native(length)),
     ("format", Value::Native(format)),
+    ("http", Value::Native(http)),
 ];
 
 fn println(objects: Vec<Value>) -> Value {
@@ -50,6 +52,7 @@ fn format(mut objects: Vec<Value>) -> Value {
             let matches = regex.find_iter(&string);
             let mut ranges = Vec::new();
             matches.for_each(|m| ranges.push(m.range()));
+            ranges.reverse();
             let variables = objects.iter();
             if variables.len() != ranges.len() {
                 Value::Error(format!(
@@ -69,6 +72,23 @@ fn format(mut objects: Vec<Value>) -> Value {
     }
 }
 
+fn http(objects: Vec<Value>) -> Value {
+    if objects.len() != 1 {
+        Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
+    } else if let Some(object) = objects.first() {
+        match object {
+            Value::String(message) => {
+                let client = http::Client::default();
+                let (_, response, _, _) = client.send(message);
+                response.to_value()
+            }
+            _ => Value::Error(format!("function send not supported type {}", object.kind())),
+        }
+    } else {
+        Value::Error("function send need a parameter".to_string())
+    }
+}
+
 #[test]
 fn test_format() {
     let tests = vec![
@@ -83,6 +103,14 @@ fn test_format() {
             vec![
                 Value::String(String::from(r#"{ "name": "{name}" , age: 2 }"#)),
                 Value::String(String::from("Bob")),
+            ],
+            Value::String(String::from(r#"{ "name": "Bob" , age: 2 }"#)),
+        ),
+        (
+            vec![
+                Value::String(String::from(r#"{ "name": "{name}" , age: {age} }"#)),
+                Value::String(String::from("Bob")),
+                Value::Integer(2),
             ],
             Value::String(String::from(r#"{ "name": "Bob" , age: 2 }"#)),
         ),
