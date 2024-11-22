@@ -14,27 +14,28 @@ fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to spawn child process");
     if let Some(mut stdin) = child.stdin.take() {
         stdin
-            .write_all("let add = fn(x, y) { x + y; }; println(add(5, 5));\n".as_bytes())
+            .write_all("let add = fn(x, y) { x + y; }; println(\"{integer}\", add(5, 5));\n".as_bytes())
             .expect("Failed to write to stdin");
         stdin.write_all("exit".as_bytes()).expect("Failed to write to stdin");
     }
     let output = child.wait_with_output().expect("Failed to read stdout");
-    assert!(String::from_utf8_lossy(&output.stdout).trim() == "10");
     println!("output:{}", String::from_utf8_lossy(&output.stdout).trim());
+    assert!(String::from_utf8_lossy(&output.stdout).trim() == "10\nnone");
     Ok(())
 }
 
 #[test]
 fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin(NAME)?;
-    cmd.arg("eval").arg("print( 1 + 1 )");
-    cmd.assert().success().stdout(predicate::str::diff("2"));
+    cmd.arg("eval").arg(r#"print("{integer}", 1 + 1 )"#);
+    cmd.assert().success().stdout(predicate::str::diff("2none\n"));
     let mut cmd = Command::cargo_bin(NAME)?;
-    cmd.arg("eval").arg("let add = fn(x, y) { x + y; }; print(add(1, 1));");
-    cmd.assert().success().stdout(predicate::str::diff("2"));
+    cmd.arg("eval")
+        .arg(r#"let add = fn(x, y) { x + y; }; print("{integer}", add(1, 1));"#);
+    cmd.assert().success().stdout(predicate::str::diff("2none\n"));
     let mut cmd = Command::cargo_bin(NAME)?;
-    cmd.arg("eval").arg(r#"println("Hello Am!")"#);
-    cmd.assert().success().stdout(predicate::str::diff("Hello Am!\n"));
+    cmd.arg("eval").arg(r#"println("{string}", "Hello Am!")"#);
+    cmd.assert().success().stdout(predicate::str::diff("Hello Am!\nnone\n"));
     Ok(())
 }
 
@@ -52,7 +53,7 @@ fn test_command_run_closure() -> Result<(), Box<dyn std::error::Error>> {
     first + second + third;
     };
     
-    println(ourFunction(20) + first + second);
+    println("{integer}", ourFunction(20) + first + second);
     "#;
     file.write_str(text)?;
 
@@ -76,8 +77,8 @@ fn test_command_run_fibonacci() -> Result<(), Box<dyn std::error::Error>> {
             fibonacci(x - 1) + fibonacci(x -2)
           }
         }
-      };  
-    println(fibonacci(10));
+      };
+    println("{integer}", fibonacci(10));
     "#;
     file.write_str(text)?;
 
@@ -91,9 +92,9 @@ fn test_command_run_fibonacci() -> Result<(), Box<dyn std::error::Error>> {
 fn test_command_run_dir() -> Result<(), Box<dyn std::error::Error>> {
     let temp = assert_fs::TempDir::new().unwrap();
     let function = temp.child("function.am");
-    function.write_str("fn add(a, b){ a + b }")?;
+    function.write_str("let add = fn(a, b){ a + b }")?;
     let call = temp.child("call.am");
-    call.write_str("println(add(1, 1));")?;
+    call.write_str(r#"println("{integer}", add(1, 1));"#)?;
     let mut cmd = Command::cargo_bin(NAME)?;
     assert!(function.path().parent() == Some(temp.path()));
     cmd.arg("run").arg(function.path().parent().unwrap());
@@ -106,17 +107,16 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let temp = assert_fs::TempDir::new().unwrap();
     let file = temp.child("request.am");
     let text = r#"
-    #[test, tag]
-    rq request`
-      GET http://${host}/get
-      Host: ${host}
-      Connection: close
-    `[status == 200];
     let host = "httpbin.org";
-    #[test, function]
-    fn call() {
-      let response = request();
-      response.status
+    rq request()`
+        GET http://{host}/get
+        Host: {host}
+        Connection: close
+    `[status == 200];
+
+    test call {
+        let response = request();
+        response.status
     }
     "#;
     file.write_str(text)?;
@@ -134,30 +134,29 @@ fn test_command_call() -> Result<(), Box<dyn std::error::Error>> {
     let temp = assert_fs::TempDir::new().unwrap();
     let file = temp.child("request.am");
     let text = r#"
-    #[test, tag]
-    rq request`
-      GET http://${host}/get
-      Host: ${host}
-      Connection: close
-    `[status == 200];
     let host = "httpbin.org";
-    #[test, function]
-    fn call() {
-      let response = request();
-      response.status
+    rq request()`
+        GET http://{host}/get
+        Host: {host}
+        Connection: close
+    `[status == 200];
+
+    test call {
+        let response = request();
+        response.status
     }
     "#;
     file.write_str(text)?;
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.current_dir(&temp);
-    cmd.arg("blow").arg("call");
+    cmd.arg("test").arg("call");
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("--- PASS  call/request ("));
 
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.current_dir(&temp);
-    cmd.arg("blow").arg("blank");
+    cmd.arg("test").arg("blank");
     cmd.assert().success().stdout(predicate::str::contains("not found"));
     Ok(())
 }

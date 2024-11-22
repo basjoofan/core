@@ -3,6 +3,7 @@ use crate::Kind;
 use crate::Opcode;
 use crate::Symbol;
 use crate::Symbols;
+use crate::Token;
 use crate::Value;
 use crate::NATIVES;
 use std::collections::HashMap;
@@ -80,27 +81,26 @@ impl Compiler {
         self.consts.len() - 1
     }
 
-    pub fn compile(&mut self, source: &[Expr]) -> Result<Vec<Opcode>, String> {
+    pub fn compile(&mut self, source: Vec<Expr>) -> Result<Vec<Opcode>, String> {
         self.batch(source)?;
         let opcodes = self.scopes.remove(self.index).opcodes;
         self.scopes = vec![Scope { opcodes: vec![] }];
         Ok(opcodes)
     }
 
-    fn batch(&mut self, source: &[Expr]) -> Result<(), String> {
-        for expr in source.iter() {
+    fn batch(&mut self, source: Vec<Expr>) -> Result<(), String> {
+        for expr in source.into_iter() {
+            let pop = match &expr {
+                Expr::Let(..) | Expr::Return(..) | Expr::Request(..) | Expr::Test(..) => false,
+                _ => true,
+            };
             self.assemble(expr)?;
-            match expr {
-                Expr::Let(..) | Expr::Return(..) | Expr::Request(..) | Expr::Test(..) => {}
-                _ => {
-                    self.emit(Opcode::Pop);
-                }
-            }
+            pop.then(|| self.emit(Opcode::Pop));
         }
         Ok(())
     }
 
-    fn block(&mut self, body: &[Expr], flag: bool) -> Result<(), String> {
+    fn block(&mut self, body: Vec<Expr>, flag: bool) -> Result<(), String> {
         if body.is_empty() {
             self.emit(Opcode::None);
         } else {
@@ -118,29 +118,29 @@ impl Compiler {
         Ok(())
     }
 
-    fn assemble(&mut self, expr: &Expr) -> Result<(), String> {
+    fn assemble(&mut self, expr: Expr) -> Result<(), String> {
         match expr {
             Expr::Ident(name) => {
-                match self.symbols.resolve(name) {
+                match self.symbols.resolve(name.as_str()) {
                     Some(symbol) => self.symbol(symbol),
-                    None => match self.natives.get(name) {
+                    None => match self.natives.get(name.as_str()) {
                         Some(index) => self.emit(Opcode::Native(*index)),
                         None => Err(format!("Undefined variable: {}", name))?,
                     },
                 };
             }
             Expr::Integer(integer) => {
-                let integer = Value::Integer(*integer);
+                let integer = Value::Integer(integer);
                 let index = self.save(integer);
                 self.emit(Opcode::Const(index));
             }
             Expr::Float(float) => {
-                let float = Value::Float(*float);
+                let float = Value::Float(float);
                 let index = self.save(float);
                 self.emit(Opcode::Const(index));
             }
             Expr::Boolean(boolean) => {
-                if *boolean {
+                if boolean {
                     self.emit(Opcode::True);
                 } else {
                     self.emit(Opcode::False);
@@ -152,21 +152,21 @@ impl Compiler {
                 self.emit(Opcode::Const(index));
             }
             Expr::Let(name, value) => {
-                let symbol = self.symbols.define(name);
+                let symbol = self.symbols.define(name.as_str());
                 let opcode = match symbol {
                     Symbol::Global(index) => Opcode::SetGlobal(*index),
                     Symbol::Local(index, _) => Opcode::SetLocal(*index),
                     Symbol::Function => Err(format!("Cannot redefine function: {}", name))?,
                 };
-                self.assemble(value)?;
+                self.assemble(*value)?;
                 self.emit(opcode);
             }
             Expr::Return(value) => {
-                self.assemble(value)?;
+                self.assemble(*value)?;
                 self.emit(Opcode::Return);
             }
             Expr::Unary(token, right) => {
-                self.assemble(right)?;
+                self.assemble(*right)?;
                 match token.kind {
                     Kind::Minus => self.emit(Opcode::Minus),
                     Kind::Bang => self.emit(Opcode::Bang),
@@ -174,8 +174,8 @@ impl Compiler {
                 };
             }
             Expr::Binary(token, left, right) => {
-                self.assemble(left)?;
-                self.assemble(right)?;
+                self.assemble(*left)?;
+                self.assemble(*right)?;
                 match token.kind {
                     Kind::Plus => self.emit(Opcode::Add),
                     Kind::Minus => self.emit(Opcode::Sub),
@@ -188,9 +188,9 @@ impl Compiler {
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
-            Expr::Paren(value) => self.assemble(value)?,
+            Expr::Paren(value) => self.assemble(*value)?,
             Expr::If(condition, consequence, alternative) => {
-                self.assemble(condition)?;
+                self.assemble(*condition)?;
                 let judge_index = self.emit(Opcode::Judge(usize::MAX));
                 self.block(consequence, false)?;
                 let jump_index = self.emit(Opcode::Jump(usize::MAX));
@@ -207,7 +207,7 @@ impl Compiler {
             Expr::Function(name, parameters, body) => {
                 self.enter();
                 if let Some(name) = name {
-                    self.symbols.function(name);
+                    self.symbols.function(name.as_str());
                 }
                 for parameter in parameters.iter() {
                     self.symbols.define(parameter);
@@ -225,32 +225,35 @@ impl Compiler {
                 self.emit(Opcode::Closure(index, count));
             }
             Expr::Call(function, arguments) => {
-                self.assemble(function)?;
-                for arg in arguments.iter() {
+                self.assemble(*function)?;
+                let length = arguments.len();
+                for arg in arguments.into_iter() {
                     self.assemble(arg)?;
                 }
-                self.emit(Opcode::Call(arguments.len()));
+                self.emit(Opcode::Call(length));
             }
             Expr::Array(elements) => {
-                for expr in elements.iter() {
+                let length = elements.len();
+                for expr in elements.into_iter() {
                     self.assemble(expr)?;
                 }
-                self.emit(Opcode::Array(elements.len()));
+                self.emit(Opcode::Array(length));
             }
             Expr::Map(pairs) => {
-                for (key, value) in pairs.iter() {
+                let length = pairs.len();
+                for (key, value) in pairs.into_iter() {
                     self.assemble(key)?;
                     self.assemble(value)?;
                 }
-                self.emit(Opcode::Map(pairs.len()));
+                self.emit(Opcode::Map(length));
             }
             Expr::Index(left, index) => {
-                self.assemble(left)?;
-                self.assemble(index)?;
+                self.assemble(*left)?;
+                self.assemble(*index)?;
                 self.emit(Opcode::Index);
             }
             Expr::Field(object, field) => {
-                self.assemble(object)?;
+                self.assemble(*object)?;
                 let field = Value::String(field.clone());
                 let index = self.save(field);
                 self.emit(Opcode::Const(index));
@@ -260,16 +263,39 @@ impl Compiler {
                 let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
                 let matches = regex.find_iter(&message);
                 let mut places = Vec::new();
-                places.push(Expr::String(String::from(message)));
+                places.push(Expr::String(message.clone()));
                 matches.for_each(|m| {
                     let literal = &m.as_str()[1..m.as_str().len() - 1];
                     places.push(Expr::Ident(String::from(literal)))
                 });
                 let format = Expr::Call(Box::new(Expr::Ident(String::from("format"))), places);
-                let body = vec![Expr::Call(Box::new(Expr::Ident(String::from("http"))), vec![format])];
-                self.assemble(&Expr::Let(
+                let body = vec![
+                    Expr::Let(
+                        String::from("response"),
+                        Box::new(Expr::Call(Box::new(Expr::Ident(String::from("http"))), vec![format])),
+                    ),
+                    Expr::Call(
+                        Box::new(Expr::Function(
+                            None,
+                            vec![String::from("status"), String::from("version")],
+                            vec![
+                                Expr::Let(String::from("result"), Box::new(Expr::Boolean(true))),
+                                Expr::Call(
+                                    Box::new(Expr::Ident(String::from("println"))),
+                                    vec![Expr::String(String::from("{asserts}")), Expr::Array(asserts)],
+                                ),
+                            ],
+                        )),
+                        vec![
+                            Expr::Field(Box::new(Expr::Ident(String::from("response"))), String::from("status")),
+                            Expr::Field(Box::new(Expr::Ident(String::from("response"))), String::from("version")),
+                        ],
+                    ),
+                    Expr::Ident(String::from("response")),
+                ];
+                self.assemble(Expr::Let(
                     name.clone(),
-                    Box::new(Expr::Function(Some(name.clone()), parameters.clone(), body)),
+                    Box::new(Expr::Function(Some(name), parameters, body)),
                 ))?;
             }
             Expr::Test(name, block) => {
@@ -278,7 +304,7 @@ impl Compiler {
                 let opcodes = self.leave();
                 let index = self.save(Value::Function(opcodes, usize::MIN, usize::MIN));
                 self.emit(Opcode::Closure(index, usize::MIN));
-                let symbol = self.symbols.define(name);
+                let symbol = self.symbols.define(name.as_str());
                 let opcode = match symbol {
                     Symbol::Global(index) => Opcode::SetGlobal(*index),
                     Symbol::Local(_, _) => Err(format!("Cannot define test in local: {}", name))?,
@@ -303,7 +329,7 @@ mod tests {
         for (text, consts, opcodes) in tests {
             let source = Parser::new(text).parse().unwrap();
             let mut compiler = Compiler::new();
-            match compiler.compile(&source) {
+            match compiler.compile(source) {
                 Ok(compiled) => {
                     assert_eq!(compiled, opcodes);
                     assert_eq!(compiler.consts, consts);
@@ -860,7 +886,7 @@ mod tests {
     fn test_variable_scope() {
         let mut compiler = Compiler::new();
         assert_eq!(compiler.index, 0);
-        let _ = compiler.assemble(&Expr::Let(String::from("a"), Box::new(Expr::Integer(2))));
+        let _ = compiler.assemble(Expr::Let(String::from("a"), Box::new(Expr::Integer(2))));
         assert_eq!(compiler.scope().opcodes.last(), Some(&Opcode::SetGlobal(0)));
         compiler.emit(Opcode::Mul);
         compiler.enter();
@@ -1250,7 +1276,7 @@ mod tests {
                         1,
                     ),
                 ],
-                vec![Opcode::Closure(1, 0), Opcode::SetGlobal(0)],
+                vec![Opcode::Closure(5, 0), Opcode::SetGlobal(0)],
             ),
             (
                 "rq request()`POST`",
@@ -1269,7 +1295,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Closure(1, 0), Opcode::SetGlobal(0)],
+                vec![Opcode::Closure(5, 0), Opcode::SetGlobal(0)],
             ),
         ];
         run_compiler_tests(tests);

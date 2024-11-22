@@ -315,7 +315,7 @@ mod tests {
             let source = Parser::new(text).parse().unwrap();
             let mut compiler = Compiler::new();
             let mut globals = Vec::new();
-            match compiler.compile(&source) {
+            match compiler.compile(source) {
                 Ok(opcodes) => {
                     println!("opcodes: {:?}", opcodes);
                     println!("consts: {:?}", compiler.consts());

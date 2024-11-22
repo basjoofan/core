@@ -1,6 +1,8 @@
 use crate::Compiler;
+use crate::Expr;
 use crate::Parser;
 use crate::Vm;
+use std::collections::HashSet;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -21,7 +23,7 @@ pub fn repl() {
                 continue;
             }
             match Parser::new(&text).parse() {
-                Ok(source) => match compiler.compile(&source) {
+                Ok(source) => match compiler.compile(source) {
                     Ok(opcodes) => {
                         let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
                         vm.run();
@@ -39,7 +41,7 @@ pub fn eval(text: String) {
     let mut globals = Vec::new();
     let mut compiler = Compiler::new();
     match Parser::new(&text).parse() {
-        Ok(source) => match compiler.compile(&source) {
+        Ok(source) => match compiler.compile(source) {
             Ok(opcodes) => {
                 let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
                 vm.run();
@@ -56,7 +58,44 @@ pub fn run(path: Option<PathBuf>) {
     eval(text);
 }
 
-pub fn test(_: Option<String>, _: u32, _: Duration, _: u32, _: Option<PathBuf>) {
+pub fn test(name: Option<String>, _: u32, _: Duration, _: u32, path: Option<PathBuf>) {
+    let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
+    let mut globals = Vec::new();
+    let mut compiler = Compiler::new();
+    match Parser::new(&text).parse() {
+        Ok(mut source) => {
+            let tests = source
+                .iter()
+                .filter_map(|expr| match expr {
+                    Expr::Test(name, _) => Some(name.to_owned()),
+                    _ => None,
+                })
+                .collect::<HashSet<_>>();
+            match name {
+                Some(name) => {
+                    if tests.contains(&name) {
+                        source.push(Expr::Call(Box::new(Expr::Ident(name)), vec![]));
+                    } else {
+                        println!("Test not found: {}", name);
+                        return;
+                    }
+                }
+                None => {
+                    for name in tests {
+                        source.push(Expr::Call(Box::new(Expr::Ident(name)), vec![]))
+                    }
+                }
+            }
+            match compiler.compile(source) {
+                Ok(opcodes) => {
+                    let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
+                    vm.run();
+                }
+                Err(message) => println!("{}", message),
+            }
+        }
+        Err(message) => println!("{}", message),
+    };
     //     let text = read_to_string(std::env::current_dir().unwrap());
     //     let mut context = Context::default();
     //     let source = Parser::new(&text).parse();
