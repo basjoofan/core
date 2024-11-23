@@ -4,8 +4,9 @@ use crate::Value;
 pub const NATIVES: &[(&str, Value)] = &[
     ("print", Value::Native(print)),
     ("println", Value::Native(println)),
-    ("length", Value::Native(length)),
     ("format", Value::Native(format)),
+    ("length", Value::Native(length)),
+    ("append", Value::Native(append)),
     ("http", Value::Native(http)),
 ];
 
@@ -26,21 +27,6 @@ fn print(objects: Vec<Value>) -> Value {
             print!("{}", value);
             Value::None
         }
-    }
-}
-
-fn length(objects: Vec<Value>) -> Value {
-    if objects.len() != 1 {
-        Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
-    } else if let Some(object) = objects.first() {
-        match object {
-            Value::String(string) => Value::Integer(string.len() as i64),
-            Value::Array(elements) => Value::Integer(elements.len() as i64),
-            Value::Map(pairs) => Value::Integer(pairs.len() as i64),
-            _ => Value::Error(format!("function length not supported type {}", object.kind())),
-        }
-    } else {
-        Value::Error("function length need a parameter".to_string())
     }
 }
 
@@ -69,6 +55,35 @@ fn format(mut objects: Vec<Value>) -> Value {
         }
         None => Value::Error("function length need a parameter".to_string()),
         _ => return Value::Error("first parameter must be a string".to_string()),
+    }
+}
+
+fn length(objects: Vec<Value>) -> Value {
+    if objects.len() != 1 {
+        Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
+    } else if let Some(object) = objects.first() {
+        match object {
+            Value::String(string) => Value::Integer(string.len() as i64),
+            Value::Array(elements) => Value::Integer(elements.len() as i64),
+            Value::Map(pairs) => Value::Integer(pairs.len() as i64),
+            _ => Value::Error(format!("function length not supported type {}", object.kind())),
+        }
+    } else {
+        Value::Error("function length need a parameter".to_string())
+    }
+}
+
+fn append(mut objects: Vec<Value>) -> Value {
+    objects.reverse();
+    match objects.pop() {
+        Some(Value::Array(mut array)) => {
+            while let Some(object) = objects.pop() {
+                array.push(object);
+            }
+            Value::Array(array)
+        }
+        None => Value::Error("function length need a parameter".to_string()),
+        _ => return Value::Error("first parameter must be a array".to_string()),
     }
 }
 
@@ -118,6 +133,32 @@ fn test_format() {
     for (test, expected) in tests {
         let actual = format(test);
         println!("{}=={}", actual, expected);
-        assert!(actual == expected);
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn test_append() {
+    let tests = vec![
+        (
+            vec![Value::Array(vec![Value::Integer(1)]), Value::Integer(2)],
+            Value::Array(vec![Value::Integer(1), Value::Integer(2)]),
+        ),
+        (
+            vec![
+                Value::Array(vec![Value::Integer(1)]),
+                Value::String(String::from("string")),
+            ],
+            Value::Array(vec![Value::Integer(1), Value::String(String::from("string"))]),
+        ),
+        (
+            vec![Value::Array(vec![Value::Integer(1)]), Value::Boolean(true)],
+            Value::Array(vec![Value::Integer(1), Value::Boolean(true)]),
+        ),
+    ];
+    for (test, expected) in tests {
+        let actual = append(test);
+        println!("{}=={}", actual, expected);
+        assert_eq!(actual, expected);
     }
 }

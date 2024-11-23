@@ -978,7 +978,7 @@ mod tests {
                 "#,
                 vec![Value::String(String::from("Hello world!"))],
                 vec![
-                    Opcode::Native(2),
+                    Opcode::Native(3),
                     Opcode::Array(0),
                     Opcode::Call(1),
                     Opcode::Pop,
@@ -993,7 +993,7 @@ mod tests {
                 fn() { length([]) }
                 "#,
                 vec![Value::Function(
-                    vec![Opcode::Native(2), Opcode::Array(0), Opcode::Call(1), Opcode::Return],
+                    vec![Opcode::Native(3), Opcode::Array(0), Opcode::Call(1), Opcode::Return],
                     0,
                     0,
                 )],
