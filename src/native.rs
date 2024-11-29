@@ -1,14 +1,29 @@
 use crate::http;
 use crate::Value;
 
-pub const NATIVES: &[(&str, Value)] = &[
-    ("print", Value::Native(print)),
-    ("println", Value::Native(println)),
-    ("format", Value::Native(format)),
-    ("length", Value::Native(length)),
-    ("append", Value::Native(append)),
-    ("http", Value::Native(http)),
-];
+pub fn get(name: &str) -> Option<isize> {
+    match name {
+        "http" => Some(-1),
+        "print" => Some(0),
+        "println" => Some(1),
+        "format" => Some(2),
+        "length" => Some(3),
+        "append" => Some(4),
+        _ => None,
+    }
+}
+
+pub fn call(index: isize) -> fn(Vec<Value>) -> Value {
+    match index {
+        -1 => http,
+        0 => print,
+        1 => println,
+        2 => format,
+        3 => length,
+        4 => append,
+        _ => panic!("Unexpected native function"),
+    }
+}
 
 fn println(objects: Vec<Value>) -> Value {
     match format(objects) {

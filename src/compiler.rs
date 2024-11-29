@@ -3,15 +3,12 @@ use crate::Kind;
 use crate::Opcode;
 use crate::Symbol;
 use crate::Symbols;
-use crate::Token;
 use crate::Value;
-use crate::NATIVES;
-use std::collections::HashMap;
+use crate::native;
 
 pub struct Compiler {
     consts: Vec<Value>,
     symbols: Symbols,
-    natives: HashMap<String, usize>,
     scopes: Vec<Scope>,
     index: usize,
 }
@@ -23,12 +20,7 @@ struct Scope {
 
 impl Compiler {
     pub fn new() -> Self {
-        let mut natives = HashMap::new();
-        for (index, (name, _)) in NATIVES.iter().enumerate() {
-            natives.insert(name.to_string(), index);
-        }
         Self {
-            natives,
             consts: Vec::new(),
             symbols: Symbols::new(),
             scopes: vec![Scope { opcodes: vec![] }],
@@ -123,8 +115,8 @@ impl Compiler {
             Expr::Ident(name) => {
                 match self.symbols.resolve(name.as_str()) {
                     Some(symbol) => self.symbol(symbol),
-                    None => match self.natives.get(name.as_str()) {
-                        Some(index) => self.emit(Opcode::Native(*index)),
+                    None => match native::get(name.as_str()) {
+                        Some(index) => self.emit(Opcode::Native(index)),
                         None => Err(format!("Undefined variable: {}", name))?,
                     },
                 };

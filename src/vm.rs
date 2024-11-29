@@ -1,6 +1,6 @@
+use crate::native;
 use crate::Opcode;
 use crate::Value;
-use crate::NATIVES;
 use std::collections::HashMap;
 
 pub struct Vm<'a> {
@@ -223,10 +223,10 @@ impl<'a> Vm<'a> {
                             self.sp = self.frame().bp + length;
                             self.stack.resize(self.sp, Value::None);
                         }
-                        Value::Native(function) => {
+                        Value::Integer(index) => {
                             let arguments = self.stack[self.sp - number..self.sp].to_vec();
                             self.sp -= number;
-                            self.push(function(arguments));
+                            self.push(native::call(index as isize)(arguments));
                         }
                         non => panic!("calling non function: {}", non.kind()),
                     };
@@ -247,8 +247,7 @@ impl<'a> Vm<'a> {
                     self.stack.insert(index, value);
                 }
                 Opcode::Native(index) => {
-                    let (_, value) = &NATIVES[index];
-                    self.push(value.clone());
+                    self.push(Value::Integer(index as i64));
                 }
                 Opcode::Closure(index, count) => match self.consts[index].clone() {
                     Value::Function(opcodes, length, arity) => {

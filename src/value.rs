@@ -16,7 +16,6 @@ pub enum Value {
     Map(HashMap<String, Value>),
     Function(Vec<Opcode>, usize, usize),
     Closure(Vec<Opcode>, usize, usize, Vec<Value>),
-    Native(fn(Vec<Value>) -> Value),
 }
 
 impl Value {
@@ -32,7 +31,6 @@ impl Value {
             Value::Map(_) => "Map",
             Value::Function(..) => "Function",
             Value::Closure(..) => "Closure",
-            Value::Native(_) => "Native",
         }
     }
 }
@@ -70,7 +68,6 @@ impl Display for Value {
             Value::Closure(opcodes, length, number, frees) => {
                 write!(f, "({}:{}:{}){:?}", length, number, frees.len(), opcodes)
             }
-            Value::Native(function) => write!(f, "{:?}", function),
         }
     }
 }

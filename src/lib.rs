@@ -16,7 +16,6 @@ mod writer;
 
 use code::Opcode;
 use compiler::Compiler;
-use native::NATIVES;
 use parser::Parser;
 use symbol::Symbol;
 use symbol::Symbols;
