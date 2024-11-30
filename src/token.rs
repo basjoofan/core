@@ -23,12 +23,18 @@ pub enum Kind {
     Minus,  // -
     Star,   // *
     Slash,  // /
-    Dot,    // .
+    Lt,     // <
+    Gt,     // >
+    Le,     // <=
+    Ge,     // >=
+    Eq,     // ==
+    Ne,     // !=
+    Bo,     // |
+    Ba,     // &
+    Lo,     // ||
+    La,     // &&
 
-    Lt, // <
-    Gt, // >
-    Eq, // ==
-    Ne, // !=
+    Dot, // .
 
     // delimiter
     Comma, // ,
@@ -66,19 +72,23 @@ impl Token {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
-            Kind::Eq => 2,    // 8==6
-            Kind::Ne => 2,    // 8!=6
-            Kind::Lt => 3,    // 8<6
-            Kind::Gt => 3,    // 8>6
-            Kind::Plus => 4,  // 8+6
-            Kind::Minus => 4, // 8-6
-            Kind::Star => 5,  // 8*6
-            Kind::Slash => 5, // 8/6
-            // Kind::Minus => 6,  -X unary minus +2
-            Kind::Bang => 6, // !X
-            Kind::Lp => 7,   // function()
-            Kind::Ls => 8,   // array[index]
-            Kind::Dot => 8,  // object.field
+            Kind::Lo=> 1,     // ||
+            Kind::La => 2,     // &&
+            Kind::Bo=> 3,     // |
+            Kind::Ba=> 4,     // &
+            Kind::Eq => 5,    // 8==6
+            Kind::Ne => 5,    // 8!=6
+            Kind::Lt => 6,    // 8<6
+            Kind::Gt => 6,    // 8>6
+            Kind::Plus => 7,  // 8+6
+            Kind::Minus => 7, // 8-6
+            Kind::Star => 8,  // 8*6
+            Kind::Slash => 8, // 8/6
+            // Kind::Minus => 9,  -X unary minus +2
+            Kind::Bang => 9, // !X
+            Kind::Lp => 10,   // function()
+            Kind::Ls => 11,   // array[index]
+            Kind::Dot => 11,  // object.field
             _ => 0,
         }
     }

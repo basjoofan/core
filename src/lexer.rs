@@ -8,17 +8,57 @@ pub fn segment(text: &str) -> Vec<Token> {
         if !char.is_whitespace() {
             let (kind, literal) = match char {
                 '=' => {
-                    if let Some('=') = chars.peek() {
-                        (Kind::Eq, String::from_iter([char, chars.next().unwrap()]))
+                    if let Some(peek @ '=') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Eq, literal)
                     } else {
                         (Kind::Assign, String::from(char))
                     }
                 }
                 '!' => {
-                    if let Some('=') = chars.peek() {
-                        (Kind::Ne, String::from_iter([char, chars.next().unwrap()]))
+                    if let Some(peek @ '=') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Ne, literal)
                     } else {
                         (Kind::Bang, String::from(char))
+                    }
+                }
+                '<' => {
+                    if let Some(peek @ '=') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Le, literal)
+                    } else {
+                        (Kind::Lt, String::from(char))
+                    }
+                }
+                '>' => {
+                    if let Some(peek @ '=') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Ge, literal)
+                    } else {
+                        (Kind::Gt, String::from(char))
+                    }
+                }
+                '|' => {
+                    if let Some(peek @ '|') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Lo, literal)
+                    } else {
+                        (Kind::Bo, String::from(char))
+                    }
+                }
+                '&' => {
+                    if let Some(peek @ '&') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::La, literal)
+                    } else {
+                        (Kind::Ba, String::from(char))
                     }
                 }
                 '+' => (Kind::Plus, String::from(char)),
@@ -26,8 +66,6 @@ pub fn segment(text: &str) -> Vec<Token> {
                 '*' => (Kind::Star, String::from(char)),
                 '/' => (Kind::Slash, String::from(char)),
                 '.' => (Kind::Dot, String::from(char)),
-                '<' => (Kind::Lt, String::from(char)),
-                '>' => (Kind::Gt, String::from(char)),
                 ',' => (Kind::Comma, String::from(char)),
                 ';' => (Kind::Semi, String::from(char)),
                 ':' => (Kind::Colon, String::from(char)),
@@ -44,7 +82,8 @@ pub fn segment(text: &str) -> Vec<Token> {
                             chars.next();
                             break;
                         } else {
-                            string.push(chars.next().unwrap());
+                            string.push(*peek);
+                            chars.next();
                         }
                     }
                     (Kind::String, string)
@@ -56,7 +95,8 @@ pub fn segment(text: &str) -> Vec<Token> {
                             chars.next();
                             break;
                         } else {
-                            string.push(chars.next().unwrap());
+                            string.push(*peek);
+                            chars.next();
                         }
                     }
                     (Kind::Template, string.to_owned())
@@ -69,7 +109,8 @@ pub fn segment(text: &str) -> Vec<Token> {
                             if *peek == '.' {
                                 has_dot = true
                             }
-                            string.push(chars.next().unwrap());
+                            string.push(*peek);
+                            chars.next();
                         } else {
                             break;
                         }
@@ -84,7 +125,8 @@ pub fn segment(text: &str) -> Vec<Token> {
                     let mut string = String::from(char);
                     while let Some(peek) = chars.peek() {
                         if peek.is_ascii_alphanumeric() || *peek == '_' {
-                            string.push(chars.next().unwrap());
+                            string.push(*peek);
+                            chars.next();
                         } else {
                             break;
                         }
@@ -139,8 +181,7 @@ fn test_segment() {
             [1, 2];
             {"foo": "bar"};
             _a2
-            #[tag]
-            rq request`
+            rq request()`
               GET http://example.com
               Host: example.com
             `[
@@ -152,6 +193,10 @@ fn test_segment() {
                 let response = request();
                 response.status
             }
+            1&0
+            1|0
+            true&&false
+            false||true
             "#;
     let expect = vec![
         (Kind::Let, "let"),
@@ -247,12 +292,10 @@ fn test_segment() {
         (Kind::Rb, "}"),
         (Kind::Semi, ";"),
         (Kind::Ident, "_a2"),
-        (Kind::Illegal, "#"),
-        (Kind::Ls, "["),
-        (Kind::Ident, "tag"),
-        (Kind::Rs, "]"),
         (Kind::Rq, "rq"),
         (Kind::Ident, "request"),
+        (Kind::Lp, "("),
+        (Kind::Rp, ")"),
         (
             Kind::Template,
             "\n              GET http://example.com\n              Host: example.com\n            ",
@@ -288,6 +331,18 @@ fn test_segment() {
         (Kind::Dot, "."),
         (Kind::Ident, "status"),
         (Kind::Rb, "}"),
+        (Kind::Integer, "1"),
+        (Kind::Ba, "&"),
+        (Kind::Integer, "0"),
+        (Kind::Integer, "1"),
+        (Kind::Bo, "|"),
+        (Kind::Integer, "0"),
+        (Kind::True, "true"),
+        (Kind::La, "&&"),
+        (Kind::False, "false"),
+        (Kind::False, "false"),
+        (Kind::Lo, "||"),
+        (Kind::True, "true"),
         (Kind::Eof, ""),
     ];
     let tokens = segment(text);

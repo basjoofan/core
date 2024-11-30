@@ -104,7 +104,11 @@ impl Parser {
                 | Some(Token { kind: Kind::Lt, .. })
                 | Some(Token { kind: Kind::Gt, .. })
                 | Some(Token { kind: Kind::Eq, .. })
-                | Some(Token { kind: Kind::Ne, .. }) => {
+                | Some(Token { kind: Kind::Ne, .. })
+                | Some(Token { kind: Kind::Ba, .. })
+                | Some(Token { kind: Kind::Bo, .. })
+                | Some(Token { kind: Kind::La, .. })
+                | Some(Token { kind: Kind::Lo, .. }) => {
                     self.next_token();
                     self.parse_binary_expr(left)?
                 }
@@ -539,6 +543,10 @@ fn test_parse_binary_expr() {
         ("true == true", "true", "==", "true"),
         ("true != false", "true", "!=", "false"),
         ("false == false", "false", "==", "false"),
+        ("1&0", "1", "&", "0"),
+        ("1|0", "1", "|", "0"),
+        ("true&&false", "true", "&&", "false"),
+        ("false||true", "false", "||", "true"),
     ];
     for (text, expected_left, expected_operator, expected_right) in tests {
         if let Ok(source) = Parser::new(text).parse() {
@@ -599,12 +607,22 @@ fn test_parse_operator_precedence() {
         ("-add()", "(-add())"),
         ("!array[1]", "(!(array[1]))"),
         ("-object.field", "(-object.field)"),
+        ("3 > 2 && 2 > 1", "((3 > 2) && (2 > 1))"),
+        ("a || b * c", "(a || (b * c))"),
+        ("a && b < c", "(a && (b < c))"),
+        ("b + c || a", "((b + c) || a)"),
+        ("b < c & a", "((b < c) & a)"),
     ];
     for (text, expected) in tests {
-        if let Ok(source) = Parser::new(text).parse() {
-            let actual: String = source.iter().map(|e| e.to_string()).collect::<String>();
-            println!("{}=={}", actual, expected);
-            assert!(actual == expected);
+        match Parser::new(text).parse() {
+            Ok(source) => {
+                let actual: String = source.iter().map(|e| e.to_string()).collect::<String>();
+                println!("{}=={}", actual, expected);
+                assert_eq!(actual, expected);
+            }
+            Err(error) => {
+                unreachable!("source expr error:{}", error);
+            }
         }
     }
 }
