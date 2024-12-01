@@ -14,9 +14,7 @@ pub struct Time {
 
 impl Default for Time {
     fn default() -> Self {
-        let now = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default();
+        let now = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
         Self {
             start: now,
             end: now,

@@ -82,10 +82,7 @@ impl Compiler {
 
     fn batch(&mut self, source: Vec<Expr>) -> Result<(), String> {
         for expr in source.into_iter() {
-            let pop = match &expr {
-                Expr::Let(..) | Expr::Return(..) | Expr::Request(..) | Expr::Test(..) => false,
-                _ => true,
-            };
+            let pop = !matches!(&expr, Expr::Let(..) | Expr::Return(..) | Expr::Request(..) | Expr::Test(..));
             self.assemble(expr)?;
             pop.then(|| self.emit(Opcode::Pop));
         }
@@ -174,15 +171,17 @@ impl Compiler {
                     Kind::Star => self.emit(Opcode::Mul),
                     Kind::Slash => self.emit(Opcode::Div),
                     Kind::Percent => self.emit(Opcode::Rem),
+                    Kind::Bx => self.emit(Opcode::Bx),
+                    Kind::Bo => self.emit(Opcode::Bo),
+                    Kind::Ba => self.emit(Opcode::Ba),
+                    Kind::Ll => self.emit(Opcode::Sl),
+                    Kind::Gg => self.emit(Opcode::Sr),
                     Kind::Lt => self.emit(Opcode::Lt),
                     Kind::Gt => self.emit(Opcode::Gt),
                     Kind::Le => self.emit(Opcode::Le),
                     Kind::Ge => self.emit(Opcode::Ge),
                     Kind::Eq => self.emit(Opcode::Eq),
                     Kind::Ne => self.emit(Opcode::Ne),
-                    Kind::Bx => self.emit(Opcode::Bx),
-                    Kind::Bo => self.emit(Opcode::Bo),
-                    Kind::Ba => self.emit(Opcode::Ba),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
@@ -376,6 +375,11 @@ mod tests {
                 vec![Opcode::Const(0), Opcode::Neg, Opcode::Pop],
             ),
             (
+                "1 ^ 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Bx, Opcode::Pop],
+            ),
+            (
                 "1 | 2",
                 vec![Value::Integer(1), Value::Integer(2)],
                 vec![Opcode::Const(0), Opcode::Const(1), Opcode::Bo, Opcode::Pop],
@@ -391,9 +395,14 @@ mod tests {
                 vec![Opcode::Const(0), Opcode::Not, Opcode::Pop],
             ),
             (
-                "1 ^ 2",
+                "1 << 2",
                 vec![Value::Integer(1), Value::Integer(2)],
-                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Bx, Opcode::Pop],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Sl, Opcode::Pop],
+            ),
+            (
+                "1 >> 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Sr, Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
@@ -562,12 +571,7 @@ mod tests {
                 "
                 if (false) { 0 } else { if (false) { 1 } else { 2 } }; 3;
                 ",
-                vec![
-                    Value::Integer(0),
-                    Value::Integer(1),
-                    Value::Integer(2),
-                    Value::Integer(3),
-                ],
+                vec![Value::Integer(0), Value::Integer(1), Value::Integer(2), Value::Integer(3)],
                 vec![
                     Opcode::False,
                     Opcode::Judge(4),
@@ -593,22 +597,12 @@ mod tests {
             (
                 "let one = 1;let two = 2;",
                 vec![Value::Integer(1), Value::Integer(2)],
-                vec![
-                    Opcode::Const(0),
-                    Opcode::SetGlobal(0),
-                    Opcode::Const(1),
-                    Opcode::SetGlobal(1),
-                ],
+                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Const(1), Opcode::SetGlobal(1)],
             ),
             (
                 "let one = 1;one;",
                 vec![Value::Integer(1)],
-                vec![
-                    Opcode::Const(0),
-                    Opcode::SetGlobal(0),
-                    Opcode::GetGlobal(0),
-                    Opcode::Pop,
-                ],
+                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::GetGlobal(0), Opcode::Pop],
             ),
             (
                 "let one = 1;let two = one;two;",
@@ -636,10 +630,7 @@ mod tests {
             ),
             (
                 r#""hello" + " world""#,
-                vec![
-                    Value::String(String::from("hello")),
-                    Value::String(String::from(" world")),
-                ],
+                vec![Value::String(String::from("hello")), Value::String(String::from(" world"))],
                 vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Pop],
             ),
         ];
@@ -767,12 +758,7 @@ mod tests {
             ),
             (
                 "{1: 2}[2 - 1]",
-                vec![
-                    Value::Integer(1),
-                    Value::Integer(2),
-                    Value::Integer(2),
-                    Value::Integer(1),
-                ],
+                vec![Value::Integer(1), Value::Integer(2), Value::Integer(2), Value::Integer(1)],
                 vec![
                     Opcode::Const(0),
                     Opcode::Const(1),
@@ -796,11 +782,7 @@ mod tests {
                 vec![
                     Value::Integer(5),
                     Value::Integer(10),
-                    Value::Function(
-                        vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return],
-                        0,
-                        0,
-                    ),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return], 0, 0),
                 ],
                 vec![Opcode::Closure(2, 0), Opcode::Pop],
             ),
@@ -809,11 +791,7 @@ mod tests {
                 vec![
                     Value::Integer(6),
                     Value::Integer(8),
-                    Value::Function(
-                        vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return],
-                        0,
-                        0,
-                    ),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return], 0, 0),
                 ],
                 vec![Opcode::Closure(2, 0), Opcode::Pop],
             ),
@@ -822,11 +800,7 @@ mod tests {
                 vec![
                     Value::Integer(1),
                     Value::Integer(2),
-                    Value::Function(
-                        vec![Opcode::Const(0), Opcode::Pop, Opcode::Const(1), Opcode::Return],
-                        0,
-                        0,
-                    ),
+                    Value::Function(vec![Opcode::Const(0), Opcode::Pop, Opcode::Const(1), Opcode::Return], 0, 0),
                 ],
                 vec![Opcode::Closure(2, 0), Opcode::Pop],
             ),
@@ -944,12 +918,7 @@ mod tests {
                     Value::Integer(55),
                     Value::Function(vec![Opcode::GetGlobal(0), Opcode::Return], 0, 0),
                 ],
-                vec![
-                    Opcode::Const(0),
-                    Opcode::SetGlobal(0),
-                    Opcode::Closure(1, 0),
-                    Opcode::Pop,
-                ],
+                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Closure(1, 0), Opcode::Pop],
             ),
             (
                 "fn() {
@@ -959,12 +928,7 @@ mod tests {
                 vec![
                     Value::Integer(55),
                     Value::Function(
-                        vec![
-                            Opcode::Const(0),
-                            Opcode::SetLocal(0),
-                            Opcode::GetLocal(0),
-                            Opcode::Return,
-                        ],
+                        vec![Opcode::Const(0), Opcode::SetLocal(0), Opcode::GetLocal(0), Opcode::Return],
                         1,
                         0,
                     ),
@@ -1081,12 +1045,7 @@ mod tests {
                         1,
                     ),
                     Value::Function(
-                        vec![
-                            Opcode::GetFree(0),
-                            Opcode::GetLocal(0),
-                            Opcode::Closure(0, 2),
-                            Opcode::Return,
-                        ],
+                        vec![Opcode::GetFree(0), Opcode::GetLocal(0), Opcode::Closure(0, 2), Opcode::Return],
                         1,
                         1,
                     ),
@@ -1153,12 +1112,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![
-                    Opcode::Const(0),
-                    Opcode::SetGlobal(0),
-                    Opcode::Closure(6, 0),
-                    Opcode::Pop,
-                ],
+                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Closure(6, 0), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);

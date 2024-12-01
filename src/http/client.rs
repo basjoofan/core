@@ -36,9 +36,7 @@ impl Client {
         time.read = read.elapsed() - time.delay;
         let end = Instant::now();
         time.total = end - start;
-        time.end = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default();
+        time.end = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
         time.write = time.total - time.resolve - time.connect - time.read - time.delay;
         (request, response, time, String::default())
     }
@@ -54,10 +52,7 @@ fn test_send_message_get() {
     let (request, response, time, _) = client.send(message);
     assert_eq!("GET", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
+    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
@@ -73,10 +68,7 @@ fn test_send_message_post() {
     let (request, response, time, _) = client.send(message);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
+    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
@@ -94,10 +86,7 @@ fn test_send_message_post_form() {
     let (request, response, time, _) = client.send(message);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
+    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
@@ -116,10 +105,7 @@ fn test_send_message_post_multipart() {
     let (request, response, time, _) = client.send(message);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
+    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
@@ -149,10 +135,7 @@ fn test_send_message_post_json() {
     let (request, response, time, _) = client.send(message);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
+    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }

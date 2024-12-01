@@ -71,10 +71,7 @@ impl Response {
             match headers.get_mut(&header.name) {
                 Some(Value::Array(array)) => array.push(Value::String(header.value.clone())),
                 _ => {
-                    headers.insert(
-                        header.name.clone(),
-                        Value::Array(vec![Value::String(header.value.clone())]),
-                    );
+                    headers.insert(header.name.clone(), Value::Array(vec![Value::String(header.value.clone())]));
                 }
             }
         }

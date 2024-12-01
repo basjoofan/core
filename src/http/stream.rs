@@ -28,11 +28,7 @@ pub enum Stream {
 }
 
 impl Stream {
-    pub fn connect(
-        url: &Url,
-        connect_tiomeout: Option<Duration>,
-        read_tiomeout: Option<Duration>,
-    ) -> Result<Self, Error> {
+    pub fn connect(url: &Url, connect_tiomeout: Option<Duration>, read_tiomeout: Option<Duration>) -> Result<Self, Error> {
         let host = url.host.as_str();
         let port = url.port;
 
@@ -147,11 +143,7 @@ impl Stream {
         let name = host.to_owned().try_into().map_err(|_e| Error::InvalidUrlHost)?;
         let attach = Box::new(rustls::ClientConnection::new(config, name).map_err(|_e| Error::TlsHandshakeFailed)?);
         let (stream, resolve) = Self::connect_tcp(host, port, connect_tiomeout, read_tiomeout)?;
-        Ok(Stream::Cipher {
-            attach,
-            stream,
-            resolve,
-        })
+        Ok(Stream::Cipher { attach, stream, resolve })
     }
 
     pub fn resolve(&self) -> Duration {

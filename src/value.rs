@@ -47,11 +47,7 @@ impl Display for Value {
             Value::Array(elements) => write!(
                 f,
                 "[{}]",
-                elements
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
+                elements.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
             ),
             Value::Map(pairs) => write!(
                 f,

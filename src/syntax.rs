@@ -60,21 +60,13 @@ impl Display for Expr {
                 write!(
                     f,
                     "{}",
-                    consequence
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(";")
+                    consequence.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
                 )?;
                 if !alternative.is_empty() {
                     write!(
                         f,
                         "}} else {{ {}",
-                        alternative
-                            .iter()
-                            .map(|e| e.to_string())
-                            .collect::<Vec<String>>()
-                            .join(";")
+                        alternative.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
                     )?
                 }
                 write!(f, " }}")?;
@@ -84,31 +76,19 @@ impl Display for Expr {
                 f,
                 "fn {:?} ({}) {{ {} }}",
                 name,
-                parameters
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", "),
+                parameters.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", "),
                 body.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
             ),
             Expr::Call(function, arguments) => write!(
                 f,
                 "{}({})",
                 function,
-                arguments
-                    .iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
+                arguments.iter().map(|a| a.to_string()).collect::<Vec<String>>().join(", ")
             ),
             Expr::Array(elements) => write!(
                 f,
                 "[{}]",
-                elements
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
+                elements.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
             ),
             Expr::Map(pairs) => write!(
                 f,
@@ -126,17 +106,9 @@ impl Display for Expr {
                     f,
                     "rq {} ({})`{}`[{}]",
                     name,
-                    parameters
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", "),
+                    parameters.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", "),
                     message,
-                    asserts
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
+                    asserts.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
                 )
             }
             Expr::Test(name, block) => write!(

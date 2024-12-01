@@ -25,24 +25,12 @@ pub fn segment(text: &str) -> Vec<Token> {
                         (Kind::Bang, String::from(char))
                     }
                 }
-                '<' => {
-                    if let Some(peek @ '=') = chars.peek() {
-                        let literal = String::from_iter([char, *peek]);
-                        chars.next();
-                        (Kind::Le, literal)
-                    } else {
-                        (Kind::Lt, String::from(char))
-                    }
-                }
-                '>' => {
-                    if let Some(peek @ '=') = chars.peek() {
-                        let literal = String::from_iter([char, *peek]);
-                        chars.next();
-                        (Kind::Ge, literal)
-                    } else {
-                        (Kind::Gt, String::from(char))
-                    }
-                }
+                '+' => (Kind::Plus, String::from(char)),
+                '-' => (Kind::Minus, String::from(char)),
+                '*' => (Kind::Star, String::from(char)),
+                '/' => (Kind::Slash, String::from(char)),
+                '%' => (Kind::Percent, String::from(char)),
+                '^' => (Kind::Bx, String::from(char)),
                 '|' => {
                     if let Some(peek @ '|') = chars.peek() {
                         let literal = String::from_iter([char, *peek]);
@@ -61,16 +49,36 @@ pub fn segment(text: &str) -> Vec<Token> {
                         (Kind::Ba, String::from(char))
                     }
                 }
-                '^' => (Kind::Bx, String::from(char)),
-                '+' => (Kind::Plus, String::from(char)),
-                '-' => (Kind::Minus, String::from(char)),
-                '*' => (Kind::Star, String::from(char)),
-                '/' => (Kind::Slash, String::from(char)),
-                '%' => (Kind::Percent, String::from(char)),
-                '.' => (Kind::Dot, String::from(char)),
+                '<' => {
+                    if let Some(peek @ '=') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Le, literal)
+                    } else if let Some(peek @ '<') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Ll, literal)
+                    } else {
+                        (Kind::Lt, String::from(char))
+                    }
+                }
+                '>' => {
+                    if let Some(peek @ '=') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Ge, literal)
+                    } else if let Some(peek @ '>') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Gg, literal)
+                    } else {
+                        (Kind::Gt, String::from(char))
+                    }
+                }
                 ',' => (Kind::Comma, String::from(char)),
                 ';' => (Kind::Semi, String::from(char)),
                 ':' => (Kind::Colon, String::from(char)),
+                '.' => (Kind::Dot, String::from(char)),
                 '(' => (Kind::Lp, String::from(char)),
                 ')' => (Kind::Rp, String::from(char)),
                 '{' => (Kind::Lb, String::from(char)),

@@ -75,96 +75,58 @@ impl<'a> Vm<'a> {
                 | Opcode::Mul
                 | Opcode::Div
                 | Opcode::Rem
+                | Opcode::Bx
+                | Opcode::Bo
+                | Opcode::Ba
+                | Opcode::Sl
+                | Opcode::Sr
                 | Opcode::Lt
                 | Opcode::Gt
                 | Opcode::Le
                 | Opcode::Ge
                 | Opcode::Eq
-                | Opcode::Ne
-                | Opcode::Bx
-                | Opcode::Bo
-                | Opcode::Ba => {
+                | Opcode::Ne => {
                     let right = self.pop();
                     let left = self.pop();
                     match (left, right, opcode) {
-                        (Value::Integer(left), Value::Integer(right), Opcode::Add) => {
-                            self.push(Value::Integer(left + right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Sub) => {
-                            self.push(Value::Integer(left - right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Mul) => {
-                            self.push(Value::Integer(left * right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Div) => {
-                            self.push(Value::Integer(left / right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Rem) => {
-                            self.push(Value::Integer(left % right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Lt) => {
-                            self.push(Value::Boolean(left < right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Gt) => {
-                            self.push(Value::Boolean(left > right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Le) => {
-                            self.push(Value::Boolean(left <= right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Ge) => {
-                            self.push(Value::Boolean(left >= right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Eq) => {
-                            self.push(Value::Boolean(left == right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Ne) => {
-                            self.push(Value::Boolean(left != right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Bx) => {
-                            self.push(Value::Integer(left ^ right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Bo) => {
-                            self.push(Value::Integer(left | right))
-                        }
-                        (Value::Integer(left), Value::Integer(right), Opcode::Ba) => {
-                            self.push(Value::Integer(left & right))
-                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Add) => self.push(Value::Integer(left + right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Sub) => self.push(Value::Integer(left - right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Mul) => self.push(Value::Integer(left * right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Div) => self.push(Value::Integer(left / right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Rem) => self.push(Value::Integer(left % right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Bx) => self.push(Value::Integer(left ^ right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Bo) => self.push(Value::Integer(left | right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Ba) => self.push(Value::Integer(left & right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Sl) => self.push(Value::Integer(left << right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Sr) => self.push(Value::Integer(left >> right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Lt) => self.push(Value::Boolean(left < right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Gt) => self.push(Value::Boolean(left > right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Le) => self.push(Value::Boolean(left <= right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Ge) => self.push(Value::Boolean(left >= right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Eq) => self.push(Value::Boolean(left == right)),
+                        (Value::Integer(left), Value::Integer(right), Opcode::Ne) => self.push(Value::Boolean(left != right)),
                         (Value::Float(left), Value::Float(right), Opcode::Add) => self.push(Value::Float(left + right)),
                         (Value::Float(left), Value::Float(right), Opcode::Sub) => self.push(Value::Float(left - right)),
                         (Value::Float(left), Value::Float(right), Opcode::Mul) => self.push(Value::Float(left * right)),
                         (Value::Float(left), Value::Float(right), Opcode::Div) => self.push(Value::Float(left / right)),
                         (Value::Float(left), Value::Float(right), Opcode::Rem) => self.push(Value::Float(left % right)),
-                        (Value::Float(left), Value::Float(right), Opcode::Lt) => {
-                            self.push(Value::Boolean(left < right))
-                        }
-                        (Value::Float(left), Value::Float(right), Opcode::Gt) => {
-                            self.push(Value::Boolean(left > right))
-                        }
-                        (Value::Float(left), Value::Float(right), Opcode::Le) => {
-                            self.push(Value::Boolean(left <= right))
-                        }
-                        (Value::Float(left), Value::Float(right), Opcode::Ge) => {
-                            self.push(Value::Boolean(left >= right))
-                        }
-                        (Value::Float(left), Value::Float(right), Opcode::Eq) => {
-                            self.push(Value::Boolean(left == right))
-                        }
-                        (Value::Float(left), Value::Float(right), Opcode::Ne) => {
-                            self.push(Value::Boolean(left != right))
-                        }
-                        (Value::Boolean(left), Value::Boolean(right), Opcode::Eq) => {
-                            self.push(Value::Boolean(left == right))
-                        }
-                        (Value::Boolean(left), Value::Boolean(right), Opcode::Ne) => {
-                            self.push(Value::Boolean(left != right))
-                        }
+                        (Value::Float(left), Value::Float(right), Opcode::Lt) => self.push(Value::Boolean(left < right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Gt) => self.push(Value::Boolean(left > right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Le) => self.push(Value::Boolean(left <= right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Ge) => self.push(Value::Boolean(left >= right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Eq) => self.push(Value::Boolean(left == right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Ne) => self.push(Value::Boolean(left != right)),
+                        (Value::Boolean(left), Value::Boolean(right), Opcode::Eq) => self.push(Value::Boolean(left == right)),
+                        (Value::Boolean(left), Value::Boolean(right), Opcode::Ne) => self.push(Value::Boolean(left != right)),
+                        (Value::Boolean(left), Value::Boolean(right), Opcode::Bx) => self.push(Value::Boolean(left ^ right)),
+                        (Value::Boolean(left), Value::Boolean(right), Opcode::Bo) => self.push(Value::Boolean(left | right)),
+                        (Value::Boolean(left), Value::Boolean(right), Opcode::Ba) => self.push(Value::Boolean(left & right)),
                         (Value::String(left), Value::String(right), Opcode::Add) => {
                             self.push(Value::String(format!("{}{}", left, right)))
                         }
-                        (left, right, opcode) => panic!(
-                            "unsupported types for binary operation: {} {:?} {}",
-                            left, opcode, right
-                        ),
+                        (left, right, opcode) => {
+                            panic!("unsupported types for binary operation: {} {:?} {}", left, opcode, right)
+                        }
                     }
                 }
                 Opcode::True => self.push(Value::Boolean(true)),
@@ -386,6 +348,9 @@ mod tests {
             ("5 ^ 3", Value::Integer(6)),
             ("5 | 3", Value::Integer(7)),
             ("5 & 3", Value::Integer(1)),
+            ("5 << 2", Value::Integer(20)),
+            ("5 >> 2", Value::Integer(1)),
+            ("-5 >> 2", Value::Integer(-2)),
         ];
         run_vm_tests(tests);
     }

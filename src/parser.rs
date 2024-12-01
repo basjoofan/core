@@ -102,17 +102,19 @@ impl Parser {
                 | Some(Token { kind: Kind::Star, .. })
                 | Some(Token { kind: Kind::Slash, .. })
                 | Some(Token { kind: Kind::Percent, .. })
+                | Some(Token { kind: Kind::Bx, .. })
+                | Some(Token { kind: Kind::Bo, .. })
+                | Some(Token { kind: Kind::Ba, .. })
+                | Some(Token { kind: Kind::Ll, .. })
+                | Some(Token { kind: Kind::Gg, .. })
+                | Some(Token { kind: Kind::La, .. })
+                | Some(Token { kind: Kind::Lo, .. })
                 | Some(Token { kind: Kind::Lt, .. })
                 | Some(Token { kind: Kind::Gt, .. })
                 | Some(Token { kind: Kind::Le, .. })
                 | Some(Token { kind: Kind::Ge, .. })
                 | Some(Token { kind: Kind::Eq, .. })
-                | Some(Token { kind: Kind::Ne, .. })
-                | Some(Token { kind: Kind::Bx, .. })
-                | Some(Token { kind: Kind::Ba, .. })
-                | Some(Token { kind: Kind::Bo, .. })
-                | Some(Token { kind: Kind::La, .. })
-                | Some(Token { kind: Kind::Lo, .. }) => {
+                | Some(Token { kind: Kind::Ne, .. }) => {
                     self.next_token();
                     self.parse_binary_expr(left)?
                 }
@@ -1052,10 +1054,7 @@ fn test_parse_request_asserts() {
                regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22"
                ]"#,
             2,
-            vec![
-                "(status == 200)",
-                r#"(regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22")"#,
-            ],
+            vec!["(status == 200)", r#"(regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22")"#],
         ),
         (r#"rq request()`POST`[]"#, 0, vec![]),
     ];
@@ -1065,9 +1064,7 @@ fn test_parse_request_asserts() {
                 println!("request:{}", request);
                 if let Expr::Request(_, _, _, asserts) = request.clone() {
                     assert!(asserts.len() == expected_len);
-                    assert!(
-                        asserts.iter().map(|assert| assert.to_string()).collect::<Vec<String>>() == expected_asserts
-                    );
+                    assert!(asserts.iter().map(|assert| assert.to_string()).collect::<Vec<String>>() == expected_asserts);
                 } else {
                     unreachable!("request literal parse failed")
                 }

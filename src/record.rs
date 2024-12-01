@@ -98,10 +98,7 @@ impl Record {
                         avro::types::Value::Record(vec![
                             (String::from("expr"), avro::types::Value::String(a.expr.to_string())),
                             (String::from("left"), avro::types::Value::String(a.left.to_string())),
-                            (
-                                String::from("compare"),
-                                avro::types::Value::String(a.compare.to_string()),
-                            ),
+                            (String::from("compare"), avro::types::Value::String(a.compare.to_string())),
                             (String::from("right"), avro::types::Value::String(a.right.to_string())),
                             (String::from("result"), avro::types::Value::Boolean(a.result)),
                         ])

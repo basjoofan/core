@@ -69,7 +69,7 @@ fn format(mut objects: Vec<Value>) -> Value {
             }
         }
         None => Value::Error("function length need a parameter".to_string()),
-        _ => return Value::Error("first parameter must be a string".to_string()),
+        _ => Value::Error("first parameter must be a string".to_string()),
     }
 }
 
@@ -98,7 +98,7 @@ fn append(mut objects: Vec<Value>) -> Value {
             Value::Array(array)
         }
         None => Value::Error("function length need a parameter".to_string()),
-        _ => return Value::Error("first parameter must be a array".to_string()),
+        _ => Value::Error("first parameter must be a array".to_string()),
     }
 }
 
@@ -160,10 +160,7 @@ fn test_append() {
             Value::Array(vec![Value::Integer(1), Value::Integer(2)]),
         ),
         (
-            vec![
-                Value::Array(vec![Value::Integer(1)]),
-                Value::String(String::from("string")),
-            ],
+            vec![Value::Array(vec![Value::Integer(1)]), Value::String(String::from("string"))],
             Value::Array(vec![Value::Integer(1), Value::String(String::from("string"))]),
         ),
         (
