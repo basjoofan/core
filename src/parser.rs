@@ -85,7 +85,7 @@ impl Parser {
                 precedence = u8::MAX;
                 self.parse_return_expr()?
             }
-            Kind::Bang | Kind::Minus => self.parse_unary_expr()?,
+            Kind::Bang | Kind::Minus | Kind::Bn => self.parse_unary_expr()?,
             Kind::Lp => self.parse_paren_expr()?,
             Kind::If => self.parse_if_expr()?,
             Kind::Fn => self.parse_function_literal()?,
@@ -107,6 +107,7 @@ impl Parser {
                 | Some(Token { kind: Kind::Ge, .. })
                 | Some(Token { kind: Kind::Eq, .. })
                 | Some(Token { kind: Kind::Ne, .. })
+                | Some(Token { kind: Kind::Bx, .. })
                 | Some(Token { kind: Kind::Ba, .. })
                 | Some(Token { kind: Kind::Bo, .. })
                 | Some(Token { kind: Kind::La, .. })
@@ -500,6 +501,7 @@ fn test_parse_unary_expr() {
     let tests = vec![
         ("!5;", "!", "5"),
         ("-15;", "-", "15"),
+        ("~5;", "~", "5"),
         ("!foobar;", "!", "foobar"),
         ("-foobar;", "-", "foobar"),
         ("!true;", "!", "true"),
@@ -547,6 +549,7 @@ fn test_parse_binary_expr() {
         ("true == true", "true", "==", "true"),
         ("true != false", "true", "!=", "false"),
         ("false == false", "false", "==", "false"),
+        ("1^0", "1", "^", "0"),
         ("1&0", "1", "&", "0"),
         ("1|0", "1", "|", "0"),
         ("true&&false", "true", "&&", "false"),

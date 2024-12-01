@@ -29,6 +29,8 @@ pub enum Kind {
     Ge,     // >=
     Eq,     // ==
     Ne,     // !=
+    Bn,     // ~
+    Bx,     // ^
     Bo,     // |
     Ba,     // &
     Lo,     // ||
@@ -75,22 +77,24 @@ impl Token {
             Kind::Lo => 1,    // a || b
             Kind::La => 2,    // a && b
             Kind::Bo => 3,    // a | b
-            Kind::Ba => 4,    // a & b
-            Kind::Eq => 5,    // a == b
-            Kind::Ne => 5,    // a != b
-            Kind::Lt => 6,    // a < b
-            Kind::Gt => 6,    // a > b
-            Kind::Le => 6,    // a <= b
-            Kind::Ge => 6,    // a >= b
-            Kind::Plus => 7,  // a + b
-            Kind::Minus => 7, // a - b
-            Kind::Star => 8,  // a * b
-            Kind::Slash => 8, // a / b
-            // Kind::Minus => 9,  -X unary minus + 2
-            Kind::Bang => 9, // !X
-            Kind::Lp => 10,  // function()
-            Kind::Ls => 11,  // array[index]
-            Kind::Dot => 11, // object.field
+            Kind::Bx => 4,    // a ^ b
+            Kind::Ba => 5,    // a & b
+            Kind::Eq => 6,    // a == b
+            Kind::Ne => 6,    // a != b
+            Kind::Lt => 7,    // a < b
+            Kind::Gt => 7,    // a > b
+            Kind::Le => 7,    // a <= b
+            Kind::Ge => 7,    // a >= b
+            Kind::Plus => 8,  // a + b
+            Kind::Minus => 8, // a - b
+            Kind::Star => 9,  // a * b
+            Kind::Slash => 9, // a / b
+            // Kind::Minus => 10,  -x unary minus + 2
+            Kind::Bang => 10, // !x
+            Kind::Bn => 10,   // ~x
+            Kind::Lp => 11,   // function()
+            Kind::Ls => 12,   // array[index]
+            Kind::Dot => 12,  // object.field
             _ => 0,
         }
     }

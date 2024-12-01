@@ -1,10 +1,10 @@
+use crate::native;
 use crate::Expr;
 use crate::Kind;
 use crate::Opcode;
 use crate::Symbol;
 use crate::Symbols;
 use crate::Value;
-use crate::native;
 
 pub struct Compiler {
     consts: Vec<Value>,
@@ -162,6 +162,7 @@ impl Compiler {
                 match token.kind {
                     Kind::Minus => self.emit(Opcode::Minus),
                     Kind::Bang => self.emit(Opcode::Bang),
+                    Kind::Bn => self.emit(Opcode::Bn),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
@@ -179,6 +180,9 @@ impl Compiler {
                     Kind::Ge => self.emit(Opcode::Ge),
                     Kind::Eq => self.emit(Opcode::Eq),
                     Kind::Ne => self.emit(Opcode::Ne),
+                    Kind::Bx => self.emit(Opcode::Bx),
+                    Kind::Bo => self.emit(Opcode::Bo),
+                    Kind::Ba => self.emit(Opcode::Ba),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
@@ -365,6 +369,26 @@ mod tests {
                 "-1",
                 vec![Value::Integer(1)],
                 vec![Opcode::Const(0), Opcode::Minus, Opcode::Pop],
+            ),
+            (
+                "1 | 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Bo, Opcode::Pop],
+            ),
+            (
+                "1 & 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Ba, Opcode::Pop],
+            ),
+            (
+                "~1",
+                vec![Value::Integer(1)],
+                vec![Opcode::Const(0), Opcode::Bn, Opcode::Pop],
+            ),
+            (
+                "1 ^ 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Bx, Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);

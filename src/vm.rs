@@ -79,7 +79,10 @@ impl<'a> Vm<'a> {
                 | Opcode::Le
                 | Opcode::Ge
                 | Opcode::Eq
-                | Opcode::Ne => {
+                | Opcode::Ne
+                | Opcode::Bx
+                | Opcode::Bo
+                | Opcode::Ba => {
                     let right = self.pop();
                     let left = self.pop();
                     match (left, right, opcode) {
@@ -112,6 +115,15 @@ impl<'a> Vm<'a> {
                         }
                         (Value::Integer(left), Value::Integer(right), Opcode::Ne) => {
                             self.push(Value::Boolean(left != right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Bx) => {
+                            self.push(Value::Integer(left ^ right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Bo) => {
+                            self.push(Value::Integer(left | right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Ba) => {
+                            self.push(Value::Integer(left & right))
                         }
                         (Value::Float(left), Value::Float(right), Opcode::Add) => self.push(Value::Float(left + right)),
                         (Value::Float(left), Value::Float(right), Opcode::Sub) => self.push(Value::Float(left - right)),
@@ -165,6 +177,13 @@ impl<'a> Vm<'a> {
                     match operand {
                         Value::Boolean(false) | Value::None => self.push(Value::Boolean(true)),
                         _ => self.push(Value::Boolean(false)),
+                    }
+                }
+                Opcode::Bn => {
+                    let operand = self.pop();
+                    match operand {
+                        Value::Integer(value) => self.push(Value::Integer(!value)),
+                        _ => panic!("unsupported types for negation: {}", operand),
                     }
                 }
                 Opcode::Jump(i) => self.frame().fp = i,
@@ -362,6 +381,11 @@ mod tests {
             ("-10", Value::Integer(-10)),
             ("-50 + 100 + -50", Value::Integer(0)),
             ("(5 + 10 * 2 + 15 / 3) * 2 + -10", Value::Integer(50)),
+            ("~5", Value::Integer(-6)),
+            ("~-3", Value::Integer(2)),
+            ("5 ^ 3", Value::Integer(6)),
+            ("5 | 3", Value::Integer(7)),
+            ("5 & 3", Value::Integer(1)),
         ];
         run_vm_tests(tests);
     }

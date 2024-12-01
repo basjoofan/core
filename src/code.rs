@@ -18,6 +18,10 @@ pub enum Opcode {
     Ge,
     Eq,
     Ne,
+    Bn,
+    Bx,
+    Ba,
+    Bo,
 
     Minus,
     Bang,
