@@ -85,7 +85,7 @@ impl Parser {
                 precedence = u8::MAX;
                 self.parse_return_expr()?
             }
-            Kind::Bang | Kind::Minus | Kind::Bn => self.parse_unary_expr()?,
+            Kind::Bang | Kind::Minus => self.parse_unary_expr()?,
             Kind::Lp => self.parse_paren_expr()?,
             Kind::If => self.parse_if_expr()?,
             Kind::Fn => self.parse_function_literal()?,
@@ -101,6 +101,7 @@ impl Parser {
                 | Some(Token { kind: Kind::Minus, .. })
                 | Some(Token { kind: Kind::Star, .. })
                 | Some(Token { kind: Kind::Slash, .. })
+                | Some(Token { kind: Kind::Percent, .. })
                 | Some(Token { kind: Kind::Lt, .. })
                 | Some(Token { kind: Kind::Gt, .. })
                 | Some(Token { kind: Kind::Le, .. })

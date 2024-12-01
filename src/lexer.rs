@@ -61,12 +61,12 @@ pub fn segment(text: &str) -> Vec<Token> {
                         (Kind::Ba, String::from(char))
                     }
                 }
-                '~' => (Kind::Bn, String::from(char)),
                 '^' => (Kind::Bx, String::from(char)),
                 '+' => (Kind::Plus, String::from(char)),
                 '-' => (Kind::Minus, String::from(char)),
                 '*' => (Kind::Star, String::from(char)),
                 '/' => (Kind::Slash, String::from(char)),
+                '%' => (Kind::Percent, String::from(char)),
                 '.' => (Kind::Dot, String::from(char)),
                 ',' => (Kind::Comma, String::from(char)),
                 ';' => (Kind::Semi, String::from(char)),

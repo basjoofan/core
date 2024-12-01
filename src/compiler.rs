@@ -160,9 +160,8 @@ impl Compiler {
             Expr::Unary(token, right) => {
                 self.assemble(*right)?;
                 match token.kind {
-                    Kind::Minus => self.emit(Opcode::Minus),
-                    Kind::Bang => self.emit(Opcode::Bang),
-                    Kind::Bn => self.emit(Opcode::Bn),
+                    Kind::Minus => self.emit(Opcode::Neg),
+                    Kind::Bang => self.emit(Opcode::Not),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
             }
@@ -174,6 +173,7 @@ impl Compiler {
                     Kind::Minus => self.emit(Opcode::Sub),
                     Kind::Star => self.emit(Opcode::Mul),
                     Kind::Slash => self.emit(Opcode::Div),
+                    Kind::Percent => self.emit(Opcode::Rem),
                     Kind::Lt => self.emit(Opcode::Lt),
                     Kind::Gt => self.emit(Opcode::Gt),
                     Kind::Le => self.emit(Opcode::Le),
@@ -366,9 +366,14 @@ mod tests {
                 vec![Opcode::Const(0), Opcode::Const(1), Opcode::Div, Opcode::Pop],
             ),
             (
+                "7 % 3",
+                vec![Value::Integer(7), Value::Integer(3)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Rem, Opcode::Pop],
+            ),
+            (
                 "-1",
                 vec![Value::Integer(1)],
-                vec![Opcode::Const(0), Opcode::Minus, Opcode::Pop],
+                vec![Opcode::Const(0), Opcode::Neg, Opcode::Pop],
             ),
             (
                 "1 | 2",
@@ -381,9 +386,9 @@ mod tests {
                 vec![Opcode::Const(0), Opcode::Const(1), Opcode::Ba, Opcode::Pop],
             ),
             (
-                "~1",
+                "!1",
                 vec![Value::Integer(1)],
-                vec![Opcode::Const(0), Opcode::Bn, Opcode::Pop],
+                vec![Opcode::Const(0), Opcode::Not, Opcode::Pop],
             ),
             (
                 "1 ^ 2",
@@ -425,7 +430,7 @@ mod tests {
             (
                 "-1.0",
                 vec![Value::Float(1.0)],
-                vec![Opcode::Const(0), Opcode::Minus, Opcode::Pop],
+                vec![Opcode::Const(0), Opcode::Neg, Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
@@ -476,7 +481,7 @@ mod tests {
                 vec![],
                 vec![Opcode::True, Opcode::False, Opcode::Ne, Opcode::Pop],
             ),
-            ("!true", vec![], vec![Opcode::True, Opcode::Bang, Opcode::Pop]),
+            ("!true", vec![], vec![Opcode::True, Opcode::Not, Opcode::Pop]),
         ];
         run_compiler_tests(tests);
     }

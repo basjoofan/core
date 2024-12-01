@@ -74,6 +74,7 @@ impl<'a> Vm<'a> {
                 | Opcode::Sub
                 | Opcode::Mul
                 | Opcode::Div
+                | Opcode::Rem
                 | Opcode::Lt
                 | Opcode::Gt
                 | Opcode::Le
@@ -97,6 +98,9 @@ impl<'a> Vm<'a> {
                         }
                         (Value::Integer(left), Value::Integer(right), Opcode::Div) => {
                             self.push(Value::Integer(left / right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Rem) => {
+                            self.push(Value::Integer(left % right))
                         }
                         (Value::Integer(left), Value::Integer(right), Opcode::Lt) => {
                             self.push(Value::Boolean(left < right))
@@ -129,6 +133,7 @@ impl<'a> Vm<'a> {
                         (Value::Float(left), Value::Float(right), Opcode::Sub) => self.push(Value::Float(left - right)),
                         (Value::Float(left), Value::Float(right), Opcode::Mul) => self.push(Value::Float(left * right)),
                         (Value::Float(left), Value::Float(right), Opcode::Div) => self.push(Value::Float(left / right)),
+                        (Value::Float(left), Value::Float(right), Opcode::Rem) => self.push(Value::Float(left % right)),
                         (Value::Float(left), Value::Float(right), Opcode::Lt) => {
                             self.push(Value::Boolean(left < right))
                         }
@@ -164,7 +169,7 @@ impl<'a> Vm<'a> {
                 }
                 Opcode::True => self.push(Value::Boolean(true)),
                 Opcode::False => self.push(Value::Boolean(false)),
-                Opcode::Minus => {
+                Opcode::Neg => {
                     let operand = self.pop();
                     match operand {
                         Value::Integer(value) => self.push(Value::Integer(-value)),
@@ -172,18 +177,12 @@ impl<'a> Vm<'a> {
                         _ => panic!("unsupported types for negation: {}", operand),
                     }
                 }
-                Opcode::Bang => {
+                Opcode::Not => {
                     let operand = self.pop();
                     match operand {
                         Value::Boolean(false) | Value::None => self.push(Value::Boolean(true)),
-                        _ => self.push(Value::Boolean(false)),
-                    }
-                }
-                Opcode::Bn => {
-                    let operand = self.pop();
-                    match operand {
                         Value::Integer(value) => self.push(Value::Integer(!value)),
-                        _ => panic!("unsupported types for negation: {}", operand),
+                        _ => self.push(Value::Boolean(false)),
                     }
                 }
                 Opcode::Jump(i) => self.frame().fp = i,
@@ -370,6 +369,7 @@ mod tests {
             ("1 - 2", Value::Integer(-1)),
             ("1 * 2", Value::Integer(2)),
             ("4 / 2", Value::Integer(2)),
+            ("7 % 3", Value::Integer(1)),
             ("50 / 2 * 2 + 10 - 5", Value::Integer(55)),
             ("5 * (2 + 10)", Value::Integer(60)),
             ("5 + 5 + 5 + 5 - 10", Value::Integer(10)),
@@ -381,8 +381,8 @@ mod tests {
             ("-10", Value::Integer(-10)),
             ("-50 + 100 + -50", Value::Integer(0)),
             ("(5 + 10 * 2 + 15 / 3) * 2 + -10", Value::Integer(50)),
-            ("~5", Value::Integer(-6)),
-            ("~-3", Value::Integer(2)),
+            ("!5", Value::Integer(-6)),
+            ("!-3", Value::Integer(2)),
             ("5 ^ 3", Value::Integer(6)),
             ("5 | 3", Value::Integer(7)),
             ("5 & 3", Value::Integer(1)),
@@ -399,6 +399,7 @@ mod tests {
             ("1.2 - 1.0", Value::Float(0.19999999999999996)),
             ("0.1 * 0.2", Value::Float(0.020000000000000004)),
             ("4.0 / 2.0", Value::Float(2.0)),
+            ("7.2 % 3.0", Value::Float(1.2000000000000002)),
             ("5.0 / 2.0 * 2.0 + 1.0 - 0.5", Value::Float(5.5)),
             ("5.0 * (0.2 + 1.0)", Value::Float(6.0)),
             ("0.5 + 0.5 + 0.5 + 0.5 - 1.0", Value::Float(1.0)),
@@ -442,10 +443,10 @@ mod tests {
             ("(1 > 2) == false", Value::Boolean(true)),
             ("!true", Value::Boolean(false)),
             ("!false", Value::Boolean(true)),
-            ("!5", Value::Boolean(false)),
+            // ("!5", Value::Boolean(false)),
+            // ("!!5", Value::Boolean(true)),
             ("!!true", Value::Boolean(true)),
             ("!!false", Value::Boolean(false)),
-            ("!!5", Value::Boolean(true)),
             ("!(if (false) { 5; })", Value::Boolean(true)),
         ];
         run_vm_tests(tests);

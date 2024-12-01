@@ -3,14 +3,17 @@ pub enum Opcode {
     None,
     Const(usize),
     Pop,
+    True,
+    False,
+
+    Neg,
+    Not,
 
     Add,
     Sub,
     Mul,
     Div,
-
-    True,
-    False,
+    Rem,
 
     Lt,
     Gt,
@@ -18,13 +21,9 @@ pub enum Opcode {
     Ge,
     Eq,
     Ne,
-    Bn,
     Bx,
     Ba,
     Bo,
-
-    Minus,
-    Bang,
 
     Judge(usize),
     Jump(usize),

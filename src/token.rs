@@ -17,31 +17,30 @@ pub enum Kind {
     Template, // `GET http://example.com`
 
     // operator
-    Assign, // =
-    Bang,   // !
-    Plus,   // +
-    Minus,  // -
-    Star,   // *
-    Slash,  // /
-    Lt,     // <
-    Gt,     // >
-    Le,     // <=
-    Ge,     // >=
-    Eq,     // ==
-    Ne,     // !=
-    Bn,     // ~
-    Bx,     // ^
-    Bo,     // |
-    Ba,     // &
-    Lo,     // ||
-    La,     // &&
-
-    Dot, // .
+    Assign,  // =
+    Bang,    // !
+    Plus,    // +
+    Minus,   // -
+    Star,    // *
+    Slash,   // /
+    Percent, // %
+    Lt,      // <
+    Gt,      // >
+    Le,      // <=
+    Ge,      // >=
+    Eq,      // ==
+    Ne,      // !=
+    Bx,      // ^
+    Bo,      // |
+    Ba,      // &
+    Lo,      // ||
+    La,      // &&
 
     // delimiter
     Comma, // ,
     Semi,  // ;
     Colon, // :
+    Dot,   // .
 
     // couple
     Lp, // (
@@ -74,24 +73,24 @@ impl Token {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
-            Kind::Lo => 1,    // a || b
-            Kind::La => 2,    // a && b
-            Kind::Bo => 3,    // a | b
-            Kind::Bx => 4,    // a ^ b
-            Kind::Ba => 5,    // a & b
-            Kind::Eq => 6,    // a == b
-            Kind::Ne => 6,    // a != b
-            Kind::Lt => 7,    // a < b
-            Kind::Gt => 7,    // a > b
-            Kind::Le => 7,    // a <= b
-            Kind::Ge => 7,    // a >= b
-            Kind::Plus => 8,  // a + b
-            Kind::Minus => 8, // a - b
-            Kind::Star => 9,  // a * b
-            Kind::Slash => 9, // a / b
+            Kind::Lo => 1,      // a || b
+            Kind::La => 2,      // a && b
+            Kind::Bo => 3,      // a | b
+            Kind::Bx => 4,      // a ^ b
+            Kind::Ba => 5,      // a & b
+            Kind::Eq => 6,      // a == b
+            Kind::Ne => 6,      // a != b
+            Kind::Lt => 7,      // a < b
+            Kind::Gt => 7,      // a > b
+            Kind::Le => 7,      // a <= b
+            Kind::Ge => 7,      // a >= b
+            Kind::Plus => 8,    // a + b
+            Kind::Minus => 8,   // a - b
+            Kind::Star => 9,    // a * b
+            Kind::Slash => 9,   // a / b
+            Kind::Percent => 9, // a / b
             // Kind::Minus => 10,  -x unary minus + 2
             Kind::Bang => 10, // !x
-            Kind::Bn => 10,   // ~x
             Kind::Lp => 11,   // function()
             Kind::Ls => 12,   // array[index]
             Kind::Dot => 12,  // object.field
