@@ -76,6 +76,8 @@ impl<'a> Vm<'a> {
                 | Opcode::Div
                 | Opcode::Lt
                 | Opcode::Gt
+                | Opcode::Le
+                | Opcode::Ge
                 | Opcode::Eq
                 | Opcode::Ne => {
                     let right = self.pop();
@@ -99,6 +101,12 @@ impl<'a> Vm<'a> {
                         (Value::Integer(left), Value::Integer(right), Opcode::Gt) => {
                             self.push(Value::Boolean(left > right))
                         }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Le) => {
+                            self.push(Value::Boolean(left <= right))
+                        }
+                        (Value::Integer(left), Value::Integer(right), Opcode::Ge) => {
+                            self.push(Value::Boolean(left >= right))
+                        }
                         (Value::Integer(left), Value::Integer(right), Opcode::Eq) => {
                             self.push(Value::Boolean(left == right))
                         }
@@ -114,6 +122,12 @@ impl<'a> Vm<'a> {
                         }
                         (Value::Float(left), Value::Float(right), Opcode::Gt) => {
                             self.push(Value::Boolean(left > right))
+                        }
+                        (Value::Float(left), Value::Float(right), Opcode::Le) => {
+                            self.push(Value::Boolean(left <= right))
+                        }
+                        (Value::Float(left), Value::Float(right), Opcode::Ge) => {
+                            self.push(Value::Boolean(left >= right))
                         }
                         (Value::Float(left), Value::Float(right), Opcode::Eq) => {
                             self.push(Value::Boolean(left == right))
@@ -385,6 +399,10 @@ mod tests {
             ("1 > 2", Value::Boolean(false)),
             ("1 < 1", Value::Boolean(false)),
             ("1 > 1", Value::Boolean(false)),
+            ("1 <= 2", Value::Boolean(true)),
+            ("1 >= 2", Value::Boolean(false)),
+            ("1 <= 1", Value::Boolean(true)),
+            ("1 >= 1", Value::Boolean(true)),
             ("1 == 1", Value::Boolean(true)),
             ("1 != 1", Value::Boolean(false)),
             ("1 == 2", Value::Boolean(false)),

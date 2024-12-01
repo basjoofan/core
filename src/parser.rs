@@ -103,6 +103,8 @@ impl Parser {
                 | Some(Token { kind: Kind::Slash, .. })
                 | Some(Token { kind: Kind::Lt, .. })
                 | Some(Token { kind: Kind::Gt, .. })
+                | Some(Token { kind: Kind::Le, .. })
+                | Some(Token { kind: Kind::Ge, .. })
                 | Some(Token { kind: Kind::Eq, .. })
                 | Some(Token { kind: Kind::Ne, .. })
                 | Some(Token { kind: Kind::Ba, .. })
@@ -530,6 +532,8 @@ fn test_parse_binary_expr() {
         ("5 / 5;", "5", "/", "5"),
         ("5 > 5;", "5", ">", "5"),
         ("5 < 5;", "5", "<", "5"),
+        ("5 >= 5;", "5", ">=", "5"),
+        ("5 <= 5;", "5", "<=", "5"),
         ("5 == 5;", "5", "==", "5"),
         ("5 != 5;", "5", "!=", "5"),
         ("foobar + barfoo;", "foobar", "+", "barfoo"),
@@ -549,19 +553,24 @@ fn test_parse_binary_expr() {
         ("false||true", "false", "||", "true"),
     ];
     for (text, expected_left, expected_operator, expected_right) in tests {
-        if let Ok(source) = Parser::new(text).parse() {
-            assert!(source.len() == 1);
-            if let Some(expr) = source.first() {
-                println!("{}", expr);
-                if let Expr::Binary(token, left, right) = expr {
-                    assert!(expected_left == left.to_string());
-                    assert!(expected_operator == token.to_string());
-                    assert!(expected_right == right.to_string());
+        match Parser::new(text).parse() {
+            Ok(source) => {
+                assert!(source.len() == 1);
+                if let Some(expr) = source.first() {
+                    println!("{}", expr);
+                    if let Expr::Binary(token, left, right) = expr {
+                        assert!(expected_left == left.to_string());
+                        assert!(expected_operator == token.to_string());
+                        assert!(expected_right == right.to_string());
+                    } else {
+                        unreachable!("binary expr parse failed")
+                    }
                 } else {
-                    unreachable!("binary expr parse failed")
+                    unreachable!("source expr none")
                 }
-            } else {
-                unreachable!("source expr none")
+            }
+            Err(error) => {
+                unreachable!("source expr error:{}", error);
             }
         }
     }

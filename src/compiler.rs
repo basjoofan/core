@@ -175,6 +175,8 @@ impl Compiler {
                     Kind::Slash => self.emit(Opcode::Div),
                     Kind::Lt => self.emit(Opcode::Lt),
                     Kind::Gt => self.emit(Opcode::Gt),
+                    Kind::Le => self.emit(Opcode::Le),
+                    Kind::Ge => self.emit(Opcode::Ge),
                     Kind::Eq => self.emit(Opcode::Eq),
                     Kind::Ne => self.emit(Opcode::Ne),
                     _ => Err(format!("Unknown operator: {}", token))?,
@@ -419,6 +421,16 @@ mod tests {
                 "1 > 2",
                 vec![Value::Integer(1), Value::Integer(2)],
                 vec![Opcode::Const(0), Opcode::Const(1), Opcode::Gt, Opcode::Pop],
+            ),
+            (
+                "1 <= 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Le, Opcode::Pop],
+            ),
+            (
+                "1 >= 2",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::Const(1), Opcode::Ge, Opcode::Pop],
             ),
             (
                 "1 == 2",

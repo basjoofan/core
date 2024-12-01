@@ -72,23 +72,25 @@ impl Token {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
-            Kind::Lo=> 1,     // ||
-            Kind::La => 2,     // &&
-            Kind::Bo=> 3,     // |
-            Kind::Ba=> 4,     // &
-            Kind::Eq => 5,    // 8==6
-            Kind::Ne => 5,    // 8!=6
-            Kind::Lt => 6,    // 8<6
-            Kind::Gt => 6,    // 8>6
-            Kind::Plus => 7,  // 8+6
-            Kind::Minus => 7, // 8-6
-            Kind::Star => 8,  // 8*6
-            Kind::Slash => 8, // 8/6
-            // Kind::Minus => 9,  -X unary minus +2
+            Kind::Lo => 1,    // a || b
+            Kind::La => 2,    // a && b
+            Kind::Bo => 3,    // a | b
+            Kind::Ba => 4,    // a & b
+            Kind::Eq => 5,    // a == b
+            Kind::Ne => 5,    // a != b
+            Kind::Lt => 6,    // a < b
+            Kind::Gt => 6,    // a > b
+            Kind::Le => 6,    // a <= b
+            Kind::Ge => 6,    // a >= b
+            Kind::Plus => 7,  // a + b
+            Kind::Minus => 7, // a - b
+            Kind::Star => 8,  // a * b
+            Kind::Slash => 8, // a / b
+            // Kind::Minus => 9,  -X unary minus + 2
             Kind::Bang => 9, // !X
-            Kind::Lp => 10,   // function()
-            Kind::Ls => 11,   // array[index]
-            Kind::Dot => 11,  // object.field
+            Kind::Lp => 10,  // function()
+            Kind::Ls => 11,  // array[index]
+            Kind::Dot => 11, // object.field
             _ => 0,
         }
     }

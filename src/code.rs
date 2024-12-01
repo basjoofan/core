@@ -14,6 +14,8 @@ pub enum Opcode {
 
     Lt,
     Gt,
+    Le,
+    Ge,
     Eq,
     Ne,
 
