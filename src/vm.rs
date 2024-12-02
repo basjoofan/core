@@ -437,6 +437,35 @@ mod tests {
     }
 
     #[test]
+    fn test_logical_junction() {
+        let tests = vec![
+            ("true || true", Value::Boolean(true)),
+            ("true || false", Value::Boolean(true)),
+            ("false || true", Value::Boolean(true)),
+            ("false || false", Value::Boolean(false)),
+            ("\"Cat\" || \"Dog\"", Value::String(String::from("Cat"))),
+            ("false || \"Cat\"", Value::String(String::from("Cat"))),
+            ("\"Cat\" || false", Value::String(String::from("Cat"))),
+            ("\"\" || false", Value::String(String::from(""))),
+            ("false || \"\"", Value::String(String::from(""))),
+            ("true && true", Value::Boolean(true)),
+            ("true &&  false", Value::Boolean(false)),
+            ("false && true", Value::Boolean(false)),
+            ("false && false", Value::Boolean(false)),
+            ("\"Cat\" && \"Dog\"", Value::String(String::from("Dog"))),
+            ("false && \"Cat\"", Value::Boolean(false)),
+            ("\"Cat\" && false", Value::Boolean(false)),
+            ("\"\" && false", Value::Boolean(false)),
+            ("false && \"\"", Value::Boolean(false)),
+            ("true || false && false", Value::Boolean(true)),
+            ("(true || false) && false", Value::Boolean(false)),
+            ("true && (false || false)", Value::Boolean(false)),
+            ("2 == 3 || (4 < 0 && 1 == 1)", Value::Boolean(false)),
+        ];
+        run_vm_tests(tests);
+    }
+
+    #[test]
     fn test_let_global() {
         let tests = vec![
             ("let one = 1; one", Value::Integer(1)),

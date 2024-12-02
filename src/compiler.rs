@@ -4,6 +4,7 @@ use crate::Kind;
 use crate::Opcode;
 use crate::Symbol;
 use crate::Symbols;
+use crate::Token;
 use crate::Value;
 
 pub struct Compiler {
@@ -161,6 +162,34 @@ impl Compiler {
                     Kind::Bang => self.emit(Opcode::Not),
                     _ => Err(format!("Unknown operator: {}", token))?,
                 };
+            }
+            Expr::Binary(Token { kind: Kind::Lo, .. }, left, right) => {
+                self.assemble(Expr::Call(
+                    Box::new(Expr::Function(
+                        None,
+                        vec![String::from("left")],
+                        vec![Expr::If(
+                            Box::new(Expr::Ident(String::from("left"))),
+                            vec![Expr::Ident(String::from("left"))],
+                            vec![*right],
+                        )],
+                    )),
+                    vec![*left],
+                ))?;
+            }
+            Expr::Binary(Token { kind: Kind::La, .. }, left, right) => {
+                self.assemble(Expr::Call(
+                    Box::new(Expr::Function(
+                        None,
+                        vec![String::from("left")],
+                        vec![Expr::If(
+                            Box::new(Expr::Ident(String::from("left"))),
+                            vec![*right],
+                            vec![Expr::Ident(String::from("left"))],
+                        )],
+                    )),
+                    vec![*left],
+                ))?;
             }
             Expr::Binary(token, left, right) => {
                 self.assemble(*left)?;
@@ -586,6 +615,45 @@ mod tests {
                     Opcode::Const(3),
                     Opcode::Pop,
                 ],
+            ),
+        ];
+        run_compiler_tests(tests);
+    }
+
+    #[test]
+    fn test_logical_junction() {
+        let tests = vec![
+            (
+                "true || true",
+                vec![Value::Function(
+                    vec![
+                        Opcode::GetLocal(0),
+                        Opcode::Judge(4),
+                        Opcode::GetLocal(0),
+                        Opcode::Jump(5),
+                        Opcode::True,
+                        Opcode::Return,
+                    ],
+                    1,
+                    1,
+                )],
+                vec![Opcode::Closure(0, 0), Opcode::True, Opcode::Call(1), Opcode::Pop],
+            ),
+            (
+                "true && true",
+                vec![Value::Function(
+                    vec![
+                        Opcode::GetLocal(0),
+                        Opcode::Judge(4),
+                        Opcode::True,
+                        Opcode::Jump(5),
+                        Opcode::GetLocal(0),
+                        Opcode::Return,
+                    ],
+                    1,
+                    1,
+                )],
+                vec![Opcode::Closure(0, 0), Opcode::True, Opcode::Call(1), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
