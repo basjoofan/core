@@ -38,13 +38,13 @@ impl Compiler {
     }
 
     fn enter(&mut self) {
-        self.symbols = self.symbols.clone().wrap();
+        self.symbols = self.symbols.to_owned().wrap();
         self.scopes.push(Scope { opcodes: vec![] });
         self.index += 1;
     }
 
     fn leave(&mut self) -> Vec<Opcode> {
-        self.symbols = self.symbols.clone().peel();
+        self.symbols = self.symbols.to_owned().peel();
         let scope = self.scopes.remove(self.index);
         self.index -= 1;
         scope.opcodes
@@ -137,7 +137,7 @@ impl Compiler {
                 }
             }
             Expr::String(string) => {
-                let string = Value::String(string.clone());
+                let string = Value::String(string);
                 let index = self.save(string);
                 self.emit(Opcode::Const(index));
             }
@@ -280,49 +280,158 @@ impl Compiler {
             }
             Expr::Field(object, field) => {
                 self.assemble(*object)?;
-                let field = Value::String(field.clone());
+                let field = Value::String(field);
                 let index = self.save(field);
                 self.emit(Opcode::Const(index));
                 self.emit(Opcode::Field);
             }
             Expr::Request(name, parameters, message, asserts) => {
                 let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
-                let matches = regex.find_iter(&message);
+                let matches = regex.find_iter(message.as_str());
                 let mut places = Vec::new();
-                places.push(Expr::String(message.clone()));
                 matches.for_each(|m| {
                     let literal = &m.as_str()[1..m.as_str().len() - 1];
                     places.push(Expr::Ident(String::from(literal)))
                 });
+                places.insert(usize::MIN, Expr::String(message));
+                let length = asserts.len();
                 let format = Expr::Call(Box::new(Expr::Ident(String::from("format"))), places);
                 let body = vec![
+                    // let result = http(format(...));
                     Expr::Let(
-                        String::from("response"),
+                        String::from("result"),
                         Box::new(Expr::Call(Box::new(Expr::Ident(String::from("http"))), vec![format])),
                     ),
+                    // let response = result.response;
+                    Expr::Let(
+                        String::from("response"),
+                        Box::new(Expr::Field(
+                            Box::new(Expr::Ident(String::from("result"))),
+                            String::from("response"),
+                        )),
+                    ),
+                    // let asserts = fn(status, version){[{"result": assert}...]}(response.status, response.version);
+                    Expr::Let(
+                        String::from("asserts"),
+                        Box::new(Expr::Call(
+                            Box::new(Expr::Function(
+                                None,
+                                vec![String::from("status"), String::from("version")],
+                                vec![Expr::Array(
+                                    asserts
+                                        .into_iter()
+                                        .filter_map(|assert| {
+                                            match assert {
+                                                Expr::Binary(token, left, right) => Some(Expr::Map(vec![
+                                                    (
+                                                        Expr::String(String::from("expr")),
+                                                        Expr::String(format!("{left} {token} {right}")),
+                                                    ),
+                                                    (Expr::String(String::from("left")), *left.clone()),
+                                                    (Expr::String(String::from("compare")), Expr::String(token.to_string())),
+                                                    (Expr::String(String::from("right")), *right.clone()),
+                                                    // TODO Optimize duplicate calculations
+                                                    (Expr::String(String::from("result")), Expr::Binary(token, left, right)),
+                                                ])),
+                                                _ => None,
+                                            }
+                                        })
+                                        .collect(),
+                                )],
+                            )),
+                            vec![
+                                Expr::Field(Box::new(Expr::Ident(String::from("response"))), String::from("status")),
+                                Expr::Field(Box::new(Expr::Ident(String::from("response"))), String::from("version")),
+                            ],
+                        )),
+                    ),
+                    // println("=== TEST  {name}", name);
+                    Expr::Call(
+                        Box::new(Expr::Ident(String::from("println"))),
+                        vec![Expr::String(String::from("=== TEST  {name}")), Expr::String(name.to_owned())],
+                    ),
+                    // let assert = fn(assert){ println("{expr} => {left} {compare} {right} => {result}", assert.expr, assert.left, assert.compare, assert.right, assert.result) };
+                    Expr::Let(
+                        String::from("assert"),
+                        Box::new(Expr::Function(
+                            None,
+                            vec![String::from("assert")],
+                            vec![Expr::Call(
+                                Box::new(Expr::Ident(String::from("println"))),
+                                vec![
+                                    Expr::String(String::from("{expr} => {left} {compare} {right} => {result}")),
+                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("expr")),
+                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("left")),
+                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("compare")),
+                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("right")),
+                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("result")),
+                                ],
+                            )],
+                        )),
+                    ),
+                    // fn(){ assert(asserts[i]); ... }();
                     Expr::Call(
                         Box::new(Expr::Function(
                             None,
-                            vec![String::from("status"), String::from("version")],
-                            vec![
-                                Expr::Let(String::from("result"), Box::new(Expr::Boolean(true))),
-                                Expr::Call(
-                                    Box::new(Expr::Ident(String::from("println"))),
-                                    vec![Expr::String(String::from("{asserts}")), Expr::Array(asserts)],
-                                ),
-                            ],
+                            vec![],
+                            (0..length)
+                                .map(|i| {
+                                    Expr::Call(
+                                        Box::new(Expr::Ident(String::from("assert"))),
+                                        vec![Expr::Index(
+                                            Box::new(Expr::Ident(String::from("asserts"))),
+                                            Box::new(Expr::Integer(i as i64)),
+                                        )],
+                                    )
+                                })
+                                .collect(),
                         )),
+                        vec![],
+                    ),
+                    // let flag = if (true && asserts[i].result ... ) { "PASS" }else { "FAIL" };
+                    Expr::Let(
+                        String::from("flag"),
+                        Box::new(Expr::If(
+                            Box::new((0..length).fold(Expr::Boolean(true), |e, i| {
+                                Expr::Binary(
+                                    Token {
+                                        kind: Kind::La,
+                                        literal: String::from("&&"),
+                                    },
+                                    Box::new(e),
+                                    Box::new(Expr::Field(
+                                        Box::new(Expr::Index(
+                                            Box::new(Expr::Ident(String::from("asserts"))),
+                                            Box::new(Expr::Integer(i as i64)),
+                                        )),
+                                        String::from("result"),
+                                    )),
+                                )
+                            })),
+                            vec![Expr::String(String::from("PASS"))],
+                            vec![Expr::String(String::from("FAIL"))],
+                        )),
+                    ),
+                    // println("--- {flag}  {name} ({total})", flag, "name", result.time.total);
+                    Expr::Call(
+                        Box::new(Expr::Ident(String::from("println"))),
                         vec![
-                            Expr::Field(Box::new(Expr::Ident(String::from("response"))), String::from("status")),
-                            Expr::Field(Box::new(Expr::Ident(String::from("response"))), String::from("version")),
+                            Expr::String(String::from("--- {flag}  {name} ({total})")),
+                            Expr::Ident(String::from("flag")),
+                            Expr::String(name.to_owned()),
+                            Expr::Field(
+                                Box::new(Expr::Field(
+                                    Box::new(Expr::Ident(String::from("result"))),
+                                    String::from("time"),
+                                )),
+                                String::from("total"),
+                            ),
                         ],
                     ),
+                    // return response;
                     Expr::Ident(String::from("response")),
                 ];
-                self.assemble(Expr::Let(
-                    name.clone(),
-                    Box::new(Expr::Function(Some(name), parameters, body)),
-                ))?;
+                self.assemble(Expr::Let(name, Box::new(Expr::Function(None, parameters, body))))?;
             }
             Expr::Test(name, block) => {
                 self.enter();

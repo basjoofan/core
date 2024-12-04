@@ -3,7 +3,7 @@ use crate::Opcode;
 use crate::Value;
 use std::collections::HashMap;
 
-pub struct Vm<'a> {
+pub struct Machine<'a> {
     consts: &'a Vec<Value>,
     globals: &'a mut Vec<Value>,
     stack: Vec<Value>,
@@ -22,7 +22,7 @@ struct Frame {
     number: usize,
 }
 
-impl<'a> Vm<'a> {
+impl<'a> Machine<'a> {
     pub fn new(consts: &'a Vec<Value>, globals: &'a mut Vec<Value>, opcodes: Vec<Opcode>) -> Self {
         Self {
             consts,
@@ -249,6 +249,7 @@ impl<'a> Vm<'a> {
                         for i in 0..count {
                             frees.insert(i, self.stack[self.sp - count + i].clone());
                         }
+                        self.sp -= count;
                         self.push(Value::Closure(opcodes, length, arity, frees));
                     }
                     non => panic!("non function: {}", non.kind()),
@@ -298,12 +299,12 @@ impl<'a> Vm<'a> {
 #[cfg(test)]
 mod tests {
     use crate::Compiler;
+    use crate::Machine;
     use crate::Parser;
     use crate::Value;
-    use crate::Vm;
     use std::collections::HashMap;
 
-    fn run_vm_tests(tests: Vec<(&str, Value)>) {
+    fn run_machine_tests(tests: Vec<(&str, Value)>) {
         for (text, value) in tests {
             let source = Parser::new(text).parse().unwrap();
             let mut compiler = Compiler::new();
@@ -312,12 +313,12 @@ mod tests {
                 Ok(opcodes) => {
                     println!("opcodes: {:?}", opcodes);
                     println!("consts: {:?}", compiler.consts());
-                    let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
-                    vm.run();
-                    println!("{} = {}", vm.past(), value);
-                    assert_eq!(vm.past(), &value);
+                    let mut machine = Machine::new(compiler.consts(), &mut globals, opcodes);
+                    machine.run();
+                    println!("{} = {}", machine.past(), value);
+                    assert_eq!(machine.past(), &value);
                 }
-                Err(message) => panic!("vm error: {}", message),
+                Err(message) => panic!("machine error: {}", message),
             }
         }
     }
@@ -352,7 +353,7 @@ mod tests {
             ("5 >> 2", Value::Integer(1)),
             ("-5 >> 2", Value::Integer(-2)),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -377,7 +378,7 @@ mod tests {
             ("-5.0 + 10.0 + -5.0", Value::Float(0.0)),
             ("(0.5 + 1.5 * 0.2 + 1.5 / 3.0) * 2.0 + -1.0", Value::Float(1.6)),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -414,7 +415,7 @@ mod tests {
             ("!!false", Value::Boolean(false)),
             ("!(if (false) { 5; })", Value::Boolean(true)),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -433,7 +434,7 @@ mod tests {
             ("if (true) {} else { 10 }", Value::None),
             ("if (true) { 1; 2 } else { 3 }", Value::Integer(2)),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -461,8 +462,10 @@ mod tests {
             ("(true || false) && false", Value::Boolean(false)),
             ("true && (false || false)", Value::Boolean(false)),
             ("2 == 3 || (4 < 0 && 1 == 1)", Value::Boolean(false)),
+            ("true && false && 1 == 1", Value::Boolean(false)),
+            ("let flag = true && false && 1 == 1;", Value::Boolean(false)),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -475,7 +478,7 @@ mod tests {
             ("let one = 1; let two = 2; one + two;", Value::Integer(3)),
             ("let one = 1; let two = one + one; one + two;", Value::Integer(3)),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -485,7 +488,7 @@ mod tests {
             (r#""hello" + " world""#, Value::String(String::from("hello world"))),
             (r#""hello"+" world"+"!""#, Value::String(String::from("hello world!"))),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -501,7 +504,7 @@ mod tests {
                 Value::Array(vec![Value::Integer(3), Value::Integer(-1), Value::Integer(30)]),
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -523,7 +526,7 @@ mod tests {
                 ])),
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -540,7 +543,7 @@ mod tests {
             ("{1: 1}[0]", Value::None),
             ("{}[0]", Value::None),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -587,7 +590,7 @@ mod tests {
                 Value::None,
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -623,7 +626,7 @@ mod tests {
                 Value::Integer(97),
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -644,7 +647,7 @@ mod tests {
                 Value::Integer(1),
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -700,7 +703,7 @@ mod tests {
                 Value::Integer(50),
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -711,7 +714,7 @@ mod tests {
             ("fn(a, b) { a + b; }(1);", "wrong number of arguments: want=2, got=1"),
         ];
         for (text, message) in tests {
-            let result = std::panic::catch_unwind(|| run_vm_tests(vec![(text, Value::None)]));
+            let result = std::panic::catch_unwind(|| run_machine_tests(vec![(text, Value::None)]));
             assert!(result.is_err());
             assert_eq!(*result.unwrap_err().downcast::<String>().unwrap(), message);
         }
@@ -734,7 +737,7 @@ mod tests {
             ("length([])", Value::Integer(0)),
             ("length([1, 2, 3])", Value::Integer(3)),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -813,7 +816,7 @@ mod tests {
                 Value::Integer(99),
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -865,7 +868,7 @@ mod tests {
                 Value::Integer(0),
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -887,7 +890,7 @@ mod tests {
             ",
             Value::Integer(610),
         )];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -899,13 +902,13 @@ mod tests {
             ",
             Value::Integer(2),
         )];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
     fn test_object_field() {
         let tests = vec![("{\"a\": 2}.a", Value::Integer(2))];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
     }
 
     #[test]
@@ -925,6 +928,51 @@ mod tests {
                 Value::Integer(200),
             ),
         ];
-        run_vm_tests(tests);
+        run_machine_tests(tests);
+    }
+
+    #[test]
+    fn test_request_asserts() {
+        let tests = vec![
+            (
+                r#"let request = fn(){
+                   let asserts = [true, false];
+                   let flag = true && asserts[0] && asserts[1];
+                   flag}
+                   request();
+                "#,
+                Value::Boolean(false),
+            ),
+            (
+                r#"let request = fn(host){
+                   let result = http(format("
+                    GET http://{host}/get
+                    Host: {host}
+                    Connection: close
+                    ", host, host));
+                   let response = result.response;
+                   let asserts = fn(status, version) { [{"result":(status == 200)}, {"result":(1 == 2)}, {"result":(1 == 1)}] }(response.status, response.version);
+                   println("asserts: {asserts}", asserts);
+                   let flag = (((true && (asserts[0]).result) && (asserts[1]).result) && (asserts[2]).result);
+                   response};
+                   request("httpbin.org").status;
+                "#,
+                Value::Integer(200),
+            ),
+            (
+                "rq request(host)`\nGET http://{host}/get\nHost: {host}\nConnection: close\n`[status == 200]
+                 request(\"httpbin.org\").status;
+                ",
+                Value::Integer(200),
+            ),
+            (
+                "let host = \"httpbin.org\";
+                 rq request()`POST http://{host}/post\nHost: {host}\nConnection: close\n`[status == 200, 1==2]
+                 request().status;
+                ",
+                Value::Integer(200),
+            ),
+        ];
+        run_machine_tests(tests);
     }
 }

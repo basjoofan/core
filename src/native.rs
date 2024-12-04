@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::http;
 use crate::Value;
 
@@ -109,8 +111,13 @@ fn http(objects: Vec<Value>) -> Value {
         match object {
             Value::String(message) => {
                 let client = http::Client::default();
-                let (_, response, _, _) = client.send(message);
-                response.to_value()
+                let (request, response, time, error) = client.send(message);
+                let mut result = HashMap::new();
+                result.insert(String::from("request"), request.to_value());
+                result.insert(String::from("response"), response.to_value());
+                result.insert(String::from("time"), time.to_value());
+                result.insert(String::from("error"), Value::String(error));
+                Value::Map(result)
             }
             _ => Value::Error(format!("function send not supported type {}", object.kind())),
         }

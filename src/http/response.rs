@@ -61,22 +61,22 @@ impl Response {
         })
     }
 
-    pub fn to_value(&self) -> Value {
+    pub fn to_value(self) -> Value {
         let mut map = HashMap::new();
-        map.insert(String::from("version"), Value::String(self.version.clone()));
+        map.insert(String::from("version"), Value::String(self.version));
         map.insert(String::from("status"), Value::Integer(self.status as i64));
-        map.insert(String::from("reason"), Value::String(self.reason.clone()));
+        map.insert(String::from("reason"), Value::String(self.reason));
         let mut headers: HashMap<String, Value> = HashMap::new();
-        for header in self.headers.iter() {
+        for header in self.headers {
             match headers.get_mut(&header.name) {
-                Some(Value::Array(array)) => array.push(Value::String(header.value.clone())),
+                Some(Value::Array(array)) => array.push(Value::String(header.value)),
                 _ => {
-                    headers.insert(header.name.clone(), Value::Array(vec![Value::String(header.value.clone())]));
+                    headers.insert(header.name, Value::Array(vec![Value::String(header.value)]));
                 }
             }
         }
         map.insert(String::from("headers"), Value::Map(headers));
-        map.insert(String::from("body"), Value::String(self.body.clone()));
+        map.insert(String::from("body"), Value::String(self.body));
         // TODO parse json value
         // let json = Parser::new(&self.body).parse().eval(&mut Context::default());
         // map.insert(String::from("json"), json);

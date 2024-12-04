@@ -5,6 +5,8 @@ use super::Headers;
 use super::Method;
 use super::Url;
 use super::Version;
+use crate::Value;
+use std::collections::HashMap;
 use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
@@ -83,7 +85,7 @@ impl Request {
                     if body.trim().is_empty() {
                         content = Content::Empty;
                     } else {
-                        content = Content::Byte(body.clone().into_bytes());
+                        content = Content::Byte(body.as_bytes().to_owned());
                     }
                 }
             }
@@ -112,6 +114,25 @@ impl Request {
         content.write(&mut writer)?;
         writer.flush().map_err(|_e| Error::WriteFlushFailed)?;
         Ok(())
+    }
+
+    pub fn to_value(self) -> Value {
+        let mut map = HashMap::new();
+        map.insert(String::from("version"), Value::String(self.version.to_string()));
+        map.insert(String::from("method"), Value::String(self.method.to_string()));
+        map.insert(String::from("url"), Value::String(self.url.to_string()));
+        let mut headers: HashMap<String, Value> = HashMap::new();
+        for header in self.headers {
+            match headers.get_mut(&header.name) {
+                Some(Value::Array(array)) => array.push(Value::String(header.value)),
+                _ => {
+                    headers.insert(header.name, Value::Array(vec![Value::String(header.value)]));
+                }
+            }
+        }
+        map.insert(String::from("headers"), Value::Map(headers));
+        map.insert(String::from("body"), Value::String(self.body));
+        Value::Map(map)
     }
 }
 

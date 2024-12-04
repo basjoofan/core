@@ -1,7 +1,7 @@
 use crate::Compiler;
 use crate::Expr;
+use crate::Machine;
 use crate::Parser;
-use crate::Vm;
 use std::collections::HashSet;
 use std::io::stdin;
 use std::io::BufRead;
@@ -25,9 +25,9 @@ pub fn repl() {
             match Parser::new(&text).parse() {
                 Ok(source) => match compiler.compile(source) {
                     Ok(opcodes) => {
-                        let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
-                        vm.run();
-                        println!("{}", vm.past());
+                        let mut machine = Machine::new(compiler.consts(), &mut globals, opcodes);
+                        machine.run();
+                        println!("{}", machine.past());
                     }
                     Err(message) => println!("{}", message),
                 },
@@ -43,9 +43,9 @@ pub fn eval(text: String) {
     match Parser::new(&text).parse() {
         Ok(source) => match compiler.compile(source) {
             Ok(opcodes) => {
-                let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
-                vm.run();
-                println!("{}", vm.past());
+                let mut machine = Machine::new(compiler.consts(), &mut globals, opcodes);
+                machine.run();
+                println!("{}", machine.past());
             }
             Err(message) => println!("{}", message),
         },
@@ -88,8 +88,8 @@ pub fn test(name: Option<String>, _: u32, _: Duration, _: u32, path: Option<Path
             }
             match compiler.compile(source) {
                 Ok(opcodes) => {
-                    let mut vm = Vm::new(compiler.consts(), &mut globals, opcodes);
-                    vm.run();
+                    let mut machine = Machine::new(compiler.consts(), &mut globals, opcodes);
+                    machine.run();
                 }
                 Err(message) => println!("{}", message),
             }

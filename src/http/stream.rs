@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-const RACE_DURATION: Duration = Duration::from_millis(200);
+const RACE: Duration = Duration::from_millis(200);
 
 pub enum Stream {
     Plain {
@@ -94,7 +94,7 @@ impl Stream {
                 // debug!("trying to connect to {}", addr);
                 let _ = sender.send((addr, Self::connect_timeout(&addr, timeout)));
             });
-            if let Ok((addr, result)) = receiver.recv_timeout(RACE_DURATION) {
+            if let Ok((addr, result)) = receiver.recv_timeout(RACE) {
                 if let Some(stream) = handle_result(addr, result) {
                     return Ok(stream);
                 }
