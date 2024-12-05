@@ -328,53 +328,51 @@ impl Compiler {
                                     asserts
                                         .into_iter()
                                         .filter_map(|assert| match assert {
-                                            Expr::Binary(token, left, right) => {
-                                                Some(Expr::Call(
-                                                    Box::new(Expr::Function(
-                                                        None,
-                                                        vec![],
-                                                        vec![
-                                                            Expr::Let(
-                                                                String::from("expr"),
-                                                                Box::new(Expr::String(format!("{left} {token} {right}"))),
-                                                            ),
-                                                            Expr::Let(String::from("left"), left),
-                                                            Expr::Let(
-                                                                String::from("compare"),
-                                                                Box::new(Expr::String(format!("{token}"))),
-                                                            ),
-                                                            Expr::Let(String::from("right"), right),
-                                                            Expr::Map(vec![
-                                                                (
-                                                                    Expr::String(String::from("expr")),
-                                                                    Expr::Ident(String::from("expr")),
-                                                                ),
-                                                                (
-                                                                    Expr::String(String::from("left")),
-                                                                    Expr::Ident(String::from("left")),
-                                                                ),
-                                                                (
-                                                                    Expr::String(String::from("compare")),
-                                                                    Expr::Ident(String::from("compare")),
-                                                                ),
-                                                                (
-                                                                    Expr::String(String::from("right")),
-                                                                    Expr::Ident(String::from("right")),
-                                                                ),
-                                                                (
-                                                                    Expr::String(String::from("result")),
-                                                                    Expr::Binary(
-                                                                        token,
-                                                                        Box::new(Expr::Ident(String::from("left"))),
-                                                                        Box::new(Expr::Ident(String::from("right"))),
-                                                                    ),
-                                                                ),
-                                                            ]),
-                                                        ],
-                                                    )),
+                                            Expr::Binary(token, left, right) => Some(Expr::Call(
+                                                Box::new(Expr::Function(
+                                                    None,
                                                     vec![],
-                                                ))
-                                            }
+                                                    vec![
+                                                        Expr::Let(
+                                                            String::from("expr"),
+                                                            Box::new(Expr::String(format!("{left} {token} {right}"))),
+                                                        ),
+                                                        Expr::Let(String::from("left"), left),
+                                                        Expr::Let(
+                                                            String::from("compare"),
+                                                            Box::new(Expr::String(format!("{token}"))),
+                                                        ),
+                                                        Expr::Let(String::from("right"), right),
+                                                        Expr::Map(vec![
+                                                            (
+                                                                Expr::String(String::from("expr")),
+                                                                Expr::Ident(String::from("expr")),
+                                                            ),
+                                                            (
+                                                                Expr::String(String::from("left")),
+                                                                Expr::Ident(String::from("left")),
+                                                            ),
+                                                            (
+                                                                Expr::String(String::from("compare")),
+                                                                Expr::Ident(String::from("compare")),
+                                                            ),
+                                                            (
+                                                                Expr::String(String::from("right")),
+                                                                Expr::Ident(String::from("right")),
+                                                            ),
+                                                            (
+                                                                Expr::String(String::from("result")),
+                                                                Expr::Binary(
+                                                                    token,
+                                                                    Box::new(Expr::Ident(String::from("left"))),
+                                                                    Box::new(Expr::Ident(String::from("right"))),
+                                                                ),
+                                                            ),
+                                                        ]),
+                                                    ],
+                                                )),
+                                                vec![],
+                                            )),
                                             _ => None,
                                         })
                                         .collect(),
@@ -1462,47 +1460,112 @@ mod tests {
 
     #[test]
     fn test_request_literal() {
-        let tests = vec![
-            (
-                "rq request(host)`\nGET http://{host}/api\nHost: example.com\n`",
-                vec![
-                    Value::String(String::from("\nGET http://{host}/api\nHost: example.com\n")),
-                    Value::Function(
-                        vec![
-                            Opcode::Native(4),
-                            Opcode::Native(3),
-                            Opcode::Const(0),
-                            Opcode::GetLocal(0),
-                            Opcode::Call(2),
-                            Opcode::Call(1),
-                            Opcode::Return,
-                        ],
-                        1,
-                        1,
-                    ),
-                ],
-                vec![Opcode::Closure(5, 0), Opcode::SetGlobal(0)],
-            ),
-            (
-                "rq request()`POST`",
-                vec![
-                    Value::String(String::from("POST")),
-                    Value::Function(
-                        vec![
-                            Opcode::Native(4),
-                            Opcode::Native(3),
-                            Opcode::Const(0),
-                            Opcode::Call(1),
-                            Opcode::Call(1),
-                            Opcode::Return,
-                        ],
-                        0,
-                        0,
-                    ),
-                ],
-                vec![Opcode::Closure(5, 0), Opcode::SetGlobal(0)],
-            ),
-        ];
+        let tests = vec![(
+            "rq request(host)`\nGET http://{host}/api\nHost: example.com\n`",
+            vec![
+                Value::String(String::from("\nGET http://{host}/api\nHost: example.com\n")),
+                Value::String(String::from("response")),
+                Value::Function(vec![Opcode::Array(0), Opcode::Return], 2, 2),
+                Value::String(String::from("status")),
+                Value::String(String::from("version")),
+                Value::String(String::from("=== TEST  {name}")),
+                Value::String(String::from("request")),
+                Value::String(String::from("{expr} => {left} {compare} {right} => {result}")),
+                Value::String(String::from("expr")),
+                Value::String(String::from("left")),
+                Value::String(String::from("compare")),
+                Value::String(String::from("right")),
+                Value::String(String::from("result")),
+                Value::Function(
+                    vec![
+                        Opcode::Native(1),
+                        Opcode::Const(7),
+                        Opcode::GetLocal(0),
+                        Opcode::Const(8),
+                        Opcode::Field,
+                        Opcode::GetLocal(0),
+                        Opcode::Const(9),
+                        Opcode::Field,
+                        Opcode::GetLocal(0),
+                        Opcode::Const(10),
+                        Opcode::Field,
+                        Opcode::GetLocal(0),
+                        Opcode::Const(11),
+                        Opcode::Field,
+                        Opcode::GetLocal(0),
+                        Opcode::Const(12),
+                        Opcode::Field,
+                        Opcode::Call(6),
+                        Opcode::Return,
+                    ],
+                    1,
+                    1,
+                ),
+                Value::Function(vec![Opcode::None, Opcode::Return], 0, 0),
+                Value::String(String::from("PASS")),
+                Value::String(String::from("FAIL")),
+                Value::String(String::from("--- {flag}  {name} ({total})")),
+                Value::String(String::from("request")),
+                Value::String(String::from("time")),
+                Value::String(String::from("total")),
+                Value::Function(
+                    vec![
+                        Opcode::Native(-1),
+                        Opcode::Native(2),
+                        Opcode::Const(0),
+                        Opcode::GetLocal(0),
+                        Opcode::Call(2),
+                        Opcode::Call(1),
+                        Opcode::SetLocal(1),
+                        Opcode::GetLocal(1),
+                        Opcode::Const(1),
+                        Opcode::Field,
+                        Opcode::SetLocal(2),
+                        Opcode::Closure(2, 0),
+                        Opcode::GetLocal(2),
+                        Opcode::Const(3),
+                        Opcode::Field,
+                        Opcode::GetLocal(2),
+                        Opcode::Const(4),
+                        Opcode::Field,
+                        Opcode::Call(2),
+                        Opcode::SetLocal(3),
+                        Opcode::Native(1),
+                        Opcode::Const(5),
+                        Opcode::Const(6),
+                        Opcode::Call(2),
+                        Opcode::Pop,
+                        Opcode::Closure(13, 0),
+                        Opcode::SetLocal(4),
+                        Opcode::Closure(14, 0),
+                        Opcode::Call(0),
+                        Opcode::Pop,
+                        Opcode::True,
+                        Opcode::Judge(34),
+                        Opcode::Const(15),
+                        Opcode::Jump(35),
+                        Opcode::Const(16),
+                        Opcode::SetLocal(5),
+                        Opcode::Native(1),
+                        Opcode::Const(17),
+                        Opcode::GetLocal(5),
+                        Opcode::Const(18),
+                        Opcode::GetLocal(1),
+                        Opcode::Const(19),
+                        Opcode::Field,
+                        Opcode::Const(20),
+                        Opcode::Field,
+                        Opcode::Call(4),
+                        Opcode::Pop,
+                        Opcode::GetLocal(2),
+                        Opcode::Return,
+                    ],
+                    6,
+                    1,
+                ),
+            ],
+            vec![Opcode::Closure(21, 0), Opcode::SetGlobal(0)],
+        )];
         run_compiler_tests(tests);
     }
 }
