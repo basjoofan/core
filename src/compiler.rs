@@ -310,7 +310,14 @@ impl Compiler {
                             String::from("response"),
                         )),
                     ),
-                    // let asserts = fn(status, version){[{"result": assert}...]}(response.status, response.version);
+                    // let asserts = fn(status, version){[
+                    //   fn(){
+                    //     let expr = "{left} {token} {right}";
+                    //     let left = left;
+                    //     let right = right;
+                    //     let result = left token right;
+                    //   } ...
+                    // ]}(response.status, response.version);
                     Expr::Let(
                         String::from("asserts"),
                         Box::new(Expr::Call(
@@ -320,21 +327,55 @@ impl Compiler {
                                 vec![Expr::Array(
                                     asserts
                                         .into_iter()
-                                        .filter_map(|assert| {
-                                            match assert {
-                                                Expr::Binary(token, left, right) => Some(Expr::Map(vec![
-                                                    (
-                                                        Expr::String(String::from("expr")),
-                                                        Expr::String(format!("{left} {token} {right}")),
-                                                    ),
-                                                    (Expr::String(String::from("left")), *left.clone()),
-                                                    (Expr::String(String::from("compare")), Expr::String(token.to_string())),
-                                                    (Expr::String(String::from("right")), *right.clone()),
-                                                    // TODO Optimize duplicate calculations
-                                                    (Expr::String(String::from("result")), Expr::Binary(token, left, right)),
-                                                ])),
-                                                _ => None,
+                                        .filter_map(|assert| match assert {
+                                            Expr::Binary(token, left, right) => {
+                                                Some(Expr::Call(
+                                                    Box::new(Expr::Function(
+                                                        None,
+                                                        vec![],
+                                                        vec![
+                                                            Expr::Let(
+                                                                String::from("expr"),
+                                                                Box::new(Expr::String(format!("{left} {token} {right}"))),
+                                                            ),
+                                                            Expr::Let(String::from("left"), left),
+                                                            Expr::Let(
+                                                                String::from("compare"),
+                                                                Box::new(Expr::String(format!("{token}"))),
+                                                            ),
+                                                            Expr::Let(String::from("right"), right),
+                                                            Expr::Map(vec![
+                                                                (
+                                                                    Expr::String(String::from("expr")),
+                                                                    Expr::Ident(String::from("expr")),
+                                                                ),
+                                                                (
+                                                                    Expr::String(String::from("left")),
+                                                                    Expr::Ident(String::from("left")),
+                                                                ),
+                                                                (
+                                                                    Expr::String(String::from("compare")),
+                                                                    Expr::Ident(String::from("compare")),
+                                                                ),
+                                                                (
+                                                                    Expr::String(String::from("right")),
+                                                                    Expr::Ident(String::from("right")),
+                                                                ),
+                                                                (
+                                                                    Expr::String(String::from("result")),
+                                                                    Expr::Binary(
+                                                                        token,
+                                                                        Box::new(Expr::Ident(String::from("left"))),
+                                                                        Box::new(Expr::Ident(String::from("right"))),
+                                                                    ),
+                                                                ),
+                                                            ]),
+                                                        ],
+                                                    )),
+                                                    vec![],
+                                                ))
                                             }
+                                            _ => None,
                                         })
                                         .collect(),
                                 )],
@@ -350,9 +391,9 @@ impl Compiler {
                         Box::new(Expr::Ident(String::from("println"))),
                         vec![Expr::String(String::from("=== TEST  {name}")), Expr::String(name.to_owned())],
                     ),
-                    // let assert = fn(assert){ println("{expr} => {left} {compare} {right} => {result}", assert.expr, assert.left, assert.compare, assert.right, assert.result) };
+                    // let log = fn(assert){ println("{expr} => {left} {compare} {right} => {result}", assert.expr, assert.left, assert.compare, assert.right, assert.result) };
                     Expr::Let(
-                        String::from("assert"),
+                        String::from("log"),
                         Box::new(Expr::Function(
                             None,
                             vec![String::from("assert")],
@@ -369,7 +410,7 @@ impl Compiler {
                             )],
                         )),
                     ),
-                    // fn(){ assert(asserts[i]); ... }();
+                    // fn(){ log(asserts[i]); ... }();
                     Expr::Call(
                         Box::new(Expr::Function(
                             None,
@@ -377,7 +418,7 @@ impl Compiler {
                             (0..length)
                                 .map(|i| {
                                     Expr::Call(
-                                        Box::new(Expr::Ident(String::from("assert"))),
+                                        Box::new(Expr::Ident(String::from("log"))),
                                         vec![Expr::Index(
                                             Box::new(Expr::Ident(String::from("asserts"))),
                                             Box::new(Expr::Integer(i as i64)),
