@@ -91,10 +91,10 @@ fn test_command_run_fibonacci() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_command_run_dir() -> Result<(), Box<dyn std::error::Error>> {
     let temp = assert_fs::TempDir::new().unwrap();
-    let function = temp.child("function.am");
-    function.write_str("let add = fn(a, b){ a + b }")?;
-    let call = temp.child("call.am");
+    let call = temp.child("2call.am");
     call.write_str(r#"println("{integer}", add(1, 1));"#)?;
+    let function = temp.child("1function.am");
+    function.write_str("let add = fn(a, b){ a + b }")?;
     let mut cmd = Command::cargo_bin(NAME)?;
     assert!(function.path().parent() == Some(temp.path()));
     cmd.arg("run").arg(function.path().parent().unwrap());
