@@ -1,9 +1,10 @@
 use crate::Token;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Expr {
     Ident(String),
     Integer(i64),
@@ -35,6 +36,23 @@ pub enum Expr {
     // TODO While A while loop: while expr { ... }.
 }
 
+macro_rules! join {
+    ($ident: ident, $format: literal, $separator:literal) => {
+        $ident
+            .iter()
+            .map(|e| format!($format, e))
+            .collect::<Vec<String>>()
+            .join($separator)
+    };
+    ($ident: ident, $format: literal, $middle:literal, $separator:literal) => {
+        $ident
+            .iter()
+            .map(|(k, v)| format!(concat!($format, $middle, $format), k, v))
+            .collect::<Vec<String>>()
+            .join($separator)
+    };
+}
+
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
@@ -49,74 +67,55 @@ impl Display for Expr {
             Expr::Return(value) => {
                 write!(f, "return {}", value)
             }
-            Expr::Unary(token, right) => write!(f, "({}{})", token, right),
+            Expr::Unary(token, right) => write!(f, "{}{}", token, right),
             Expr::Binary(token, left, right) => {
-                write!(f, "({} {} {})", left, token, right)
+                write!(f, "{} {} {}", left, token, right)
             }
-            // TODO Paren A paren expr: (expr).
-            Expr::Paren(value) => write!(f, "{}", value),
+            Expr::Paren(value) => write!(f, "({})", value),
             Expr::If(condition, consequence, alternative) => {
-                write!(f, "if ({}) {{ ", condition)?;
-                write!(
-                    f,
-                    "{}",
-                    consequence.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
-                )?;
+                write!(f, "if ({}) {{ {}", condition, join!(consequence, "{}", ";"))?;
                 if !alternative.is_empty() {
-                    write!(
-                        f,
-                        "}} else {{ {}",
-                        alternative.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
-                    )?
+                    write!(f, "}} else {{ {}", join!(alternative, "{}", ";"))?
                 }
-                write!(f, " }}")?;
-                Ok(())
+                write!(f, " }}")
             }
             Expr::Function(name, parameters, body) => write!(
                 f,
                 "fn {:?} ({}) {{ {} }}",
                 name,
-                parameters.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", "),
-                body.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
+                parameters.join(", "),
+                join!(body, "{}", ";")
             ),
-            Expr::Call(function, arguments) => write!(
-                f,
-                "{}({})",
-                function,
-                arguments.iter().map(|a| a.to_string()).collect::<Vec<String>>().join(", ")
-            ),
-            Expr::Array(elements) => write!(
-                f,
-                "[{}]",
-                elements.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
-            ),
-            Expr::Map(pairs) => write!(
-                f,
-                "{{{}}}",
-                pairs
-                    .iter()
-                    .map(|(k, v)| format!("{}:{}", k, v))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-            Expr::Index(left, index) => write!(f, "({}[{}])", left, index),
+            Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{}", ", ")),
+            Expr::Array(elements) => write!(f, "[{}]", join!(elements, "{}", ", ")),
+            Expr::Map(pairs) => write!(f, "{{{}}}", join!(pairs, "{}", ": ", ", ")),
+            Expr::Index(left, index) => write!(f, "{}[{}]", left, index),
             Expr::Field(object, field) => write!(f, "{}.{}", object, field),
             Expr::Request(name, parameters, message, asserts) => {
                 write!(
                     f,
                     "rq {} ({})`{}`[{}]",
                     name,
-                    parameters.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", "),
+                    parameters.join(", "),
                     message,
-                    asserts.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
+                    join!(asserts, "{}", ", ")
                 )
             }
-            Expr::Test(name, block) => write!(
-                f,
-                "test {} {{ {} }}",
-                name,
-                block.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(";")
-            ),
+            Expr::Test(name, block) => write!(f, "test {} {{ {} }}", name, join!(block, "{}", ";")),
+        }
+    }
+}
+
+impl Debug for Expr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Expr::Unary(token, right) => write!(f, "({}{:?})", token, right),
+            Expr::Binary(token, left, right) => {
+                write!(f, "({:?} {} {:?})", left, token, right)
+            }
+            Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{:?}", ", ")),
+            Expr::Index(left, index) => write!(f, "({:?}[{:?}])", left, index),
+            _ => write!(f, "{}", self),
         }
     }
 }

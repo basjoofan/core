@@ -631,7 +631,11 @@ fn test_parse_operator_precedence() {
     for (text, expected) in tests {
         match Parser::new(text).parse() {
             Ok(source) => {
-                let actual: String = source.iter().map(|e| e.to_string()).collect::<String>();
+                let actual: String = source.iter().fold(String::new(), |mut output, e| {
+                    use std::fmt::Write;
+                    let _ = write!(output, "{e:?}");
+                    output
+                });
                 println!("{}=={}", actual, expected);
                 assert_eq!(actual, expected);
             }
@@ -650,7 +654,7 @@ fn test_parse_if_expr() {
         if let Some(expr) = source.first() {
             println!("{}", expr);
             if let Expr::If(condition, consequence, alternative) = expr {
-                assert!(condition.to_string() == "(x < y)");
+                assert!(condition.to_string() == "x < y");
                 assert!(consequence[0].to_string() == "x");
                 assert!(alternative.is_empty())
             } else {
@@ -670,7 +674,7 @@ fn test_parse_if_else_expr() {
         if let Some(expr) = source.first() {
             println!("{}", expr);
             if let Expr::If(condition, consequence, alternative) = expr {
-                assert!(condition.to_string() == "(x < y)");
+                assert!(condition.to_string() == "x < y");
                 assert!(consequence[0].to_string() == "z");
                 assert!(consequence[1].to_string() == "x");
                 assert!(alternative[0].to_string() == "y")
@@ -686,9 +690,9 @@ fn test_parse_if_else_expr() {
 #[test]
 fn test_parse_function_literal() {
     let tests = vec![
-        ("fn(x, y) { x + y }", vec!["x", "y"], "(x + y)"),
-        ("fn(x) { x + 1;x }", vec!["x"], "(x + 1)"),
-        ("fn() { 1 + 2;3 }", vec![], "(1 + 2)"),
+        ("fn(x, y) { x + y }", vec!["x", "y"], "x + y"),
+        ("fn(x) { x + 1;x }", vec!["x"], "x + 1"),
+        ("fn() { 1 + 2;3 }", vec![], "1 + 2"),
     ];
     for (text, expected_parameters, expected_body) in tests {
         if let Ok(source) = Parser::new(text).parse() {
@@ -740,8 +744,8 @@ fn test_parse_call_expr() {
             if let Expr::Call(function, arguments) = expr {
                 assert!(function.to_string() == "add");
                 assert!(arguments[0].to_string() == "1");
-                assert!(arguments[1].to_string() == "(2 * 3)");
-                assert!(arguments[2].to_string() == "(4 + 5)");
+                assert!(arguments[1].to_string() == "2 * 3");
+                assert!(arguments[2].to_string() == "4 + 5");
             } else {
                 unreachable!("call expr parse failed")
             }
@@ -756,7 +760,7 @@ fn test_parse_call_expr_argument() {
     let tests = vec![
         ("add();", "add", vec![]),
         ("add(1);", "add", vec!["1"]),
-        ("add(1, 2 * 3, 4 + 5);", "add", vec!["1", "(2 * 3)", "(4 + 5)"]),
+        ("add(1, 2 * 3, 4 + 5);", "add", vec!["1", "2 * 3", "4 + 5"]),
     ];
     for (text, function_name, expected) in tests {
         if let Ok(source) = Parser::new(text).parse() {
@@ -804,8 +808,8 @@ fn test_parse_array_literal() {
             if let Expr::Array(elements) = expr {
                 assert!(elements.len() == 3);
                 assert!(elements[0].to_string() == "1");
-                assert!(elements[1].to_string() == "(2 * 2)");
-                assert!(elements[2].to_string() == "(3 + 3)");
+                assert!(elements[1].to_string() == "2 * 2");
+                assert!(elements[2].to_string() == "3 + 3");
             } else {
                 unreachable!("array literal parse failed")
             }
@@ -824,7 +828,7 @@ fn test_parse_index_expr() {
             println!("{}", expr);
             if let Expr::Index(left, index) = expr {
                 assert!(left.to_string() == "myArray");
-                assert!(index.to_string() == "(1 + 1)");
+                assert!(index.to_string() == "1 + 1");
             } else {
                 unreachable!("index expr parse failed")
             }
@@ -986,9 +990,9 @@ fn test_parse_map_literal_integer_key() {
 fn test_parse_map_literal_with_expr() {
     let text = r#"{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}"#;
     let expected = vec![
-        (String::from("\"one\""), String::from("(0 + 1)")),
-        (String::from("\"two\""), String::from("(10 - 8)")),
-        (String::from("\"three\""), String::from("(15 / 5)")),
+        (String::from("\"one\""), String::from("0 + 1")),
+        (String::from("\"two\""), String::from("10 - 8")),
+        (String::from("\"three\""), String::from("15 / 5")),
     ];
     if let Ok(source) = Parser::new(text).parse() {
         assert!(source.len() == 1);
@@ -1054,7 +1058,7 @@ fn test_parse_request_asserts() {
                regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22"
                ]"#,
             2,
-            vec!["(status == 200)", r#"(regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22")"#],
+            vec!["status == 200", r#"regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22""#],
         ),
         (r#"rq request()`POST`[]"#, 0, vec![]),
     ];

@@ -123,9 +123,7 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.current_dir(&temp);
     cmd.arg("test");
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("--- PASS  request ("));
+    cmd.assert().success().stdout(predicate::str::contains("--- PASS  request ("));
     Ok(())
 }
 
@@ -150,9 +148,7 @@ fn test_command_call() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.current_dir(&temp);
     cmd.arg("test").arg("call");
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("--- PASS  request ("));
+    cmd.assert().success().stdout(predicate::str::contains("--- PASS  request ("));
 
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.current_dir(&temp);
