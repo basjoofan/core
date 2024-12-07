@@ -231,8 +231,12 @@ fn read_to_string(path: PathBuf) -> String {
 
 fn read(path: PathBuf, text: &mut String) -> std::io::Result<()> {
     if path.is_dir() {
-        for entry in (std::fs::read_dir(path)?).flatten() {
-            read(entry.path(), text)?;
+        let mut entries = std::fs::read_dir(path)?
+            .map(|r| r.map(|e| e.path()))
+            .collect::<Result<Vec<PathBuf>, std::io::Error>>()?;
+        entries.sort();
+        for entry in entries {
+            read(entry, text)?;
         }
     } else if path.is_file() && path.extension() == Some(std::ffi::OsStr::new(NAME)) {
         text.push_str(&std::fs::read_to_string(path)?)
