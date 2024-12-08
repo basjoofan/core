@@ -34,12 +34,7 @@ impl std::convert::From<&str> for Url {
                 Scheme::Https => 443,
             },
         };
-        Url {
-            scheme,
-            host,
-            port,
-            path,
-        }
+        Url { scheme, host, port, path }
     }
 }
 

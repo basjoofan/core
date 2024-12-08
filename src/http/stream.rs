@@ -54,9 +54,7 @@ impl Stream {
         }?;
         let resolve_duration = resolve_start.elapsed();
         let stream = Self::connect_happy(addrs, connect_tiomeout)?;
-        stream
-            .set_read_timeout(read_tiomeout)
-            .map_err(|_e| Error::SetReadTimeoutFailed)?;
+        stream.set_read_timeout(read_tiomeout).map_err(|_e| Error::SetReadTimeoutFailed)?;
         Ok((stream, resolve_duration))
     }
 
@@ -126,20 +124,11 @@ impl Stream {
         .map_err(|_e| Error::TcpConnectFailed)
     }
 
-    fn connect_tls(
-        host: &str,
-        port: u16,
-        connect_tiomeout: Option<Duration>,
-        read_tiomeout: Option<Duration>,
-    ) -> Result<Self, Error> {
+    fn connect_tls(host: &str, port: u16, connect_tiomeout: Option<Duration>, read_tiomeout: Option<Duration>) -> Result<Self, Error> {
         let store = rustls::RootCertStore {
             roots: webpki_roots::TLS_SERVER_ROOTS.into(),
         };
-        let config = Arc::new(
-            rustls::ClientConfig::builder()
-                .with_root_certificates(store)
-                .with_no_client_auth(),
-        );
+        let config = Arc::new(rustls::ClientConfig::builder().with_root_certificates(store).with_no_client_auth());
         let name = host.to_owned().try_into().map_err(|_e| Error::InvalidUrlHost)?;
         let attach = Box::new(rustls::ClientConnection::new(config, name).map_err(|_e| Error::TlsHandshakeFailed)?);
         let (stream, resolve) = Self::connect_tcp(host, port, connect_tiomeout, read_tiomeout)?;

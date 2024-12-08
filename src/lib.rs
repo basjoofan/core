@@ -25,3 +25,21 @@ use token::Token;
 use value::Value;
 
 pub mod command;
+
+#[macro_export]
+macro_rules! join {
+    ($ident: ident, $format: literal, $separator:literal) => {
+        $ident
+            .iter()
+            .map(|e| format!($format, e))
+            .collect::<Vec<String>>()
+            .join($separator)
+    };
+    ($ident: ident, $format: literal, $middle:literal, $separator:literal) => {
+        $ident
+            .iter()
+            .map(|(k, v)| format!(concat!($format, $middle, $format), k, v))
+            .collect::<Vec<String>>()
+            .join($separator)
+    };
+}

@@ -116,14 +116,34 @@ impl<'a> Machine<'a> {
                         (Value::Float(left), Value::Float(right), Opcode::Ge) => self.push(Value::Boolean(left >= right)),
                         (Value::Float(left), Value::Float(right), Opcode::Eq) => self.push(Value::Boolean(left == right)),
                         (Value::Float(left), Value::Float(right), Opcode::Ne) => self.push(Value::Boolean(left != right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Add) => self.push(Value::Float(left as f64 + right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Sub) => self.push(Value::Float(left as f64 - right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Mul) => self.push(Value::Float(left as f64 * right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Div) => self.push(Value::Float(left as f64 / right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Rem) => self.push(Value::Float(left as f64 % right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Lt) => self.push(Value::Boolean((left as f64) < right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Gt) => self.push(Value::Boolean((left as f64) > right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Le) => self.push(Value::Boolean((left as f64) <= right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Ge) => self.push(Value::Boolean((left as f64) >= right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Eq) => self.push(Value::Boolean((left as f64) == right)),
+                        (Value::Integer(left), Value::Float(right), Opcode::Ne) => self.push(Value::Boolean((left as f64) != right)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Add) => self.push(Value::Float(left + right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Sub) => self.push(Value::Float(left - right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Mul) => self.push(Value::Float(left * right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Div) => self.push(Value::Float(left / right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Rem) => self.push(Value::Float(left % right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Lt) => self.push(Value::Boolean(left < right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Gt) => self.push(Value::Boolean(left > right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Le) => self.push(Value::Boolean(left <= right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Ge) => self.push(Value::Boolean(left >= right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Eq) => self.push(Value::Boolean(left == right as f64)),
+                        (Value::Float(left), Value::Integer(right), Opcode::Ne) => self.push(Value::Boolean(left != right as f64)),
                         (Value::Boolean(left), Value::Boolean(right), Opcode::Eq) => self.push(Value::Boolean(left == right)),
                         (Value::Boolean(left), Value::Boolean(right), Opcode::Ne) => self.push(Value::Boolean(left != right)),
                         (Value::Boolean(left), Value::Boolean(right), Opcode::Bx) => self.push(Value::Boolean(left ^ right)),
                         (Value::Boolean(left), Value::Boolean(right), Opcode::Bo) => self.push(Value::Boolean(left | right)),
                         (Value::Boolean(left), Value::Boolean(right), Opcode::Ba) => self.push(Value::Boolean(left & right)),
-                        (Value::String(left), Value::String(right), Opcode::Add) => {
-                            self.push(Value::String(format!("{}{}", left, right)))
-                        }
+                        (Value::String(left), Value::String(right), Opcode::Add) => self.push(Value::String(left + &right)),
                         (left, right, opcode) => {
                             panic!("unsupported types for binary operation: {} {:?} {}", left, opcode, right)
                         }

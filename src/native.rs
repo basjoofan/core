@@ -58,11 +58,7 @@ fn format(mut objects: Vec<Value>) -> Value {
             ranges.reverse();
             let variables = objects.iter();
             if variables.len() != ranges.len() {
-                Value::Error(format!(
-                    "wrong number of arguments. got={}, want={}",
-                    variables.len(),
-                    ranges.len()
-                ))
+                Value::Error(format!("wrong number of arguments. got={}, want={}", variables.len(), ranges.len()))
             } else {
                 for (range, variable) in ranges.into_iter().zip(variables) {
                     string.replace_range(range, &variable.to_string());
@@ -130,10 +126,7 @@ fn http(objects: Vec<Value>) -> Value {
 fn test_format() {
     let tests = vec![
         (
-            vec![
-                Value::String(String::from("Hello, {name}!")),
-                Value::String(String::from("World")),
-            ],
+            vec![Value::String(String::from("Hello, {name}!")), Value::String(String::from("World"))],
             Value::String(String::from("Hello, World!")),
         ),
         (

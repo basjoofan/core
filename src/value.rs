@@ -1,3 +1,4 @@
+use crate::join;
 use crate::Opcode;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -44,20 +45,8 @@ impl Display for Value {
             Value::Float(float) => write!(f, "{}", float),
             Value::Boolean(boolean) => write!(f, "{}", boolean),
             Value::String(string) => write!(f, "{}", string),
-            Value::Array(elements) => write!(
-                f,
-                "[{}]",
-                elements.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(", ")
-            ),
-            Value::Map(pairs) => write!(
-                f,
-                "{{{}}}",
-                pairs
-                    .iter()
-                    .map(|(k, v)| format!("{}:{}", k, v))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
+            Value::Array(elements) => write!(f, "[{}]", join!(elements, "{}", ", ")),
+            Value::Map(pairs) => write!(f, "{{{}}}", join!(pairs, "{}", ": ", ", ")),
             Value::Function(opcodes, length, number) => {
                 write!(f, "({}:{}){:?}", length, number, opcodes)
             }

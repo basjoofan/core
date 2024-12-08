@@ -1,3 +1,4 @@
+use crate::join;
 use crate::Token;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -36,23 +37,6 @@ pub enum Expr {
     // TODO While A while loop: while expr { ... }.
 }
 
-macro_rules! join {
-    ($ident: ident, $format: literal, $separator:literal) => {
-        $ident
-            .iter()
-            .map(|e| format!($format, e))
-            .collect::<Vec<String>>()
-            .join($separator)
-    };
-    ($ident: ident, $format: literal, $middle:literal, $separator:literal) => {
-        $ident
-            .iter()
-            .map(|(k, v)| format!(concat!($format, $middle, $format), k, v))
-            .collect::<Vec<String>>()
-            .join($separator)
-    };
-}
-
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
@@ -79,13 +63,9 @@ impl Display for Expr {
                 }
                 write!(f, " }}")
             }
-            Expr::Function(name, parameters, body) => write!(
-                f,
-                "fn {:?} ({}) {{ {} }}",
-                name,
-                parameters.join(", "),
-                join!(body, "{}", ";")
-            ),
+            Expr::Function(name, parameters, body) => {
+                write!(f, "fn {:?} ({}) {{ {} }}", name, parameters.join(", "), join!(body, "{}", ";"))
+            }
             Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{}", ", ")),
             Expr::Array(elements) => write!(f, "[{}]", join!(elements, "{}", ", ")),
             Expr::Map(pairs) => write!(f, "{{{}}}", join!(pairs, "{}", ": ", ", ")),
