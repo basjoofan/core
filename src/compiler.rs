@@ -7,6 +7,7 @@ use crate::Symbols;
 use crate::Token;
 use crate::Value;
 
+#[derive(Clone)]
 pub struct Compiler {
     consts: Vec<Value>,
     symbols: Symbols,
@@ -14,7 +15,7 @@ pub struct Compiler {
     index: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Scope {
     opcodes: Vec<Opcode>,
 }

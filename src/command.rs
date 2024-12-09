@@ -63,33 +63,53 @@ pub fn test(name: Option<String>, _: u32, _: Duration, _: u32, path: Option<Path
     let mut globals = Vec::new();
     let mut compiler = Compiler::new();
     match Parser::new(&text).parse() {
-        Ok(mut source) => {
+        Ok(source) => {
             let tests = source
                 .iter()
                 .filter_map(|expr| match expr {
                     Expr::Test(name, _) => Some(name.to_owned()),
                     _ => None,
                 })
-                .collect::<HashSet<_>>();
-            match name {
-                Some(name) => {
-                    if tests.contains(&name) {
-                        source.push(Expr::Call(Box::new(Expr::Ident(name)), vec![]));
-                    } else {
-                        println!("Test not found: {}", name);
-                        return;
-                    }
-                }
-                None => {
-                    for name in tests {
-                        source.push(Expr::Call(Box::new(Expr::Ident(name)), vec![]))
-                    }
-                }
-            }
+                .collect::<HashSet<String>>();
             match compiler.compile(source) {
                 Ok(opcodes) => {
                     let mut machine = Machine::new(compiler.consts(), &mut globals, opcodes);
                     machine.run();
+                    match name {
+                        Some(name) => {
+                            if tests.contains(&name) {
+                                match compiler.compile(vec![Expr::Call(Box::new(Expr::Ident(name)), vec![])]) {
+                                    Ok(opcodes) => {
+                                        let mut machine = Machine::new(compiler.consts(), &mut globals, opcodes);
+                                        machine.run();
+                                    }
+                                    Err(message) => println!("{}", message),
+                                }
+                            } else {
+                                println!("Test not found: {}", name);
+                                return;
+                            }
+                        }
+                        None => {
+                            let mut handles = vec![];
+                            for name in tests {
+                                let mut globals = globals.clone();
+                                let mut compiler = compiler.clone();
+                                handles.push(std::thread::spawn(move || {
+                                    match compiler.compile(vec![Expr::Call(Box::new(Expr::Ident(name)), vec![])]) {
+                                        Ok(opcodes) => {
+                                            let mut machine = Machine::new(compiler.consts(), &mut globals, opcodes);
+                                            machine.run();
+                                        }
+                                        Err(message) => println!("{}", message),
+                                    }
+                                }));
+                            }
+                            for handle in handles {
+                                let _ = handle.join();
+                            }
+                        }
+                    }
                 }
                 Err(message) => println!("{}", message),
             }

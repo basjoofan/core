@@ -49,7 +49,7 @@ impl Stream {
     ) -> Result<(TcpStream, Duration), Error> {
         let resolve_start = Instant::now();
         let addrs = match (host, port).to_socket_addrs() {
-            Ok(addrs) => Ok(addrs.collect::<Vec<_>>()),
+            Ok(addrs) => Ok(addrs.collect::<Vec<SocketAddr>>()),
             Err(_) => Err(Error::HostNotFound),
         }?;
         let resolve_duration = resolve_start.elapsed();
@@ -65,7 +65,7 @@ impl Stream {
         }
 
         // Happy Eyeballs (also called Fast Fallback)
-        let (a, b): (Vec<_>, Vec<_>) = addrs.into_iter().partition(|a| a.is_ipv6());
+        let (a, b): (Vec<SocketAddr>, Vec<SocketAddr>) = addrs.into_iter().partition(|a| a.is_ipv6());
         let (sender, receiver) = std::sync::mpsc::channel();
         let mut error = None;
         // let start = Instant::now();
