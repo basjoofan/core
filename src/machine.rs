@@ -258,7 +258,7 @@ impl<'a> Machine<'a> {
                 Opcode::SetLocal(mut index) => {
                     let value = self.pop();
                     index += self.frame().bp;
-                    self.stack.insert(index, value);
+                    self.stack[index] = value;
                 }
                 Opcode::Native(index) => {
                     self.push(Value::Integer(index as i64));
