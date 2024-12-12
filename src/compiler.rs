@@ -143,7 +143,10 @@ impl Compiler {
                 self.emit(Opcode::Const(index));
             }
             Expr::Let(name, value) => {
-                let symbol = self.symbols.define(name.as_str());
+                let symbol = match self.symbols.get(name.as_str()) {
+                    Some(symbol @ Symbol::Global(_)) | Some(symbol @ Symbol::Local(..)) => symbol,
+                    Some(Symbol::Function) | None => self.symbols.define(name.as_str()),
+                };
                 let opcode = match symbol {
                     Symbol::Global(index) => Opcode::SetGlobal(*index),
                     Symbol::Local(index, _) => Opcode::SetLocal(*index),
@@ -799,6 +802,23 @@ mod tests {
                     Opcode::Pop,
                 ],
             ),
+            (
+                "let one = 1;let one = 2;",
+                vec![Value::Integer(1), Value::Integer(2)],
+                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Const(1), Opcode::SetGlobal(0)],
+            ),
+            (
+                "let one = 1;let two = 2;let one = 3;",
+                vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)],
+                vec![
+                    Opcode::Const(0),
+                    Opcode::SetGlobal(0),
+                    Opcode::Const(1),
+                    Opcode::SetGlobal(1),
+                    Opcode::Const(2),
+                    Opcode::SetGlobal(0),
+                ],
+            ),
         ];
         run_compiler_tests(tests);
     }
@@ -1128,6 +1148,54 @@ mod tests {
                     ),
                 ],
                 vec![Opcode::Closure(2, 0), Opcode::Pop],
+            ),
+            (
+                "fn() {
+				   let a = 1;
+				   let a = 2;
+			     }",
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Function(
+                        vec![
+                            Opcode::Const(0),
+                            Opcode::SetLocal(0),
+                            Opcode::Const(1),
+                            Opcode::SetLocal(0),
+                            Opcode::Return,
+                        ],
+                        1,
+                        0,
+                    ),
+                ],
+                vec![Opcode::Closure(2, 0), Opcode::Pop],
+            ),
+            (
+                "fn() {
+				   let a = 1;
+                   let b = 2;
+				   let a = 3;
+			     }",
+                vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                    Value::Function(
+                        vec![
+                            Opcode::Const(0),
+                            Opcode::SetLocal(0),
+                            Opcode::Const(1),
+                            Opcode::SetLocal(1),
+                            Opcode::Const(2),
+                            Opcode::SetLocal(0),
+                            Opcode::Return,
+                        ],
+                        2,
+                        0,
+                    ),
+                ],
+                vec![Opcode::Closure(3, 0), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);

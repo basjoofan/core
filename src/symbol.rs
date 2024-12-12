@@ -54,6 +54,10 @@ impl Symbols {
         self.inner.get(name).unwrap()
     }
 
+    pub fn get(&self, name: &str) -> Option<&Symbol> {
+        self.inner.get(name)
+    }
+
     pub fn define(&mut self, name: &str) -> &Symbol {
         let index = self.index;
         self.index += 1;

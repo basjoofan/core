@@ -497,6 +497,9 @@ mod tests {
             ("let one = 1; one;", Value::Integer(1)),
             ("let one = 1; let two = 2; one + two;", Value::Integer(3)),
             ("let one = 1; let two = one + one; one + two;", Value::Integer(3)),
+            ("let one = 1;let one = 2;", Value::Integer(2)),
+            ("let one = 1;let one = 2;one", Value::Integer(2)),
+            ("let one = 1;let two = 2;let one = 3;one", Value::Integer(3)),
         ];
         run_machine_tests(tests);
     }
@@ -645,6 +648,8 @@ mod tests {
                  minusOne() + minusTwo();",
                 Value::Integer(97),
             ),
+            ("let one = fn() { let a = 1; let a = 2; a }; one();", Value::Integer(2)),
+            ("let one = fn() { let a = 1; let b = 2; let a = 3; a }; one();", Value::Integer(3)),
         ];
         run_machine_tests(tests);
     }
