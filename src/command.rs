@@ -95,7 +95,6 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
                     Ok(opcodes) => {
                         let continuous = Arc::new(AtomicBool::new(true));
                         let iterations = iterations / concurrency;
-
                         for _ in 0..concurrency {
                             let continuous = continuous.clone();
                             let consts = compiler.consts().clone();
@@ -124,7 +123,6 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
             }
         }
         None => {
-            let mut handles = Vec::new();
             for name in tests {
                 let mut globals = globals.clone();
                 let mut compiler = compiler.clone();
