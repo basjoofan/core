@@ -243,7 +243,7 @@ impl<'a> Machine<'a> {
                             self.sp -= number;
                             self.push(native::call(index as isize)(arguments));
                         }
-                        non => panic!("calling non function: {}", non.kind()),
+                        non => panic!("calling non function: {:?}", non),
                     };
                 }
                 Opcode::Return => {
@@ -273,7 +273,7 @@ impl<'a> Machine<'a> {
                         self.sp -= count;
                         self.push(Value::Closure(opcodes, length, arity, frees));
                     }
-                    non => panic!("non function: {}", non.kind()),
+                    non => panic!("non function: {:?}", non),
                 },
                 Opcode::GetFree(index) => {
                     let value = self.frame().frees[index].clone();
@@ -754,7 +754,7 @@ mod tests {
             ("length(\"hello world\")", Value::Integer(11)),
             (
                 "length(1)",
-                Value::Error(String::from("function length not supported type Integer")),
+                Value::Error(String::from("function length not supported type Integer(1)")),
             ),
             (
                 "length(\"one\", \"two\")",

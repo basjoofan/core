@@ -1,4 +1,3 @@
-use crate::join;
 use crate::Opcode;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -19,23 +18,6 @@ pub enum Value {
     Closure(Vec<Opcode>, usize, usize, Vec<Value>),
 }
 
-impl Value {
-    pub fn kind(&self) -> &str {
-        match self {
-            Value::None => "None",
-            Value::Error(_) => "Error",
-            Value::Integer(_) => "Integer",
-            Value::Float(_) => "Float",
-            Value::Boolean(_) => "Boolean",
-            Value::String(_) => "String",
-            Value::Array(_) => "Array",
-            Value::Map(_) => "Map",
-            Value::Function(..) => "Function",
-            Value::Closure(..) => "Closure",
-        }
-    }
-}
-
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
@@ -45,8 +27,8 @@ impl Display for Value {
             Value::Float(float) => write!(f, "{}", float),
             Value::Boolean(boolean) => write!(f, "{}", boolean),
             Value::String(string) => write!(f, "{}", string),
-            Value::Array(elements) => write!(f, "[{}]", join!(elements, "{}", ", ")),
-            Value::Map(pairs) => write!(f, "{{{}}}", join!(pairs, "{}", ": ", ", ")),
+            Value::Array(elements) => write!(f, "{:?}", elements),
+            Value::Map(pairs) => write!(f, "{:?}", pairs),
             Value::Function(opcodes, length, number) => {
                 write!(f, "({}:{}){:?}", length, number, opcodes)
             }

@@ -79,7 +79,7 @@ fn length(objects: Vec<Value>) -> Value {
             Value::String(string) => Value::Integer(string.len() as i64),
             Value::Array(elements) => Value::Integer(elements.len() as i64),
             Value::Map(pairs) => Value::Integer(pairs.len() as i64),
-            _ => Value::Error(format!("function length not supported type {}", object.kind())),
+            _ => Value::Error(format!("function length not supported type {:?}", object)),
         }
     } else {
         Value::Error("function length need a parameter".to_string())
@@ -115,7 +115,7 @@ fn http(objects: Vec<Value>) -> Value {
                 result.insert(String::from("error"), Value::String(error));
                 Value::Map(result)
             }
-            _ => Value::Error(format!("function send not supported type {}", object.kind())),
+            _ => Value::Error(format!("function send not supported type {:?}", object)),
         }
     } else {
         Value::Error("function send need a parameter".to_string())
