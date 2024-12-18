@@ -180,7 +180,8 @@ impl<'a> Machine<'a> {
                 }
                 Opcode::SetGlobal(index) => {
                     let value = self.pop();
-                    self.globals.insert(index, value);
+                    self.globals.resize(index + 1, Value::None);
+                    self.globals[index] = value;
                 }
                 Opcode::Array(length) => {
                     let mut array = Vec::with_capacity(length);
