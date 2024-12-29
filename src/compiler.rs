@@ -56,20 +56,6 @@ impl Compiler {
         self.scope().opcodes.len() - 1
     }
 
-    fn symbol(&mut self, symbol: Symbol) -> usize {
-        match symbol {
-            Symbol::Global(index) => self.emit(Opcode::GetGlobal(index)),
-            Symbol::Local(index, free) => {
-                if free {
-                    self.emit(Opcode::GetFree(index))
-                } else {
-                    self.emit(Opcode::GetLocal(index))
-                }
-            }
-            Symbol::Function => self.emit(Opcode::Current),
-        }
-    }
-
     fn save(&mut self, value: Value) -> usize {
         self.consts.push(value);
         self.consts.len() - 1
@@ -112,13 +98,15 @@ impl Compiler {
     fn assemble(&mut self, expr: Expr) -> Result<(), String> {
         match expr {
             Expr::Ident(name) => {
-                match self.symbols.resolve(name.as_str()) {
-                    Some(symbol) => self.symbol(symbol),
+                let opcode = match self.symbols.resolve(name.as_str()) {
+                    Some(Symbol::Global(index)) => Opcode::GetGlobal(*index),
+                    Some(Symbol::Local(index)) => Opcode::GetLocal(*index),
                     None => match native::get(name.as_str()) {
-                        Some(index) => self.emit(Opcode::Native(index)),
+                        Some(index) => Opcode::Native(index),
                         None => Err(format!("Undefined variable: {}", name))?,
                     },
                 };
+                self.emit(opcode);
             }
             Expr::Integer(integer) => {
                 let integer = Value::Integer(integer);
@@ -143,16 +131,16 @@ impl Compiler {
                 self.emit(Opcode::Const(index));
             }
             Expr::Let(name, value) => {
+                self.assemble(*value)?;
+                // TODO fixme
                 let symbol = match self.symbols.get(name.as_str()) {
-                    Some(symbol @ Symbol::Global(_)) | Some(symbol @ Symbol::Local(..)) => symbol,
-                    Some(Symbol::Function) | None => self.symbols.define(name.as_str()),
+                    Some(symbol) => symbol,
+                    None => self.symbols.define(name.as_str()),
                 };
                 let opcode = match symbol {
                     Symbol::Global(index) => Opcode::SetGlobal(*index),
-                    Symbol::Local(index, _) => Opcode::SetLocal(*index),
-                    Symbol::Function => Err(format!("Cannot redefine function: {}", name))?,
+                    Symbol::Local(index) => Opcode::SetLocal(*index),
                 };
-                self.assemble(*value)?;
                 self.emit(opcode);
             }
             Expr::Return(value) => {
@@ -168,31 +156,19 @@ impl Compiler {
                 };
             }
             Expr::Binary(Token { kind: Kind::Lo, .. }, left, right) => {
-                self.assemble(Expr::Call(
-                    Box::new(Expr::Function(
-                        None,
-                        vec![String::from("left")],
-                        vec![Expr::If(
-                            Box::new(Expr::Ident(String::from("left"))),
-                            vec![Expr::Ident(String::from("left"))],
-                            vec![*right],
-                        )],
-                    )),
-                    vec![*left],
+                self.assemble(Expr::Let(String::from("_left"), Box::new(*left)))?;
+                self.assemble(Expr::If(
+                    Box::new(Expr::Ident(String::from("_left"))),
+                    vec![Expr::Ident(String::from("_left"))],
+                    vec![*right],
                 ))?;
             }
             Expr::Binary(Token { kind: Kind::La, .. }, left, right) => {
-                self.assemble(Expr::Call(
-                    Box::new(Expr::Function(
-                        None,
-                        vec![String::from("left")],
-                        vec![Expr::If(
-                            Box::new(Expr::Ident(String::from("left"))),
-                            vec![*right],
-                            vec![Expr::Ident(String::from("left"))],
-                        )],
-                    )),
-                    vec![*left],
+                self.assemble(Expr::Let(String::from("_left"), Box::new(*left)))?;
+                self.assemble(Expr::If(
+                    Box::new(Expr::Ident(String::from("_left"))),
+                    vec![*right],
+                    vec![Expr::Ident(String::from("_left"))],
                 ))?;
             }
             Expr::Binary(token, left, right) => {
@@ -234,25 +210,17 @@ impl Compiler {
                     *opcode = Opcode::Jump(jump_position)
                 }
             }
-            Expr::Function(name, parameters, body) => {
+            Expr::Function(_, parameters, body) => {
                 self.enter();
-                if let Some(name) = name {
-                    self.symbols.function(name.as_str());
-                }
                 for parameter in parameters.iter() {
                     self.symbols.define(parameter);
                 }
                 self.block(body, true)?;
-                let frees = self.symbols.frees();
-                let count = frees.len();
                 let length = self.symbols.length();
                 let opcodes = self.leave();
-                for free in frees {
-                    self.symbol(free);
-                }
                 let number = parameters.len();
                 let index = self.save(Value::Function(opcodes, length, number));
-                self.emit(Opcode::Closure(index, count));
+                self.emit(Opcode::Const(index));
             }
             Expr::Call(function, arguments) => {
                 self.assemble(*function)?;
@@ -298,27 +266,26 @@ impl Compiler {
                     places.push(Expr::Ident(String::from(literal)))
                 });
                 places.insert(usize::MIN, Expr::String(message));
-                let length = asserts.len();
                 let format = Expr::Call(Box::new(Expr::Ident(String::from("format"))), places);
                 let body = vec![
-                    // let result = http(format(...));
+                    // let record = http(format(...));
                     Expr::Let(
-                        String::from("result"),
+                        String::from("record"),
                         Box::new(Expr::Call(Box::new(Expr::Ident(String::from("http"))), vec![format])),
                     ),
-                    // let response = result.response;
+                    // let response = record.response;
                     Expr::Let(
                         String::from("response"),
-                        Box::new(Expr::Field(Box::new(Expr::Ident(String::from("result"))), String::from("response"))),
+                        Box::new(Expr::Field(Box::new(Expr::Ident(String::from("record"))), String::from("response"))),
                     ),
-                    // let asserts = fn(status, version){[
-                    //   fn(){
-                    //     let expr = "{left} {token} {right}";
-                    //     let left = left;
-                    //     let right = right;
-                    //     let result = left token right;
-                    //   } ...
-                    // ]}(response.status, response.version);
+                    // let asserts = fn(status, version){
+                    //     [{ "expr": "{left} {token} {right}",
+                    //       "left": left,
+                    //       "compare": token,
+                    //       "right": right,
+                    //       "result": (left token right)
+                    //     }, ...]
+                    // }(response.status, response.version);
                     Expr::Let(
                         String::from("asserts"),
                         Box::new(Expr::Call(
@@ -329,36 +296,13 @@ impl Compiler {
                                     asserts
                                         .into_iter()
                                         .filter_map(|assert| match assert {
-                                            Expr::Binary(token, left, right) => Some(Expr::Call(
-                                                Box::new(Expr::Function(
-                                                    None,
-                                                    vec![],
-                                                    vec![
-                                                        Expr::Let(
-                                                            String::from("expr"),
-                                                            Box::new(Expr::String(format!("{left} {token} {right}"))),
-                                                        ),
-                                                        Expr::Let(String::from("left"), left),
-                                                        Expr::Let(String::from("compare"), Box::new(Expr::String(format!("{token}")))),
-                                                        Expr::Let(String::from("right"), right),
-                                                        Expr::Map(vec![
-                                                            (Expr::String(String::from("expr")), Expr::Ident(String::from("expr"))),
-                                                            (Expr::String(String::from("left")), Expr::Ident(String::from("left"))),
-                                                            (Expr::String(String::from("compare")), Expr::Ident(String::from("compare"))),
-                                                            (Expr::String(String::from("right")), Expr::Ident(String::from("right"))),
-                                                            (
-                                                                Expr::String(String::from("result")),
-                                                                Expr::Binary(
-                                                                    token,
-                                                                    Box::new(Expr::Ident(String::from("left"))),
-                                                                    Box::new(Expr::Ident(String::from("right"))),
-                                                                ),
-                                                            ),
-                                                        ]),
-                                                    ],
-                                                )),
-                                                vec![],
-                                            )),
+                                            Expr::Binary(token, left, right) => Some(Expr::Map(vec![
+                                                (Expr::String(String::from("expr")), Expr::String(format!("{left} {token} {right}"))),
+                                                (Expr::String(String::from("left")), *left.clone()),
+                                                (Expr::String(String::from("compare")), Expr::String(format!("{token}"))),
+                                                (Expr::String(String::from("right")), *right.clone()),
+                                                (Expr::String(String::from("result")), Expr::Binary(token, left, right)),
+                                            ])),
                                             _ => None,
                                         })
                                         .collect(),
@@ -370,92 +314,34 @@ impl Compiler {
                             ],
                         )),
                     ),
-                    // println("=== TEST  {name}", name);
+                    // track({"name": name,
+                    //         "request": record.request,
+                    //         "response": record.response,
+                    //         "time": record.time,
+                    //         "asserts": asserts
+                    //         "error": record.error });
                     Expr::Call(
-                        Box::new(Expr::Ident(String::from("println"))),
-                        vec![Expr::String(String::from("=== TEST  {name}")), Expr::String(name.to_owned())],
-                    ),
-                    // let log = fn(assert){ println("{expr} => {left} {compare} {right} => {result}", assert.expr, assert.left, assert.compare, assert.right, assert.result) };
-                    Expr::Let(
-                        String::from("log"),
-                        Box::new(Expr::Function(
-                            None,
-                            vec![String::from("assert")],
-                            vec![Expr::Call(
-                                Box::new(Expr::Ident(String::from("println"))),
-                                vec![
-                                    Expr::String(String::from("{expr} => {left} {compare} {right} => {result}")),
-                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("expr")),
-                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("left")),
-                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("compare")),
-                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("right")),
-                                    Expr::Field(Box::new(Expr::Ident(String::from("assert"))), String::from("result")),
-                                ],
-                            )],
-                        )),
-                    ),
-                    // fn(){ log(asserts[i]); ... }();
-                    Expr::Call(
-                        Box::new(Expr::Function(
-                            None,
-                            vec![],
-                            (0..length)
-                                .map(|i| {
-                                    Expr::Call(
-                                        Box::new(Expr::Ident(String::from("log"))),
-                                        vec![Expr::Index(
-                                            Box::new(Expr::Ident(String::from("asserts"))),
-                                            Box::new(Expr::Integer(i as i64)),
-                                        )],
-                                    )
-                                })
-                                .collect(),
-                        )),
-                        vec![],
-                    ),
-                    // let flag = if (true && asserts[i].result ... ) { "PASS" }else { "FAIL" };
-                    Expr::Let(
-                        String::from("flag"),
-                        Box::new(Expr::If(
-                            Box::new((0..length).fold(Expr::Boolean(true), |e, i| {
-                                Expr::Binary(
-                                    Token {
-                                        kind: Kind::La,
-                                        literal: String::from("&&"),
-                                    },
-                                    Box::new(e),
-                                    Box::new(Expr::Field(
-                                        Box::new(Expr::Index(
-                                            Box::new(Expr::Ident(String::from("asserts"))),
-                                            Box::new(Expr::Integer(i as i64)),
-                                        )),
-                                        String::from("result"),
-                                    )),
-                                )
-                            })),
-                            vec![Expr::String(String::from("PASS"))],
-                            vec![Expr::String(String::from("FAIL"))],
-                        )),
-                    ),
-                    // println("--- {flag}  {name} ({total})", flag, "name", result.time.total);
-                    Expr::Call(
-                        Box::new(Expr::Ident(String::from("println"))),
-                        vec![
-                            Expr::String(String::from("--- {flag}  {name} ({total}ms)")),
-                            Expr::Ident(String::from("flag")),
-                            Expr::String(name.to_owned()),
-                            Expr::Binary(
-                                Token {
-                                    kind: Kind::Slash,
-                                    literal: String::from("/"),
-                                },
-                                Box::new(Expr::Field(
-                                    Box::new(Expr::Field(Box::new(Expr::Ident(String::from("result"))), String::from("time"))),
-                                    String::from("total"),
-                                )),
-                                Box::new(Expr::Float(1000000.00)),
+                        Box::new(Expr::Ident(String::from("track"))),
+                        vec![Expr::Map(vec![
+                            (Expr::String(String::from("name")), Expr::String(name.to_owned())),
+                            (
+                                Expr::String(String::from("request")),
+                                Expr::Field(Box::new(Expr::Ident(String::from("record"))), String::from("request")),
                             ),
-                        ],
+                            (
+                                Expr::String(String::from("response")),
+                                Expr::Field(Box::new(Expr::Ident(String::from("record"))), String::from("response")),
+                            ),
+                            (
+                                Expr::String(String::from("time")),
+                                Expr::Field(Box::new(Expr::Ident(String::from("record"))), String::from("time")),
+                            ),
+                            (Expr::String(String::from("asserts")), Expr::Ident(String::from("asserts"))),
+                            (
+                                Expr::String(String::from("error")),
+                                Expr::Field(Box::new(Expr::Ident(String::from("record"))), String::from("error")),
+                            ),
+                        ])],
                     ),
                     // return response;
                     Expr::Ident(String::from("response")),
@@ -467,12 +353,11 @@ impl Compiler {
                 self.block(block, true)?;
                 let opcodes = self.leave();
                 let index = self.save(Value::Function(opcodes, usize::MIN, usize::MIN));
-                self.emit(Opcode::Closure(index, usize::MIN));
+                self.emit(Opcode::Const(index));
                 let symbol = self.symbols.define(name.as_str());
                 let opcode = match symbol {
                     Symbol::Global(index) => Opcode::SetGlobal(*index),
-                    Symbol::Local(_, _) => Err(format!("Cannot define test in local: {}", name))?,
-                    Symbol::Function => Err(format!("Cannot redefine function: {}", name))?,
+                    Symbol::Local(_) => Err(format!("Cannot define test in local: {}", name))?,
                 };
                 self.emit(opcode);
             }
@@ -743,35 +628,31 @@ mod tests {
         let tests = vec![
             (
                 "true || true",
-                vec![Value::Function(
-                    vec![
-                        Opcode::GetLocal(0),
-                        Opcode::Judge(4),
-                        Opcode::GetLocal(0),
-                        Opcode::Jump(5),
-                        Opcode::True,
-                        Opcode::Return,
-                    ],
-                    1,
-                    1,
-                )],
-                vec![Opcode::Closure(0, 0), Opcode::True, Opcode::Call(1), Opcode::Pop],
+                vec![],
+                vec![
+                    Opcode::True,
+                    Opcode::SetGlobal(0),
+                    Opcode::GetGlobal(0),
+                    Opcode::Judge(6),
+                    Opcode::GetGlobal(0),
+                    Opcode::Jump(7),
+                    Opcode::True,
+                    Opcode::Pop,
+                ],
             ),
             (
                 "true && true",
-                vec![Value::Function(
-                    vec![
-                        Opcode::GetLocal(0),
-                        Opcode::Judge(4),
-                        Opcode::True,
-                        Opcode::Jump(5),
-                        Opcode::GetLocal(0),
-                        Opcode::Return,
-                    ],
-                    1,
-                    1,
-                )],
-                vec![Opcode::Closure(0, 0), Opcode::True, Opcode::Call(1), Opcode::Pop],
+                vec![],
+                vec![
+                    Opcode::True,
+                    Opcode::SetGlobal(0),
+                    Opcode::GetGlobal(0),
+                    Opcode::Judge(6),
+                    Opcode::True,
+                    Opcode::Jump(7),
+                    Opcode::GetGlobal(0),
+                    Opcode::Pop,
+                ],
             ),
         ];
         run_compiler_tests(tests);
@@ -981,7 +862,7 @@ mod tests {
                     Value::Integer(10),
                     Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return], 0, 0),
                 ],
-                vec![Opcode::Closure(2, 0), Opcode::Pop],
+                vec![Opcode::Const(2), Opcode::Pop],
             ),
             (
                 "fn() { 6 + 8 }",
@@ -990,7 +871,7 @@ mod tests {
                     Value::Integer(8),
                     Value::Function(vec![Opcode::Const(0), Opcode::Const(1), Opcode::Add, Opcode::Return], 0, 0),
                 ],
-                vec![Opcode::Closure(2, 0), Opcode::Pop],
+                vec![Opcode::Const(2), Opcode::Pop],
             ),
             (
                 "fn() { 1; 2 }",
@@ -999,12 +880,12 @@ mod tests {
                     Value::Integer(2),
                     Value::Function(vec![Opcode::Const(0), Opcode::Pop, Opcode::Const(1), Opcode::Return], 0, 0),
                 ],
-                vec![Opcode::Closure(2, 0), Opcode::Pop],
+                vec![Opcode::Const(2), Opcode::Pop],
             ),
             (
                 "fn() { }",
                 vec![Value::Function(vec![Opcode::None, Opcode::Return], 0, 0)],
-                vec![Opcode::Closure(0, 0), Opcode::Pop],
+                vec![Opcode::Const(0), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
@@ -1016,13 +897,13 @@ mod tests {
             (
                 "fn() { 2 }();",
                 vec![Value::Integer(2), Value::Function(vec![Opcode::Const(0), Opcode::Return], 0, 0)],
-                vec![Opcode::Closure(1, 0), Opcode::Call(0), Opcode::Pop],
+                vec![Opcode::Const(1), Opcode::Call(0), Opcode::Pop],
             ),
             (
                 "let no_arg = fn() { 22 }; no_arg();",
                 vec![Value::Integer(22), Value::Function(vec![Opcode::Const(0), Opcode::Return], 0, 0)],
                 vec![
-                    Opcode::Closure(1, 0),
+                    Opcode::Const(1),
                     Opcode::SetGlobal(0),
                     Opcode::GetGlobal(0),
                     Opcode::Call(0),
@@ -1034,7 +915,7 @@ mod tests {
                  oneArg(2);",
                 vec![Value::Function(vec![Opcode::GetLocal(0), Opcode::Return], 1, 1), Value::Integer(2)],
                 vec![
-                    Opcode::Closure(0, 0),
+                    Opcode::Const(0),
                     Opcode::SetGlobal(0),
                     Opcode::GetGlobal(0),
                     Opcode::Const(1),
@@ -1063,7 +944,7 @@ mod tests {
                     Value::Integer(8),
                 ],
                 vec![
-                    Opcode::Closure(0, 0),
+                    Opcode::Const(0),
                     Opcode::SetGlobal(0),
                     Opcode::GetGlobal(0),
                     Opcode::Const(1),
@@ -1106,7 +987,7 @@ mod tests {
                     Value::Integer(55),
                     Value::Function(vec![Opcode::GetGlobal(0), Opcode::Return], 0, 0),
                 ],
-                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Closure(1, 0), Opcode::Pop],
+                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Const(1), Opcode::Pop],
             ),
             (
                 "fn() {
@@ -1121,7 +1002,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Closure(1, 0), Opcode::Pop],
+                vec![Opcode::Const(1), Opcode::Pop],
             ),
             (
                 "fn() {
@@ -1147,7 +1028,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Closure(2, 0), Opcode::Pop],
+                vec![Opcode::Const(2), Opcode::Pop],
             ),
             (
                 "fn() {
@@ -1169,7 +1050,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Closure(2, 0), Opcode::Pop],
+                vec![Opcode::Const(2), Opcode::Pop],
             ),
             (
                 "fn() {
@@ -1195,7 +1076,7 @@ mod tests {
                         0,
                     ),
                 ],
-                vec![Opcode::Closure(3, 0), Opcode::Pop],
+                vec![Opcode::Const(3), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
@@ -1230,202 +1111,7 @@ mod tests {
                     0,
                     0,
                 )],
-                vec![Opcode::Closure(0, 0), Opcode::Pop],
-            ),
-        ];
-        run_compiler_tests(tests);
-    }
-
-    #[test]
-    fn test_function_closure() {
-        let tests = vec![
-            (
-                "
-                fn(a) {
-                    fn(b) {
-                        a + b
-                    }
-                }
-                 ",
-                vec![
-                    Value::Function(vec![Opcode::GetFree(0), Opcode::GetLocal(0), Opcode::Add, Opcode::Return], 1, 1),
-                    Value::Function(vec![Opcode::GetLocal(0), Opcode::Closure(0, 1), Opcode::Return], 1, 1),
-                ],
-                vec![Opcode::Closure(1, 0), Opcode::Pop],
-            ),
-            (
-                "
-                fn(a) {
-                    fn(b) {
-                        fn(c) {
-                            a + b + c
-                        }
-                    }
-			    };
-                ",
-                vec![
-                    Value::Function(
-                        vec![
-                            Opcode::GetFree(0),
-                            Opcode::GetFree(1),
-                            Opcode::Add,
-                            Opcode::GetLocal(0),
-                            Opcode::Add,
-                            Opcode::Return,
-                        ],
-                        1,
-                        1,
-                    ),
-                    Value::Function(
-                        vec![Opcode::GetFree(0), Opcode::GetLocal(0), Opcode::Closure(0, 2), Opcode::Return],
-                        1,
-                        1,
-                    ),
-                    Value::Function(vec![Opcode::GetLocal(0), Opcode::Closure(1, 1), Opcode::Return], 1, 1),
-                ],
-                vec![Opcode::Closure(2, 0), Opcode::Pop],
-            ),
-            (
-                "
-                let global = 55;
-                fn() {
-                    let a = 66;
-                    fn() {
-                        let b = 77;
-                        fn() {
-                            let c = 88;
-                            global + a + b + c;
-                        }
-                    }
-                }
-                ",
-                vec![
-                    Value::Integer(55),
-                    Value::Integer(66),
-                    Value::Integer(77),
-                    Value::Integer(88),
-                    Value::Function(
-                        vec![
-                            Opcode::Const(3),
-                            Opcode::SetLocal(0),
-                            Opcode::GetGlobal(0),
-                            Opcode::GetFree(0),
-                            Opcode::Add,
-                            Opcode::GetFree(1),
-                            Opcode::Add,
-                            Opcode::GetLocal(0),
-                            Opcode::Add,
-                            Opcode::Return,
-                        ],
-                        1,
-                        0,
-                    ),
-                    Value::Function(
-                        vec![
-                            Opcode::Const(2),
-                            Opcode::SetLocal(0),
-                            Opcode::GetFree(0),
-                            Opcode::GetLocal(0),
-                            Opcode::Closure(4, 2),
-                            Opcode::Return,
-                        ],
-                        1,
-                        0,
-                    ),
-                    Value::Function(
-                        vec![
-                            Opcode::Const(1),
-                            Opcode::SetLocal(0),
-                            Opcode::GetLocal(0),
-                            Opcode::Closure(5, 1),
-                            Opcode::Return,
-                        ],
-                        1,
-                        0,
-                    ),
-                ],
-                vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Closure(6, 0), Opcode::Pop],
-            ),
-        ];
-        run_compiler_tests(tests);
-    }
-
-    #[test]
-    fn test_function_recursive() {
-        let tests = vec![
-            (
-                "
-                let countDown = fn(x) { countDown(x - 1); };
-                countDown(1);
-                ",
-                vec![
-                    Value::Integer(1),
-                    Value::Function(
-                        vec![
-                            Opcode::Current,
-                            Opcode::GetLocal(0),
-                            Opcode::Const(0),
-                            Opcode::Sub,
-                            Opcode::Call(1),
-                            Opcode::Return,
-                        ],
-                        1,
-                        1,
-                    ),
-                    Value::Integer(1),
-                ],
-                vec![
-                    Opcode::Closure(1, 0),
-                    Opcode::SetGlobal(0),
-                    Opcode::GetGlobal(0),
-                    Opcode::Const(2),
-                    Opcode::Call(1),
-                    Opcode::Pop,
-                ],
-            ),
-            (
-                "
-                let wrapper = fn() {
-                    let countDown = fn(x) { countDown(x - 1); };
-                    countDown(1);
-                };
-                wrapper();
-                ",
-                vec![
-                    Value::Integer(1),
-                    Value::Function(
-                        vec![
-                            Opcode::Current,
-                            Opcode::GetLocal(0),
-                            Opcode::Const(0),
-                            Opcode::Sub,
-                            Opcode::Call(1),
-                            Opcode::Return,
-                        ],
-                        1,
-                        1,
-                    ),
-                    Value::Integer(1),
-                    Value::Function(
-                        vec![
-                            Opcode::Closure(1, 0),
-                            Opcode::SetLocal(0),
-                            Opcode::GetLocal(0),
-                            Opcode::Const(2),
-                            Opcode::Call(1),
-                            Opcode::Return,
-                        ],
-                        1,
-                        0,
-                    ),
-                ],
-                vec![
-                    Opcode::Closure(3, 0),
-                    Opcode::SetGlobal(0),
-                    Opcode::GetGlobal(0),
-                    Opcode::Call(0),
-                    Opcode::Pop,
-                ],
+                vec![Opcode::Const(0), Opcode::Pop],
             ),
         ];
         run_compiler_tests(tests);
@@ -1440,7 +1126,7 @@ mod tests {
             ",
             vec![Value::Integer(2), Value::Function(vec![Opcode::Const(0), Opcode::Return], 0, 0)],
             vec![
-                Opcode::Closure(1, 0),
+                Opcode::Const(1),
                 Opcode::SetGlobal(0),
                 Opcode::GetGlobal(0),
                 Opcode::Call(0),
@@ -1481,47 +1167,17 @@ mod tests {
                 Value::Function(vec![Opcode::Array(0), Opcode::Return], 2, 2),
                 Value::String(String::from("status")),
                 Value::String(String::from("version")),
-                Value::String(String::from("=== TEST  {name}")),
+                Value::String(String::from("name")),
                 Value::String(String::from("request")),
-                Value::String(String::from("{expr} => {left} {compare} {right} => {result}")),
-                Value::String(String::from("expr")),
-                Value::String(String::from("left")),
-                Value::String(String::from("compare")),
-                Value::String(String::from("right")),
-                Value::String(String::from("result")),
-                Value::Function(
-                    vec![
-                        Opcode::Native(1),
-                        Opcode::Const(7),
-                        Opcode::GetLocal(0),
-                        Opcode::Const(8),
-                        Opcode::Field,
-                        Opcode::GetLocal(0),
-                        Opcode::Const(9),
-                        Opcode::Field,
-                        Opcode::GetLocal(0),
-                        Opcode::Const(10),
-                        Opcode::Field,
-                        Opcode::GetLocal(0),
-                        Opcode::Const(11),
-                        Opcode::Field,
-                        Opcode::GetLocal(0),
-                        Opcode::Const(12),
-                        Opcode::Field,
-                        Opcode::Call(6),
-                        Opcode::Return,
-                    ],
-                    1,
-                    1,
-                ),
-                Value::Function(vec![Opcode::None, Opcode::Return], 0, 0),
-                Value::String(String::from("PASS")),
-                Value::String(String::from("FAIL")),
-                Value::String(String::from("--- {flag}  {name} ({total}ms)")),
                 Value::String(String::from("request")),
+                Value::String(String::from("request")),
+                Value::String(String::from("response")),
+                Value::String(String::from("response")),
                 Value::String(String::from("time")),
-                Value::String(String::from("total")),
-                Value::Float(1000000.00),
+                Value::String(String::from("time")),
+                Value::String(String::from("asserts")),
+                Value::String(String::from("error")),
+                Value::String(String::from("error")),
                 Value::Function(
                     vec![
                         Opcode::Native(-1),
@@ -1535,7 +1191,7 @@ mod tests {
                         Opcode::Const(1),
                         Opcode::Field,
                         Opcode::SetLocal(2),
-                        Opcode::Closure(2, 0),
+                        Opcode::Const(2),
                         Opcode::GetLocal(2),
                         Opcode::Const(3),
                         Opcode::Field,
@@ -1544,43 +1200,38 @@ mod tests {
                         Opcode::Field,
                         Opcode::Call(2),
                         Opcode::SetLocal(3),
-                        Opcode::Native(1),
+                        Opcode::Native(-2),
                         Opcode::Const(5),
                         Opcode::Const(6),
-                        Opcode::Call(2),
-                        Opcode::Pop,
-                        Opcode::Closure(13, 0),
-                        Opcode::SetLocal(4),
-                        Opcode::Closure(14, 0),
-                        Opcode::Call(0),
-                        Opcode::Pop,
-                        Opcode::True,
-                        Opcode::Judge(34),
-                        Opcode::Const(15),
-                        Opcode::Jump(35),
-                        Opcode::Const(16),
-                        Opcode::SetLocal(5),
-                        Opcode::Native(1),
-                        Opcode::Const(17),
-                        Opcode::GetLocal(5),
-                        Opcode::Const(18),
+                        Opcode::Const(7),
                         Opcode::GetLocal(1),
-                        Opcode::Const(19),
+                        Opcode::Const(8),
                         Opcode::Field,
-                        Opcode::Const(20),
+                        Opcode::Const(9),
+                        Opcode::GetLocal(1),
+                        Opcode::Const(10),
                         Opcode::Field,
-                        Opcode::Const(21),
-                        Opcode::Div,
-                        Opcode::Call(4),
+                        Opcode::Const(11),
+                        Opcode::GetLocal(1),
+                        Opcode::Const(12),
+                        Opcode::Field,
+                        Opcode::Const(13),
+                        Opcode::GetLocal(3),
+                        Opcode::Const(14),
+                        Opcode::GetLocal(1),
+                        Opcode::Const(15),
+                        Opcode::Field,
+                        Opcode::Map(6),
+                        Opcode::Call(1),
                         Opcode::Pop,
                         Opcode::GetLocal(2),
                         Opcode::Return,
                     ],
-                    6,
+                    4,
                     1,
                 ),
             ],
-            vec![Opcode::Closure(22, 0), Opcode::SetGlobal(0)],
+            vec![Opcode::Const(16), Opcode::SetGlobal(0)],
         )];
         run_compiler_tests(tests);
     }

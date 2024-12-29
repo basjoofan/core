@@ -174,7 +174,7 @@ fn test_segment() {
             x + y;
             };
             
-            let result = add(five, ten);
+            let number = add(five, ten);
             !-/*5;
             5 < 10 > 5;
             
@@ -241,7 +241,7 @@ fn test_segment() {
         (Kind::Rb, "}"),
         (Kind::Semi, ";"),
         (Kind::Let, "let"),
-        (Kind::Ident, "result"),
+        (Kind::Ident, "number"),
         (Kind::Assign, "="),
         (Kind::Ident, "add"),
         (Kind::Lp, "("),

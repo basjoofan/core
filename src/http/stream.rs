@@ -113,7 +113,7 @@ impl Stream {
         }
 
         // debug!("could not connect to any address, took {}", start.elapsed());
-        Err(error.unwrap_or_else(|| Error::NoConnectionAvailable))
+        Err(error.unwrap_or(Error::NoConnectionAvailable))
     }
 
     fn connect_timeout(addr: &SocketAddr, timeout: Option<Duration>) -> Result<TcpStream, Error> {

@@ -44,9 +44,5 @@ pub enum Opcode {
 
     Native(isize),
 
-    Closure(usize, usize),
-    GetFree(usize),
-    Current,
-
     Field,
 }

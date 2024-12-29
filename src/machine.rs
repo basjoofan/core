@@ -17,9 +17,6 @@ struct Frame {
     opcodes: Vec<Opcode>,
     fp: usize,
     bp: usize,
-    frees: Vec<Value>,
-    length: usize,
-    number: usize,
 }
 
 impl<'a> Machine<'a> {
@@ -33,9 +30,6 @@ impl<'a> Machine<'a> {
                 opcodes,
                 fp: usize::MIN,
                 bp: usize::MIN,
-                frees: vec![],
-                length: usize::MIN,
-                number: usize::MIN,
             }],
             index: usize::MIN,
         }
@@ -145,7 +139,7 @@ impl<'a> Machine<'a> {
                         (Value::Boolean(left), Value::Boolean(right), Opcode::Ba) => self.push(Value::Boolean(left & right)),
                         (Value::String(left), Value::String(right), Opcode::Add) => self.push(Value::String(left + &right)),
                         (left, right, opcode) => {
-                            panic!("unsupported types for binary operation: {} {:?} {}", left, opcode, right)
+                            panic!("unsupported types for binary operation: {:?} | {:?} | {}", left, opcode, right)
                         }
                     }
                 }
@@ -219,28 +213,25 @@ impl<'a> Machine<'a> {
                         (left, index) => panic!("unsupported types for index: {}[{}]", left, index),
                     }
                 }
-                Opcode::Call(number) => {
-                    let function = self.stack.remove(self.sp - 1 - number);
+                Opcode::Call(arity) => {
+                    let function = self.stack.remove(self.sp - 1 - arity);
                     self.sp -= 1;
                     match function {
-                        Value::Closure(opcodes, length, arity, frees) => {
+                        Value::Function(opcodes, length, number) => {
                             if number != arity {
-                                panic!("wrong number of arguments: want={}, got={}", arity, number);
+                                panic!("wrong number of arguments: want={}, got={}", number, arity);
                             }
                             self.enter(Frame {
                                 opcodes,
                                 fp: usize::MIN,
-                                bp: self.sp - number,
-                                frees,
-                                length,
-                                number,
+                                bp: self.sp - arity,
                             });
                             self.sp = self.frame().bp + length;
                             self.stack.resize(self.sp, Value::None);
                         }
                         Value::Integer(index) => {
-                            let arguments = self.stack[self.sp - number..self.sp].to_vec();
-                            self.sp -= number;
+                            let arguments = self.stack[self.sp - arity..self.sp].to_vec();
+                            self.sp -= arity;
                             self.push(native::call(index as isize)(arguments));
                         }
                         non => panic!("calling non function: {:?}", non),
@@ -263,28 +254,6 @@ impl<'a> Machine<'a> {
                 }
                 Opcode::Native(index) => {
                     self.push(Value::Integer(index as i64));
-                }
-                Opcode::Closure(index, count) => match self.consts[index].clone() {
-                    Value::Function(opcodes, length, arity) => {
-                        let mut frees = Vec::with_capacity(count);
-                        for i in 0..count {
-                            frees.insert(i, self.stack[self.sp - count + i].clone());
-                        }
-                        self.sp -= count;
-                        self.push(Value::Closure(opcodes, length, arity, frees));
-                    }
-                    non => panic!("non function: {:?}", non),
-                },
-                Opcode::GetFree(index) => {
-                    let value = self.frame().frees[index].clone();
-                    self.push(value)
-                }
-                Opcode::Current => {
-                    let opcodes = self.frame().opcodes.clone();
-                    let length = self.frame().length;
-                    let number = self.frame().number;
-                    let frees = self.frame().frees.clone();
-                    self.push(Value::Closure(opcodes, length, number, frees))
                 }
                 Opcode::Field => {
                     let field = self.pop();
@@ -767,159 +736,6 @@ mod tests {
     }
 
     #[test]
-    fn test_function_closure() {
-        let tests = vec![
-            (
-                "
-                let newClosure = fn(a) {
-                    fn() { a; };
-                };
-                let closure = newClosure(99);
-                closure();
-                 ",
-                Value::Integer(99),
-            ),
-            (
-                "
-                let newAdder = fn(a, b) {
-                    fn(c) { a + b + c };
-                };
-                let adder = newAdder(1, 2);
-                adder(8);
-                ",
-                Value::Integer(11),
-            ),
-            (
-                "
-                let newAdder = fn(a, b) {
-                    let c = a + b;
-                    fn(d) { c + d };
-                };
-                let adder = newAdder(1, 2);
-                adder(8);
-                ",
-                Value::Integer(11),
-            ),
-            (
-                "
-                let newAdderOuter = fn(a, b) {
-                    let c = a + b;
-                    fn(d) {
-                        let e = d + c;
-                        fn(f) { e + f; };
-                    };
-                };
-                let newAdderInner = newAdderOuter(1, 2)
-                let adder = newAdderInner(3);
-                adder(8);
-                ",
-                Value::Integer(14),
-            ),
-            (
-                "
-                let a = 1;
-                let newAdderOuter = fn(b) {
-                    fn(c) {
-                        fn(d) { a + b + c + d };
-                    };
-                };
-                let newAdderInner = newAdderOuter(2)
-                let adder = newAdderInner(3);
-                adder(8);
-                ",
-                Value::Integer(14),
-            ),
-            (
-                "
-                let newClosure = fn(a, b) {
-                    let one = fn() { a; };
-                    let two = fn() { b; };
-                    fn() { one() + two(); };
-                };
-                let closure = newClosure(9, 90);
-                closure();
-                ",
-                Value::Integer(99),
-            ),
-        ];
-        run_machine_tests(tests);
-    }
-
-    #[test]
-    fn test_function_recursive() {
-        let tests = vec![
-            (
-                "
-                let countDown = fn(x) {
-                    if (x == 0) {
-                        return 0;
-                    } else {
-                        countDown(x - 1);
-                    }
-                };
-                countDown(1);
-                ",
-                Value::Integer(0),
-            ),
-            (
-                "
-                let countDown = fn(x) {
-                    if (x == 0) {
-                        return 0;
-                    } else {
-                        countDown(x - 1);
-                    }
-                };
-                let wrapper = fn() {
-                    countDown(1);
-                };
-                wrapper();
-                ",
-                Value::Integer(0),
-            ),
-            (
-                "
-                let wrapper = fn() {
-                    let countDown = fn(x) {
-                        if (x == 0) {
-                            return 0;
-                        } else {
-                            countDown(x - 1);
-                        }
-                    };
-                    countDown(1);
-                };
-                wrapper();
-                ",
-                Value::Integer(0),
-            ),
-        ];
-        run_machine_tests(tests);
-    }
-
-    #[test]
-    fn test_function_fibonacci() {
-        let tests = vec![(
-            "
-            let fibonacci = fn(x) {
-                if (x == 0) {
-                    return 0;
-                } else {
-                    if (x == 1) {
-                        return 1;
-                    } else {
-                        fibonacci(x - 1) + fibonacci(x - 2);
-                    }
-                }
-            };
-            fibonacci(15);
-            ",
-            Value::Integer(610),
-        )];
-        run_machine_tests(tests);
-    }
-
-    #[test]
     fn test_test_block() {
         let tests = vec![(
             "
@@ -963,24 +779,26 @@ mod tests {
             (
                 r#"let request = fn(){
                    let asserts = [true, false];
-                   let flag = true && asserts[0] && asserts[1];
-                   flag}
+                     let flag = true && asserts[0] && asserts[1];
+                     flag
+                   }
                    request();
                 "#,
                 Value::Boolean(false),
             ),
             (
                 r#"let request = fn(host){
-                   let result = http(format("
-                    GET http://{host}/get
-                    Host: {host}
-                    Connection: close
-                    ", host, host));
-                   let response = result.response;
-                   let asserts = fn(status, version) { [{"result":(status == 200)}, {"result":(1 == 2)}, {"result":(1 == 1)}] }(response.status, response.version);
-                   println("asserts: {asserts}", asserts);
-                   let flag = (((true && (asserts[0]).result) && (asserts[1]).result) && (asserts[2]).result);
-                   response};
+                        let record = http(format("
+                            GET http://{host}/get
+                            Host: {host}
+                            Connection: close
+                            ", host, host));
+                        let response = record.response;
+                        let asserts = fn(status, version) { [status == 200, 1 == 2, 1 == 1] }(response.status, response.version);
+                        println("asserts: {asserts}", asserts);
+                        let flag = true && asserts[0] && asserts[1] && asserts[2];
+                        response;
+                   };
                    request("httpbin.org").status;
                 "#,
                 Value::Integer(200),

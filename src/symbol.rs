@@ -3,15 +3,13 @@ use std::collections::HashMap;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Symbol {
     Global(usize),
-    Local(usize, bool),
-    Function,
+    Local(usize),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Symbols {
     outer: Option<Box<Symbols>>,
     inner: HashMap<String, Symbol>,
-    frees: Vec<Symbol>,
     index: usize,
 }
 
@@ -20,7 +18,6 @@ impl Symbols {
         Self {
             outer: None,
             inner: HashMap::new(),
-            frees: Vec::new(),
             index: usize::MIN,
         }
     }
@@ -29,7 +26,6 @@ impl Symbols {
         Self {
             outer: Some(Box::new(self)),
             inner: HashMap::new(),
-            frees: Vec::new(),
             index: usize::MIN,
         }
     }
@@ -45,15 +41,6 @@ impl Symbols {
         self.index
     }
 
-    pub fn frees(&self) -> Vec<Symbol> {
-        self.frees.clone()
-    }
-
-    pub fn function(&mut self, name: &str) -> &Symbol {
-        self.inner.insert(name.to_string(), Symbol::Function);
-        self.inner.get(name).unwrap()
-    }
-
     pub fn get(&self, name: &str) -> Option<&Symbol> {
         self.inner.get(name)
     }
@@ -62,25 +49,19 @@ impl Symbols {
         let index = self.index;
         self.index += 1;
         let symbol = match self.outer {
-            Some(_) => Symbol::Local(index, false),
+            Some(_) => Symbol::Local(index),
             None => Symbol::Global(index),
         };
         self.inner.insert(name.to_string(), symbol);
         self.inner.get(name).unwrap()
     }
 
-    pub fn resolve(&mut self, name: &str) -> Option<Symbol> {
+    pub fn resolve(&mut self, name: &str) -> Option<&Symbol> {
         match self.inner.get(name) {
-            Some(symbol) => Some(symbol.clone()),
+            Some(symbol) => Some(symbol),
             None => match &mut self.outer {
                 Some(outer) => match outer.resolve(name) {
-                    Some(symbol @ Symbol::Global(_)) => Some(symbol),
-                    Some(symbol) => {
-                        self.frees.push(symbol);
-                        let free = Symbol::Local(self.frees.len() - 1, true);
-                        self.inner.insert(name.to_string(), free.clone());
-                        Some(free)
-                    }
+                    Some(symbol) => Some(symbol),
                     None => None,
                 },
                 None => None,
@@ -104,13 +85,13 @@ fn test_symbol_scope() {
     let expects = vec![
         ("a", Symbol::Global(0)),
         ("b", Symbol::Global(1)),
-        ("c", Symbol::Local(0, true)),
-        ("d", Symbol::Local(1, true)),
-        ("e", Symbol::Local(0, false)),
-        ("f", Symbol::Local(1, false)),
+        ("c", Symbol::Local(0)),
+        ("d", Symbol::Local(1)),
+        ("e", Symbol::Local(0)),
+        ("f", Symbol::Local(1)),
     ];
     for (name, symbol) in expects {
-        assert_eq!(last.resolve(name), Some(symbol));
+        assert_eq!(last.resolve(name), Some(&symbol));
     }
     assert_eq!(last.resolve("g"), None);
 }

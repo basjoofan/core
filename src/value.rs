@@ -15,7 +15,6 @@ pub enum Value {
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
     Function(Vec<Opcode>, usize, usize),
-    Closure(Vec<Opcode>, usize, usize, Vec<Value>),
 }
 
 impl Display for Value {
@@ -31,9 +30,6 @@ impl Display for Value {
             Value::Map(pairs) => write!(f, "{:?}", pairs),
             Value::Function(opcodes, length, number) => {
                 write!(f, "({}:{}){:?}", length, number, opcodes)
-            }
-            Value::Closure(opcodes, length, number, frees) => {
-                write!(f, "({}:{}:{}){:?}", length, number, frees.len(), opcodes)
             }
         }
     }

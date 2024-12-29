@@ -61,7 +61,7 @@ impl Response {
         })
     }
 
-    pub fn to_value(self) -> Value {
+    pub fn into_value(self) -> Value {
         let mut map = HashMap::new();
         map.insert(String::from("version"), Value::String(self.version));
         map.insert(String::from("status"), Value::Integer(self.status as i64));

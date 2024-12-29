@@ -116,7 +116,7 @@ impl Request {
         Ok(())
     }
 
-    pub fn to_value(self) -> Value {
+    pub fn into_value(self) -> Value {
         let mut map = HashMap::new();
         map.insert(String::from("version"), Value::String(self.version.to_string()));
         map.insert(String::from("method"), Value::String(self.method.to_string()));

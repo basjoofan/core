@@ -1,10 +1,12 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use crate::http;
 use crate::Value;
 
 pub fn get(name: &str) -> Option<isize> {
     match name {
+        "track" => Some(-2),
         "http" => Some(-1),
         "print" => Some(0),
         "println" => Some(1),
@@ -17,6 +19,7 @@ pub fn get(name: &str) -> Option<isize> {
 
 pub fn call(index: isize) -> fn(Vec<Value>) -> Value {
     match index {
+        -2 => track,
         -1 => http,
         0 => print,
         1 => println,
@@ -108,12 +111,63 @@ fn http(objects: Vec<Value>) -> Value {
             Value::String(message) => {
                 let client = http::Client::default();
                 let (request, response, time, error) = client.send(message);
-                let mut result = HashMap::new();
-                result.insert(String::from("request"), request.to_value());
-                result.insert(String::from("response"), response.to_value());
-                result.insert(String::from("time"), time.to_value());
-                result.insert(String::from("error"), Value::String(error));
-                Value::Map(result)
+                let mut record = HashMap::new();
+                record.insert(String::from("request"), request.into_value());
+                record.insert(String::from("response"), response.into_value());
+                record.insert(String::from("time"), time.into_value());
+                record.insert(String::from("error"), Value::String(error));
+                Value::Map(record)
+            }
+            _ => Value::Error(format!("function send not supported type {:?}", object)),
+        }
+    } else {
+        Value::Error("function send need a parameter".to_string())
+    }
+}
+
+fn track(objects: Vec<Value>) -> Value {
+    if objects.len() != 1 {
+        Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
+    } else if let Some(object) = objects.first() {
+        match object {
+            Value::Map(record) => {
+                let name = record.get("name").unwrap_or(&Value::None);
+                println!("=== TEST  {}", name);
+                let mut flag = true;
+                if let Some(Value::Array(asserts)) = record.get("asserts") {
+                    for assert in asserts {
+                        if let Value::Map(assert) = assert {
+                            let result = !matches!(assert.get("result"), Some(Value::Boolean(false)));
+                            println!(
+                                "{} => {} {} {} => {}",
+                                assert.get("expr").unwrap_or(&Value::None),
+                                assert.get("left").unwrap_or(&Value::None),
+                                assert.get("compare").unwrap_or(&Value::None),
+                                assert.get("right").unwrap_or(&Value::None),
+                                result
+                            );
+                            flag &= result;
+                        }
+                    }
+                }
+                println!(
+                    "--- {}  {} ({:?})",
+                    match flag {
+                        true => "PASS",
+                        false => "FAIL",
+                    },
+                    name,
+                    match record.get("time") {
+                        Some(Value::Map(time)) => {
+                            match time.get("total") {
+                                Some(Value::Integer(total)) => Duration::from_nanos(*total as u64),
+                                _ => Duration::ZERO,
+                            }
+                        }
+                        _ => Duration::ZERO,
+                    }
+                );
+                Value::None
             }
             _ => Value::Error(format!("function send not supported type {:?}", object)),
         }

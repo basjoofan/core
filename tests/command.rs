@@ -6,6 +6,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 #[test]
+#[allow(clippy::zombie_processes)]
 fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
     let mut child = Command::cargo_bin(NAME)?
         .stdin(Stdio::piped())
@@ -60,31 +61,6 @@ fn test_command_run_closure() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.arg("run").arg(file.path());
     cmd.assert().success().stdout(predicate::str::contains("70"));
-    Ok(())
-}
-
-#[test]
-fn test_command_run_fibonacci() -> Result<(), Box<dyn std::error::Error>> {
-    let file = assert_fs::NamedTempFile::new("fibonacci.am")?;
-    let text = r#"
-    let fibonacci = fn (x) {
-        if (x == 0) {
-          0
-        } else {
-          if (x == 1) {
-            1
-          } else {
-            fibonacci(x - 1) + fibonacci(x -2)
-          }
-        }
-      };
-    println("{integer}", fibonacci(10));
-    "#;
-    file.write_str(text)?;
-
-    let mut cmd = Command::cargo_bin(NAME)?;
-    cmd.arg("run").arg(file.path());
-    cmd.assert().success().stdout(predicate::str::contains("55"));
     Ok(())
 }
 

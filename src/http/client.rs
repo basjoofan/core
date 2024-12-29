@@ -14,7 +14,7 @@ pub struct Client {
 }
 
 impl Client {
-    /// Send this request and wait for the result.
+    /// Send this request and wait for the record.
     pub fn send(&self, message: &str) -> (Request, Response, Time, String) {
         let (mut request, content) = Request::from(message);
         let mut time = Time::default();

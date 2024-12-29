@@ -31,7 +31,7 @@ impl Default for Time {
 }
 
 impl Time {
-    pub fn to_value(self) -> Value {
+    pub fn into_value(self) -> Value {
         let mut map = HashMap::new();
         map.insert(String::from("start"), Value::Integer(self.start.as_nanos() as i64));
         map.insert(String::from("end"), Value::Integer(self.end.as_nanos() as i64));
