@@ -755,21 +755,13 @@ mod tests {
 
     #[test]
     fn test_request_literal() {
-        let tests = vec![
-            (
-                "rq request(host)`\nGET http://{host}/get\nHost: {host}\nConnection: close\n`
-                 request(\"httpbin.org\").status;
-                ",
-                Value::Integer(200),
-            ),
-            (
-                "let host = \"httpbin.org\";
-                 rq request()`POST http://{host}/post\nHost: {host}\nConnection: close\n`
+        let tests = vec![(
+            "let host = \"httpbin.org\";
+                 rq request`\nGET http://{host}/get\nHost: {host}\nConnection: close\n`
                  request().status;
                 ",
-                Value::Integer(200),
-            ),
-        ];
+            Value::Integer(200),
+        )];
         run_machine_tests(tests);
     }
 
@@ -804,14 +796,15 @@ mod tests {
                 Value::Integer(200),
             ),
             (
-                "rq request(host)`\nGET http://{host}/get\nHost: {host}\nConnection: close\n`[status == 200]
-                 request(\"httpbin.org\").status;
+                "let host = \"httpbin.org\";
+                 rq request`\nGET http://{host}/get\nHost: {host}\nConnection: close\n`[status == 200]
+                 request().status;
                 ",
                 Value::Integer(200),
             ),
             (
                 "let host = \"httpbin.org\";
-                 rq request()`POST http://{host}/post\nHost: {host}\nConnection: close\n`[status == 200, 1==2]
+                 rq request`POST http://{host}/post\nHost: {host}\nConnection: close\n`[status == 200, 1==2]
                  request().status;
                 ",
                 Value::Integer(200),

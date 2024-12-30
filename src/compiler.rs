@@ -257,7 +257,7 @@ impl Compiler {
                 self.emit(Opcode::Const(index));
                 self.emit(Opcode::Field);
             }
-            Expr::Request(name, parameters, message, asserts) => {
+            Expr::Request(name, message, asserts) => {
                 let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
                 let matches = regex.find_iter(message.as_str());
                 let mut places = Vec::new();
@@ -346,7 +346,7 @@ impl Compiler {
                     // return response;
                     Expr::Ident(String::from("response")),
                 ];
-                self.assemble(Expr::Let(name, Box::new(Expr::Function(None, parameters, body))))?;
+                self.assemble(Expr::Let(name, Box::new(Expr::Function(None, vec![], body))))?;
             }
             Expr::Test(name, block) => {
                 self.enter();
@@ -1160,8 +1160,10 @@ mod tests {
     #[test]
     fn test_request_literal() {
         let tests = vec![(
-            "rq request(host)`\nGET http://{host}/api\nHost: example.com\n`",
+            "let host = \"domain.com\";
+            rq request`\nGET http://{host}/api\nHost: example.com\n`",
             vec![
+                Value::String(String::from("domain.com")),
                 Value::String(String::from("\nGET http://{host}/api\nHost: example.com\n")),
                 Value::String(String::from("response")),
                 Value::Function(vec![Opcode::Array(0), Opcode::Return], 2, 2),
@@ -1182,56 +1184,56 @@ mod tests {
                     vec![
                         Opcode::Native(-1),
                         Opcode::Native(2),
-                        Opcode::Const(0),
-                        Opcode::GetLocal(0),
+                        Opcode::Const(1),
+                        Opcode::GetGlobal(0),
                         Opcode::Call(2),
                         Opcode::Call(1),
-                        Opcode::SetLocal(1),
-                        Opcode::GetLocal(1),
-                        Opcode::Const(1),
-                        Opcode::Field,
-                        Opcode::SetLocal(2),
+                        Opcode::SetLocal(0),
+                        Opcode::GetLocal(0),
                         Opcode::Const(2),
-                        Opcode::GetLocal(2),
-                        Opcode::Const(3),
                         Opcode::Field,
-                        Opcode::GetLocal(2),
+                        Opcode::SetLocal(1),
+                        Opcode::Const(3),
+                        Opcode::GetLocal(1),
                         Opcode::Const(4),
                         Opcode::Field,
-                        Opcode::Call(2),
-                        Opcode::SetLocal(3),
-                        Opcode::Native(-2),
+                        Opcode::GetLocal(1),
                         Opcode::Const(5),
+                        Opcode::Field,
+                        Opcode::Call(2),
+                        Opcode::SetLocal(2),
+                        Opcode::Native(-2),
                         Opcode::Const(6),
                         Opcode::Const(7),
-                        Opcode::GetLocal(1),
                         Opcode::Const(8),
-                        Opcode::Field,
+                        Opcode::GetLocal(0),
                         Opcode::Const(9),
-                        Opcode::GetLocal(1),
+                        Opcode::Field,
                         Opcode::Const(10),
-                        Opcode::Field,
+                        Opcode::GetLocal(0),
                         Opcode::Const(11),
-                        Opcode::GetLocal(1),
-                        Opcode::Const(12),
                         Opcode::Field,
+                        Opcode::Const(12),
+                        Opcode::GetLocal(0),
                         Opcode::Const(13),
-                        Opcode::GetLocal(3),
+                        Opcode::Field,
                         Opcode::Const(14),
-                        Opcode::GetLocal(1),
+                        Opcode::GetLocal(2),
                         Opcode::Const(15),
+                        Opcode::GetLocal(0),
+                        Opcode::Const(16),
                         Opcode::Field,
                         Opcode::Map(6),
                         Opcode::Call(1),
                         Opcode::Pop,
-                        Opcode::GetLocal(2),
+                        Opcode::GetLocal(1),
                         Opcode::Return,
                     ],
-                    4,
-                    1,
+                    3,
+                    0,
                 ),
             ],
-            vec![Opcode::Const(16), Opcode::SetGlobal(0)],
+            vec![Opcode::Const(0), Opcode::SetGlobal(0), Opcode::Const(17), Opcode::SetGlobal(1)],
         )];
         run_compiler_tests(tests);
     }

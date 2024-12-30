@@ -84,7 +84,7 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let file = temp.child("request.am");
     let text = r#"
     let host = "httpbin.org";
-    rq request()`
+    rq request`
         GET http://{host}/get
         Host: {host}
         Connection: close
@@ -109,7 +109,7 @@ fn test_command_call() -> Result<(), Box<dyn std::error::Error>> {
     let file = temp.child("request.am");
     let text = r#"
     let host = "httpbin.org";
-    rq request()`
+    rq request`
         GET http://{host}/get
         Host: {host}
         Connection: close
