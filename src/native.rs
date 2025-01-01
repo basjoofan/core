@@ -1,36 +1,9 @@
+use crate::http;
+use crate::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::http;
-use crate::Value;
-
-pub fn get(name: &str) -> Option<isize> {
-    match name {
-        "track" => Some(-2),
-        "http" => Some(-1),
-        "print" => Some(0),
-        "println" => Some(1),
-        "format" => Some(2),
-        "length" => Some(3),
-        "append" => Some(4),
-        _ => None,
-    }
-}
-
-pub fn call(index: isize) -> fn(Vec<Value>) -> Value {
-    match index {
-        -2 => track,
-        -1 => http,
-        0 => print,
-        1 => println,
-        2 => format,
-        3 => length,
-        4 => append,
-        _ => panic!("Unexpected native function"),
-    }
-}
-
-fn println(objects: Vec<Value>) -> Value {
+pub fn println(objects: Vec<Value>) -> Value {
     match format(objects) {
         error @ Value::Error(_) => error,
         value => {
@@ -40,7 +13,7 @@ fn println(objects: Vec<Value>) -> Value {
     }
 }
 
-fn print(objects: Vec<Value>) -> Value {
+pub fn print(objects: Vec<Value>) -> Value {
     match format(objects) {
         error @ Value::Error(_) => error,
         value => {
@@ -50,7 +23,7 @@ fn print(objects: Vec<Value>) -> Value {
     }
 }
 
-fn format(mut objects: Vec<Value>) -> Value {
+pub fn format(mut objects: Vec<Value>) -> Value {
     objects.reverse();
     match objects.pop() {
         Some(Value::String(mut string)) => {
@@ -74,7 +47,7 @@ fn format(mut objects: Vec<Value>) -> Value {
     }
 }
 
-fn length(objects: Vec<Value>) -> Value {
+pub fn length(objects: Vec<Value>) -> Value {
     if objects.len() != 1 {
         Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
     } else if let Some(object) = objects.first() {
@@ -89,7 +62,7 @@ fn length(objects: Vec<Value>) -> Value {
     }
 }
 
-fn append(mut objects: Vec<Value>) -> Value {
+pub fn append(mut objects: Vec<Value>) -> Value {
     objects.reverse();
     match objects.pop() {
         Some(Value::Array(mut array)) => {
@@ -103,7 +76,7 @@ fn append(mut objects: Vec<Value>) -> Value {
     }
 }
 
-fn http(objects: Vec<Value>) -> Value {
+pub fn http(objects: Vec<Value>) -> Value {
     if objects.len() != 1 {
         Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
     } else if let Some(object) = objects.first() {
@@ -125,7 +98,7 @@ fn http(objects: Vec<Value>) -> Value {
     }
 }
 
-fn track(objects: Vec<Value>) -> Value {
+pub fn track(objects: Vec<Value>) -> Value {
     if objects.len() != 1 {
         Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
     } else if let Some(object) = objects.first() {

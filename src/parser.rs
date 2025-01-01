@@ -85,7 +85,7 @@ impl Parser {
                 precedence = u8::MAX;
                 self.parse_return_expr()?
             }
-            Kind::Bang | Kind::Minus => self.parse_unary_expr()?,
+            Kind::Not | Kind::Sub => self.parse_unary_expr()?,
             Kind::Lp => self.parse_paren_expr()?,
             Kind::If => self.parse_if_expr()?,
             Kind::Fn => self.parse_function_literal()?,
@@ -97,16 +97,16 @@ impl Parser {
         };
         while !self.peek_token_is(Kind::Semi) && precedence < self.peek_precedence() {
             left = match self.peek_token() {
-                Some(Token { kind: Kind::Plus, .. })
-                | Some(Token { kind: Kind::Minus, .. })
-                | Some(Token { kind: Kind::Star, .. })
-                | Some(Token { kind: Kind::Slash, .. })
-                | Some(Token { kind: Kind::Percent, .. })
+                Some(Token { kind: Kind::Add, .. })
+                | Some(Token { kind: Kind::Sub, .. })
+                | Some(Token { kind: Kind::Mul, .. })
+                | Some(Token { kind: Kind::Div, .. })
+                | Some(Token { kind: Kind::Rem, .. })
                 | Some(Token { kind: Kind::Bx, .. })
                 | Some(Token { kind: Kind::Bo, .. })
                 | Some(Token { kind: Kind::Ba, .. })
-                | Some(Token { kind: Kind::Ll, .. })
-                | Some(Token { kind: Kind::Gg, .. })
+                | Some(Token { kind: Kind::Sl, .. })
+                | Some(Token { kind: Kind::Sr, .. })
                 | Some(Token { kind: Kind::La, .. })
                 | Some(Token { kind: Kind::Lo, .. })
                 | Some(Token { kind: Kind::Lt, .. })
@@ -199,7 +199,7 @@ impl Parser {
     fn parse_unary_expr(&mut self) -> Result<Expr, String> {
         let token = self.current_token().clone();
         let mut precedence = self.current_precedence();
-        (token.kind == Kind::Minus).then(|| {
+        (token.kind == Kind::Sub).then(|| {
             precedence += 2;
         });
         self.next_token();
@@ -258,7 +258,11 @@ impl Parser {
 
     fn parse_call_expr(&mut self, function: Expr) -> Result<Expr, String> {
         let arguments = self.parse_expr_list(Kind::Rp)?;
-        Ok(Expr::Call(Box::new(function), arguments))
+        if let Expr::Ident(function) = function {
+            Ok(Expr::Call(function, arguments))
+        }else {
+            Err(format!("parse call expr error: {}", function))
+        } 
     }
 
     fn parse_expr_list(&mut self, end: Kind) -> Result<Vec<Expr>, String> {

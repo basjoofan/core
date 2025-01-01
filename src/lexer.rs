@@ -22,14 +22,14 @@ pub fn segment(text: &str) -> Vec<Token> {
                         chars.next();
                         (Kind::Ne, literal)
                     } else {
-                        (Kind::Bang, String::from(char))
+                        (Kind::Not, String::from(char))
                     }
                 }
-                '+' => (Kind::Plus, String::from(char)),
-                '-' => (Kind::Minus, String::from(char)),
-                '*' => (Kind::Star, String::from(char)),
-                '/' => (Kind::Slash, String::from(char)),
-                '%' => (Kind::Percent, String::from(char)),
+                '+' => (Kind::Add, String::from(char)),
+                '-' => (Kind::Sub, String::from(char)),
+                '*' => (Kind::Mul, String::from(char)),
+                '/' => (Kind::Div, String::from(char)),
+                '%' => (Kind::Rem, String::from(char)),
                 '^' => (Kind::Bx, String::from(char)),
                 '|' => {
                     if let Some(peek @ '|') = chars.peek() {
@@ -57,7 +57,7 @@ pub fn segment(text: &str) -> Vec<Token> {
                     } else if let Some(peek @ '<') = chars.peek() {
                         let literal = String::from_iter([char, *peek]);
                         chars.next();
-                        (Kind::Ll, literal)
+                        (Kind::Sl, literal)
                     } else {
                         (Kind::Lt, String::from(char))
                     }
@@ -70,7 +70,7 @@ pub fn segment(text: &str) -> Vec<Token> {
                     } else if let Some(peek @ '>') = chars.peek() {
                         let literal = String::from_iter([char, *peek]);
                         chars.next();
-                        (Kind::Gg, literal)
+                        (Kind::Sr, literal)
                     } else {
                         (Kind::Gt, String::from(char))
                     }
@@ -235,7 +235,7 @@ fn test_segment() {
         (Kind::Rp, ")"),
         (Kind::Lb, "{"),
         (Kind::Ident, "x"),
-        (Kind::Plus, "+"),
+        (Kind::Add, "+"),
         (Kind::Ident, "y"),
         (Kind::Semi, ";"),
         (Kind::Rb, "}"),
@@ -250,10 +250,10 @@ fn test_segment() {
         (Kind::Ident, "ten"),
         (Kind::Rp, ")"),
         (Kind::Semi, ";"),
-        (Kind::Bang, "!"),
-        (Kind::Minus, "-"),
-        (Kind::Slash, "/"),
-        (Kind::Star, "*"),
+        (Kind::Not, "!"),
+        (Kind::Sub, "-"),
+        (Kind::Div, "/"),
+        (Kind::Mul, "*"),
         (Kind::Integer, "5"),
         (Kind::Semi, ";"),
         (Kind::Integer, "5"),

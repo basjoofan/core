@@ -7,18 +7,18 @@ use std::fmt::Result;
 #[derive(Clone, PartialEq)]
 pub enum Expr {
     Ident(String),
+    Let(String, Box<Expr>),
     Integer(i64),
     Float(f64),
     Boolean(bool),
     String(String),
-    Let(String, Box<Expr>),
     Return(Box<Expr>),
     Unary(Token, Box<Expr>),
     Binary(Token, Box<Expr>, Box<Expr>),
     Paren(Box<Expr>),
     If(Box<Expr>, Vec<Expr>, Vec<Expr>),
     Function(Option<String>, Vec<String>, Vec<Expr>),
-    Call(Box<Expr>, Vec<Expr>),
+    Call(String, Vec<Expr>),
     Array(Vec<Expr>),
     Map(Vec<(Expr, Expr)>),
     Index(Box<Expr>, Box<Expr>),
@@ -57,13 +57,13 @@ impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Expr::Ident(ident) => write!(f, "{}", ident),
+            Expr::Let(name, value) => {
+                write!(f, "let {} = {}", name, value)
+            }
             Expr::Integer(integer) => write!(f, "{}", integer),
             Expr::Float(float) => write!(f, "{}", float),
             Expr::Boolean(boolean) => write!(f, "{}", boolean),
             Expr::String(string) => write!(f, "\"{}\"", string),
-            Expr::Let(name, value) => {
-                write!(f, "let {} = {}", name, value)
-            }
             Expr::Return(value) => {
                 write!(f, "return {}", value)
             }
