@@ -12,25 +12,17 @@ pub enum Expr {
     Float(f64),
     Boolean(bool),
     String(String),
-    Return(Box<Expr>),
     Unary(Token, Box<Expr>),
     Binary(Token, Box<Expr>, Box<Expr>),
     Paren(Box<Expr>),
     If(Box<Expr>, Vec<Expr>, Vec<Expr>),
-    Function(Option<String>, Vec<String>, Vec<Expr>),
     Call(String, Vec<Expr>),
     Array(Vec<Expr>),
     Map(Vec<(Expr, Expr)>),
     Index(Box<Expr>, Box<Expr>),
     // Field Access of a named field (object.field)
     Field(Box<Expr>, String),
-    Request(String, String, Vec<Expr>),
-    Test(String, Vec<Expr>),
-    // TODO Assign An assignment expr: a = compute().
-    // TODO Closure A closure expr: |a, b| a + b.
     // TODO Break A break, with an optional label to break and an optional expr.
-    // TODO Continue A continue, with an optional label.
-    // TODO Const A const expr: const a = 1.
     // TODO For A for loop: for pat in expr { ... }.
     // TODO Range A range expr: 1..2, 1.., ..2, 1..=2, ..=2.
     // TODO While A while loop: while expr { ... }.
@@ -64,9 +56,6 @@ impl Display for Expr {
             Expr::Float(float) => write!(f, "{}", float),
             Expr::Boolean(boolean) => write!(f, "{}", boolean),
             Expr::String(string) => write!(f, "\"{}\"", string),
-            Expr::Return(value) => {
-                write!(f, "return {}", value)
-            }
             Expr::Unary(token, right) => write!(f, "{}{}", token, right),
             Expr::Binary(token, left, right) => {
                 write!(f, "{} {} {}", left, token, right)
@@ -79,18 +68,11 @@ impl Display for Expr {
                 }
                 write!(f, " }}")
             }
-            Expr::Function(name, parameters, body) => {
-                write!(f, "fn {:?} ({}) {{ {} }}", name, parameters.join(", "), join!(body, "{}", ";"))
-            }
             Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{}", ", ")),
             Expr::Array(elements) => write!(f, "[{}]", join!(elements, "{}", ", ")),
             Expr::Map(pairs) => write!(f, "{{{}}}", join!(pairs, "{}", ": ", ", ")),
             Expr::Index(left, index) => write!(f, "{}[{}]", left, index),
             Expr::Field(object, field) => write!(f, "{}.{}", object, field),
-            Expr::Request(name, message, asserts) => {
-                write!(f, "rq {} `{}`[{}]", name, message, join!(asserts, "{}", ", "))
-            }
-            Expr::Test(name, block) => write!(f, "test {} {{ {} }}", name, join!(block, "{}", ";")),
         }
     }
 }

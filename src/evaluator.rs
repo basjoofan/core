@@ -1,10 +1,34 @@
 use crate::native;
-use crate::Context;
 use crate::Expr;
 use crate::Kind;
+use crate::Source;
 use crate::Token;
 use crate::Value;
 use std::collections::HashMap;
+
+#[derive(Clone)]
+pub struct Context {
+    inner: HashMap<String, Value>,
+}
+
+impl Context {
+    pub fn new() -> Self {
+        Self { inner: HashMap::new() }
+    }
+}
+
+impl Source {
+    pub fn eval(&self, exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
+        eval_block_expr(exprs, context)
+    }
+
+    pub fn test(&self, name: &str, context: &mut Context) -> Result<Value, String> {
+        match self.get(name) {
+            Some(exprs) => eval_block_expr(exprs, context),
+            None => Err(format!("test:{} not found", name)),
+        }
+    }
+}
 
 pub fn eval_expr(expr: &Expr, context: &mut Context) -> Result<Value, String> {
     match expr {
@@ -14,32 +38,28 @@ pub fn eval_expr(expr: &Expr, context: &mut Context) -> Result<Value, String> {
         Expr::Float(float) => eval_float_literal(float),
         Expr::Boolean(boolean) => eval_boolean_literal(boolean),
         Expr::String(string) => eval_string_literal(string),
-        Expr::Return(..) => todo!(),
         Expr::Unary(token, right) => eval_unary_expr(token, right, context),
         Expr::Binary(token, left, right) => eval_binary_expr(token, left, right, context),
         Expr::Paren(expr) => eval_expr(expr, context),
         Expr::If(condition, consequence, alternative) => eval_if_expr(condition, consequence, alternative, context),
-        Expr::Function(..) => todo!(),
         Expr::Call(function, arguments) => eval_call_expr(function, arguments, context),
         Expr::Array(elements) => eval_array_literal(elements, context),
         Expr::Map(pairs) => eval_map_literal(pairs, context),
         Expr::Index(value, index) => eval_index_expr(value, index, context),
         Expr::Field(map, field) => eval_field_expr(map, field, context),
-        Expr::Request(..) => todo!(),
-        Expr::Test(..) => todo!(),
     }
 }
 
 fn eval_ident_expr(ident: &String, context: &mut Context) -> Result<Value, String> {
-    match context.get(ident) {
-        Some(value) => Ok(value),
+    match context.inner.get(ident) {
+        Some(value) => Ok(value.to_owned()),
         None => Err(format!("ident:{} not found", ident)),
     }
 }
 
-fn eval_let_expr(name: &String, expr: &Box<Expr>, context: &mut Context) -> Result<Value, String> {
+fn eval_let_expr(name: &String, expr: &Expr, context: &mut Context) -> Result<Value, String> {
     let value = eval_expr(expr, context)?;
-    context.set(name, value.to_owned());
+    context.inner.insert(name.to_owned(), value.to_owned());
     Ok(value)
 }
 
@@ -59,7 +79,7 @@ fn eval_string_literal(string: &String) -> Result<Value, String> {
     Ok(Value::String(string.to_owned()))
 }
 
-fn eval_unary_expr(token: &Token, right: &Box<Expr>, context: &mut Context) -> Result<Value, String> {
+fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context) -> Result<Value, String> {
     let right = eval_expr(right, context)?;
     match (token.kind, right) {
         (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::None) => Ok(Value::Boolean(true)),
@@ -71,7 +91,7 @@ fn eval_unary_expr(token: &Token, right: &Box<Expr>, context: &mut Context) -> R
     }
 }
 
-fn eval_binary_expr(token: &Token, left: &Box<Expr>, right: &Box<Expr>, context: &mut Context) -> Result<Value, String> {
+fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mut Context) -> Result<Value, String> {
     match token.kind {
         Kind::Add => Ok(eval_expr(left, context)? + eval_expr(right, context)?),
         Kind::Sub => Ok(eval_expr(left, context)? - eval_expr(right, context)?),
@@ -101,7 +121,7 @@ fn eval_binary_expr(token: &Token, left: &Box<Expr>, right: &Box<Expr>, context:
     }
 }
 
-fn eval_if_expr(condition: &Box<Expr>, consequence: &[Expr], alternative: &[Expr], context: &mut Context) -> Result<Value, String> {
+fn eval_if_expr(condition: &Expr, consequence: &[Expr], alternative: &[Expr], context: &mut Context) -> Result<Value, String> {
     let condition = eval_expr(condition, context)?;
     match condition {
         Value::Boolean(false) | Value::None => eval_block_expr(alternative, context),
@@ -135,7 +155,7 @@ fn eval_map_literal(pairs: &Vec<(Expr, Expr)>, context: &mut Context) -> Result<
     Ok(Value::Map(map))
 }
 
-fn eval_index_expr(value: &Box<Expr>, index: &Box<Expr>, context: &mut Context) -> Result<Value, String> {
+fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context) -> Result<Value, String> {
     // TODO enhance indent expr get variable use reference
     let value = eval_expr(value, context)?;
     let index = eval_expr(index, context)?;
@@ -160,7 +180,7 @@ fn eval_index_expr(value: &Box<Expr>, index: &Box<Expr>, context: &mut Context) 
     }
 }
 
-fn eval_field_expr(map: &Box<Expr>, field: &String, context: &mut Context) -> Result<Value, String> {
+fn eval_field_expr(map: &Expr, field: &String, context: &mut Context) -> Result<Value, String> {
     // TODO enhance indent expr get variable use reference
     match eval_expr(map, context)? {
         Value::Map(mut pairs) => {
@@ -194,17 +214,17 @@ fn eval_exprs(elements: &[Expr], context: &mut Context) -> Result<Vec<Value>, St
 mod tests {
     use super::eval_block_expr;
     use crate::Context;
-    use crate::Parser;
+    use crate::parser::Parser;
     use crate::Value;
     use std::collections::HashMap;
 
     fn run_eval_tests(tests: Vec<(&str, Value)>) {
         for (text, expect) in tests {
-            let source = Parser::new(text).parse().unwrap();
-            let mut context = Context::default();
-            match eval_block_expr(&source, &mut context) {
+            let (exprs, ..) = Parser::new(text).parse().unwrap();
+            let mut context = Context::new();
+            match eval_block_expr(&exprs, &mut context) {
                 Ok(value) => {
-                    println!("{:?} => {} = {}", source, value, expect);
+                    println!("{:?} => {} = {}", exprs, value, expect);
                     assert_eq!(value, expect);
                 }
                 Err(message) => panic!("machine error: {}", message),

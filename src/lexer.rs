@@ -144,12 +144,10 @@ pub fn segment(text: &str) -> Vec<Token> {
                     match string.as_str() {
                         "true" => (Kind::True, string),
                         "false" => (Kind::False, string),
-                        "fn" => (Kind::Fn, string),
-                        "rq" => (Kind::Rq, string),
+                        "request" => (Kind::Request, string),
                         "let" => (Kind::Let, string),
                         "if" => (Kind::If, string),
                         "else" => (Kind::Else, string),
-                        "return" => (Kind::Return, string),
                         "test" => (Kind::Test, string),
                         _ => (Kind::Ident, string),
                     }
@@ -191,7 +189,7 @@ fn test_segment() {
             [1, 2];
             {"foo": "bar"};
             _a2
-            rq request()`
+            request get()`
               GET http://example.com
               Host: example.com
             `[
@@ -200,7 +198,7 @@ fn test_segment() {
             ]
             object.field
             test expectStatusOk {
-                let response = request();
+                let response = get();
                 response.status
             }
             1&0
@@ -227,7 +225,7 @@ fn test_segment() {
         (Kind::Let, "let"),
         (Kind::Ident, "add"),
         (Kind::Assign, "="),
-        (Kind::Fn, "fn"),
+        (Kind::Ident, "fn"),
         (Kind::Lp, "("),
         (Kind::Ident, "x"),
         (Kind::Comma, ","),
@@ -269,13 +267,13 @@ fn test_segment() {
         (Kind::Integer, "10"),
         (Kind::Rp, ")"),
         (Kind::Lb, "{"),
-        (Kind::Return, "return"),
+        (Kind::Ident, "return"),
         (Kind::True, "true"),
         (Kind::Semi, ";"),
         (Kind::Rb, "}"),
         (Kind::Else, "else"),
         (Kind::Lb, "{"),
-        (Kind::Return, "return"),
+        (Kind::Ident, "return"),
         (Kind::False, "false"),
         (Kind::Semi, ";"),
         (Kind::Rb, "}"),
@@ -302,8 +300,8 @@ fn test_segment() {
         (Kind::Rb, "}"),
         (Kind::Semi, ";"),
         (Kind::Ident, "_a2"),
-        (Kind::Rq, "rq"),
-        (Kind::Ident, "request"),
+        (Kind::Request, "request"),
+        (Kind::Ident, "get"),
         (Kind::Lp, "("),
         (Kind::Rp, ")"),
         (
@@ -333,7 +331,7 @@ fn test_segment() {
         (Kind::Let, "let"),
         (Kind::Ident, "response"),
         (Kind::Assign, "="),
-        (Kind::Ident, "request"),
+        (Kind::Ident, "get"),
         (Kind::Lp, "("),
         (Kind::Rp, ")"),
         (Kind::Semi, ";"),

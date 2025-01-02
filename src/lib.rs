@@ -1,5 +1,3 @@
-mod code;
-mod context;
 mod evaluator;
 mod http;
 mod lexer;
@@ -12,9 +10,8 @@ mod token;
 mod value;
 mod writer;
 
-use code::Opcode;
-use context::Context;
-use parser::Parser;
+use evaluator::Context;
+use parser::Source;
 use syntax::Expr;
 use token::Kind;
 use token::Token;

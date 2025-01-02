@@ -1,6 +1,5 @@
-use crate::evaluator;
 use crate::Context;
-use crate::Parser;
+use crate::Source;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -13,7 +12,8 @@ pub const NAME: &str = env!("CARGO_PKG_NAME");
 
 pub fn repl() {
     let mut lines = stdin().lock().lines();
-    let mut context = Context::default();
+    let mut context = Context::new();
+    let mut source = Source::new();
     loop {
         if let Some(Ok(text)) = lines.next() {
             if text == "exit" {
@@ -22,30 +22,31 @@ pub fn repl() {
             if text.trim().is_empty() {
                 continue;
             }
-            match Parser::new(&text).parse() {
-                Ok(source) => match evaluator::eval_block_expr(&source, &mut context) {
+            match source.load(&text) {
+                Ok(exprs) => match source.eval(&exprs, &mut context) {
                     Ok(value) => {
                         println!("{}", value);
                     }
                     Err(error) => println!("{}", error),
                 },
                 Err(error) => println!("{}", error),
-            };
+            }
         }
     }
 }
 
 pub fn eval(text: String) {
-    let mut context = Context::default();
-    match Parser::new(&text).parse() {
-        Ok(source) => match evaluator::eval_block_expr(&source, &mut context) {
+    let mut context = Context::new();
+    let mut source = Source::new();
+    match source.load(&text) {
+        Ok(exprs) => match source.eval(&exprs, &mut context) {
             Ok(value) => {
                 println!("{}", value);
             }
             Err(error) => println!("{}", error),
         },
         Err(error) => println!("{}", error),
-    };
+    }
 }
 
 pub fn run(path: Option<PathBuf>) {
@@ -55,67 +56,78 @@ pub fn run(path: Option<PathBuf>) {
 
 pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iterations: u32, path: Option<PathBuf>) {
     let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
-    let mut context = Context::default();
-    let source = match Parser::new(&text).parse() {
-        Ok(source) => source,
+    let mut context = Context::new();
+    let mut source = Source::new();
+    match source.load(&text) {
+        Ok(exprs) => match source.eval(&exprs, &mut context) {
+            Ok(value) => {
+                println!("{}", value);
+            }
+            Err(error) => {
+                println!("{}", error);
+                return;
+            }
+        },
         Err(error) => {
             println!("{}", error);
             return;
         }
-    };
-    // let mut handles = Vec::new();
-    // match name {
-    //     Some(name) => {
-    //         if tests.contains(&name) {
-    //             match compiler.compile(vec![Expr::Call(Box::new(Expr::Ident(name)), Vec::new())]) {
-    //                 Ok(opcodes) => {
-    //                     let continuous = Arc::new(AtomicBool::new(true));
-    //                     let iterations = iterations / concurrency;
-    //                     for _ in 0..concurrency {
-    //                         let continuous = continuous.clone();
-    //                         let consts = compiler.consts().clone();
-    //                         let mut globals = globals.clone();
-    //                         let opcodes = opcodes.clone();
-    //                         handles.push(std::thread::spawn(move || {
-    //                             let mut i = iterations;
-    //                             while continuous.load(Ordering::Relaxed) && i > 0 {
-    //                                 Machine::new(&consts, &mut globals, opcodes.clone()).run();
-    //                                 i -= 1;
-    //                             }
-    //                         }));
-    //                     }
-    //                     // handle interrupt signal
-    //                     handle_interrupt(continuous.clone());
-    //                     // completed after thread sleep duration
-    //                     std::thread::spawn(move || {
-    //                         std::thread::sleep(duration);
-    //                         continuous.store(false, Ordering::Relaxed)
-    //                     });
-    //                 }
-    //                 Err(message) => println!("{}", message),
-    //             }
-    //         } else {
-    //             println!("Test not found: {}", name);
-    //         }
-    //     }
-    //     None => {
-    //         for name in tests {
-    //             let mut globals = globals.clone();
-    //             let mut compiler = compiler.clone();
-    //             handles.push(std::thread::spawn(move || {
-    //                 match compiler.compile(vec![Expr::Call(Box::new(Expr::Ident(name)), Vec::new())]) {
-    //                     Ok(opcodes) => {
-    //                         Machine::new(compiler.consts(), &mut globals, opcodes).run();
-    //                     }
-    //                     Err(message) => println!("{}", message),
-    //                 }
-    //             }));
-    //         }
-    //     }
-    // }
-    // for handle in handles {
-    //     let _ = handle.join();
-    // }
+    }
+    let mut handles = Vec::new();
+    let source = Arc::new(source);
+    let tests = source.tests();
+    match name {
+        Some(name) => {
+            if tests.contains(&name) {
+                let name = Arc::new(name);
+                let continuous = Arc::new(AtomicBool::new(true));
+                let iterations = iterations / concurrency;
+                for _ in 0..concurrency {
+                    let continuous = continuous.to_owned();
+                    let mut context = context.to_owned();
+                    let source = source.to_owned();
+                    let name = name.to_owned();
+                    handles.push(std::thread::spawn(move || {
+                        let mut i = iterations;
+                        while continuous.load(Ordering::Relaxed) && i > 0 {
+                            match source.test(name.as_str(), &mut context) {
+                                Ok(_) => {}
+                                Err(error) => {
+                                    println!("{}", error);
+                                    break;
+                                }
+                            }
+                            i -= 1;
+                        }
+                    }));
+                }
+                // handle interrupt signal
+                handle_interrupt(continuous.clone());
+                // completed after thread sleep duration
+                std::thread::spawn(move || {
+                    std::thread::sleep(duration);
+                    continuous.store(false, Ordering::Relaxed)
+                });
+            } else {
+                println!("Test not found: {}", name)
+            }
+        }
+        None => {
+            for name in tests {
+                let mut context = context.to_owned();
+                let source = source.to_owned();
+                handles.push(std::thread::spawn(move || match source.test(name.as_str(), &mut context) {
+                    Ok(_) => {}
+                    Err(error) => {
+                        println!("{}", error);
+                    }
+                }));
+            }
+        }
+    }
+    for handle in handles {
+        let _ = handle.join();
+    }
 }
 
 fn read_to_string(path: PathBuf) -> String {

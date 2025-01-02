@@ -53,13 +53,11 @@ pub enum Kind {
     Rs, // ]
 
     // keyword
-    Fn,     // fn
-    Rq,     // rq
-    Let,    // let
-    If,     // if
-    Else,   // else
-    Return, // return
-    Test,   // test
+    Request, // request
+    Let,     // let
+    If,      // if
+    Else,    // else
+    Test,    // test
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

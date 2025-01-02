@@ -1,4 +1,3 @@
-use crate::Opcode;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -24,7 +23,6 @@ pub enum Value {
     String(String),
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
-    Function(Vec<Opcode>, usize, usize),
 }
 
 impl Display for Value {
@@ -38,9 +36,6 @@ impl Display for Value {
             Value::String(string) => write!(f, "{}", string),
             Value::Array(elements) => write!(f, "{:?}", elements),
             Value::Map(pairs) => write!(f, "{:?}", pairs),
-            Value::Function(opcodes, length, number) => {
-                write!(f, "({}:{}){:?}", length, number, opcodes)
-            }
         }
     }
 }
