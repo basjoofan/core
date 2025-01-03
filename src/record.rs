@@ -1,144 +1,19 @@
 use crate::http::Request;
 use crate::http::Response;
 use crate::http::Time;
-use crate::Expr;
-use crate::Token;
-use crate::Value;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
-use std::fs::File;
-use std::path::PathBuf;
+use std::io::Write;
 
-pub struct Record {
-    pub name: String,
-    pub time: Time,
-    pub request: Request,
-    pub response: Response,
-    pub asserts: Vec<Assert>,
-    pub error: String,
-}
-
-pub struct Assert {
-    pub expr: Expr,
-    pub left: Value,
-    pub compare: Token,
-    pub right: Value,
-    pub result: bool,
-}
-
-impl Display for Assert {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(
-            f,
-            "{} => ({} {} {}) => {}",
-            self.expr, self.left, self.compare, self.right, self.result
-        )
-    }
-}
-
-impl Record {
-    pub fn to(self, id: String, name: String, schema: &avro::Schema) -> avro::types::Record<'_> {
-        let mut record = avro::types::Record::new(schema).unwrap();
-        record.put("context_id", id);
-        record.put("context_name", name);
-        record.put("time_start", self.time.start.as_nanos() as i64);
-        record.put("time_end", self.time.end.as_nanos() as i64);
-        record.put("time_total", self.time.total.as_nanos() as i64);
-        record.put("time_resolve", self.time.resolve.as_nanos() as i64);
-        record.put("time_connect", self.time.connect.as_nanos() as i64);
-        record.put("time_write", self.time.write.as_nanos() as i64);
-        record.put("time_delay", self.time.delay.as_nanos() as i64);
-        record.put("time_read", self.time.read.as_nanos() as i64);
-        record.put("request_name", self.name);
-        record.put("request_method", self.request.method.to_string());
-        record.put("request_url", self.request.url.to_string());
-        record.put("request_version", self.request.version.to_string());
-        record.put(
-            "request_headers",
-            avro::types::Value::Array(
-                self.request
-                    .headers
-                    .into_iter()
-                    .map(|header| {
-                        avro::types::Value::Array(vec![
-                            avro::types::Value::String(header.name),
-                            avro::types::Value::String(header.value),
-                        ])
-                    })
-                    .collect::<Vec<avro::types::Value>>(),
-            ),
-        );
-        record.put("request_body", self.request.body);
-        record.put("response_version", self.response.version);
-        record.put("response_status", self.response.status as i32);
-        record.put("response_reason", self.response.reason);
-        record.put(
-            "response_headers",
-            avro::types::Value::Array(
-                self.response
-                    .headers
-                    .into_iter()
-                    .map(|header| {
-                        avro::types::Value::Array(vec![
-                            avro::types::Value::String(header.name),
-                            avro::types::Value::String(header.value),
-                        ])
-                    })
-                    .collect::<Vec<avro::types::Value>>(),
-            ),
-        );
-        record.put("response_body", self.response.body);
-        record.put(
-            "asserts",
-            avro::types::Value::Array(
-                self.asserts
-                    .into_iter()
-                    .map(|a| {
-                        avro::types::Value::Record(vec![
-                            (String::from("expr"), avro::types::Value::String(a.expr.to_string())),
-                            (String::from("left"), avro::types::Value::String(a.left.to_string())),
-                            (String::from("compare"), avro::types::Value::String(a.compare.to_string())),
-                            (String::from("right"), avro::types::Value::String(a.right.to_string())),
-                            (String::from("result"), avro::types::Value::Boolean(a.result)),
-                        ])
-                    })
-                    .collect::<Vec<avro::types::Value>>(),
-            ),
-        );
-        record.put("error", self.error);
-        record
-    }
-}
-
-pub fn writer(schema: &avro::Schema, file: Option<PathBuf>) -> Option<avro::Writer<File>> {
-    match file {
-        Some(file) => {
-            let display = file.display();
-            let file = match File::create(&file) {
-                Err(error) => panic!("couldn't create {}: {:?}", display, error),
-                Ok(file) => file,
-            };
-            Some(avro::Writer::new(schema, file))
-        }
-        None => None,
-    }
-}
-
-pub fn schema() -> avro::Schema {
-    match avro::Schema::parse_str(RAW) {
-        Err(error) => panic!("parse schema error: {:?}", error),
-        Ok(schema) => schema,
-    }
-}
-
-const RAW: &str = r#"
+const META: [(&str, &str); 2] = [
+    (
+        "avro.schema",
+        r#"
 {
     "name": "record",
     "type": "record",
     "fields": [
-        {"name": "context_id", "type": "string"},
-        {"name": "context_name", "type": "string"},
         {"name": "time_start", "type": "long"},
         {"name": "time_end", "type": "long"},
         {"name": "time_total", "type": "long"},
@@ -176,51 +51,241 @@ const RAW: &str = r#"
         },
         {"name": "error", "type": "string"}
     ]
-}
-"#;
+    }
+"#,
+    ),
+    ("avro.codec", "null"),
+];
+const MAGIC: &[u8; 4] = b"Obj\x01";
+const MARKER: &[u8; 16] = b"afilesyncmarker\x02";
 
-// #[test]
-// fn test_record_to_record() {
-//     let record = Record {
-//         name: String::from("name"),
-//         time: Time::default(),
-//         request: Request::default(),
-//         response: Response::default(),
-//         asserts: vec![Assert {
-//             expr: Expr::Binary(
-//                 Token {
-//                     kind: crate::token::Kind::Eq,
-//                     literal: String::from("=="),
-//                 },
-//                 Some(Box::new(Expr::Ident(
-//                     Token {
-//                         kind: crate::token::Kind::Ident,
-//                         literal: String::from("status"),
-//                     },
-//                     String::from("status"),
-//                 ))),
-//                 Some(Box::new(Expr::Integer(
-//                     Token {
-//                         kind: crate::token::Kind::Integer,
-//                         literal: String::from("200"),
-//                     },
-//                     Some(200),
-//                 ))),
-//             ),
-//             left: Value::Integer(200),
-//             compare: Token {
-//                 kind: crate::token::Kind::Eq,
-//                 literal: String::from("=="),
-//             },
-//             right: Value::Integer(200),
-//             result: true,
-//         }],
-//         error: String::from("error"),
-//     };
-//     let schema = schema();
-//     let avro = record.to("id".to_string(), "name".to_string(), &schema);
-//     println!("avro:{:?}", avro);
-//     let mut writer = avro::Writer::new(&schema, Vec::new());
-//     println!("append: {:?}", writer.append(avro).unwrap());
-//     println!("encoded: {:?}", writer.into_inner().unwrap());
-// }
+pub struct Writer<W> {
+    w: W,
+}
+
+impl<W: Write> Writer<W> {
+    pub fn new(mut w: W) -> Self {
+        let _ = w.write(&header());
+        Writer { w }
+    }
+
+    fn write(&mut self, data: &[u8]) {
+        let _ = self.w.write(data);
+    }
+
+    fn into_inner(mut self) -> W {
+        let _ = self.w.flush();
+        self.w
+    }
+}
+
+pub struct Records {
+    inner: Vec<Record>,
+}
+
+pub struct Record {
+    pub name: String,
+    pub time: Time,
+    pub request: Request,
+    pub response: Response,
+    pub asserts: Vec<Assert>,
+    pub error: String,
+}
+
+pub struct Assert {
+    pub expr: String,
+    pub left: String,
+    pub compare: String,
+    pub right: String,
+    pub result: bool,
+}
+
+impl From<Record> for Vec<u8> {
+    fn from(record: Record) -> Vec<u8> {
+        let mut data = Vec::new();
+        encode_long(record.time.start.as_nanos() as i64, &mut data);
+        encode_long(record.time.end.as_nanos() as i64, &mut data);
+        encode_long(record.time.total.as_nanos() as i64, &mut data);
+        encode_long(record.time.resolve.as_nanos() as i64, &mut data);
+        encode_long(record.time.connect.as_nanos() as i64, &mut data);
+        encode_long(record.time.write.as_nanos() as i64, &mut data);
+        encode_long(record.time.delay.as_nanos() as i64, &mut data);
+        encode_long(record.time.read.as_nanos() as i64, &mut data);
+        encode_bytes(record.name.as_bytes(), &mut data);
+        encode_bytes(record.request.method.as_ref(), &mut data);
+        encode_bytes(record.request.url.to_string().as_bytes(), &mut data);
+        encode_bytes(record.request.version.as_ref(), &mut data);
+        encode_long(record.request.headers.len() as i64, &mut data);
+        for header in record.request.headers.into_iter() {
+            encode_long(2, &mut data);
+            encode_bytes(header.name.as_bytes(), &mut data);
+            encode_bytes(header.value.as_bytes(), &mut data);
+        }
+        encode_bytes(record.request.body.as_bytes(), &mut data);
+        encode_bytes(record.response.version.as_bytes(), &mut data);
+        encode_long(record.response.status as i64, &mut data);
+        encode_bytes(record.response.reason.as_bytes(), &mut data);
+        encode_long(record.response.headers.len() as i64, &mut data);
+        for header in record.response.headers.into_iter() {
+            encode_long(2, &mut data);
+            encode_bytes(header.name.as_bytes(), &mut data);
+            encode_bytes(header.value.as_bytes(), &mut data);
+        }
+        encode_bytes(record.response.body.as_bytes(), &mut data);
+        encode_long(record.asserts.len() as i64, &mut data);
+        for assert in record.asserts.into_iter() {
+            encode_bytes(assert.expr.as_bytes(), &mut data);
+            encode_bytes(assert.left.as_bytes(), &mut data);
+            encode_bytes(assert.compare.as_bytes(), &mut data);
+            encode_bytes(assert.right.as_bytes(), &mut data);
+            encode_bool(assert.result, &mut data);
+        }
+        encode_bytes(record.error.as_bytes(), &mut data);
+        let mut buffer = Vec::new();
+        encode_long(1, &mut buffer);
+        encode_long(data.len() as i64, &mut buffer);
+        buffer.extend_from_slice(&data);
+        buffer.extend_from_slice(MARKER);
+        buffer
+    }
+}
+
+fn header() -> Vec<u8> {
+    let mut header = Vec::new();
+    header.extend_from_slice(MAGIC);
+    encode_long(META.len() as i64, &mut header);
+    for (key, value) in META {
+        encode_bytes(key, &mut header);
+        encode_bytes(value, &mut header);
+    }
+    header.push(0u8);
+    header.extend_from_slice(MARKER);
+    header
+}
+
+fn encode_bool(b: bool, buffer: &mut Vec<u8>) {
+    buffer.push(u8::from(b));
+}
+
+fn encode_bytes<B: AsRef<[u8]> + ?Sized>(s: &B, buffer: &mut Vec<u8>) {
+    let bytes = s.as_ref();
+    encode_long(bytes.len() as i64, buffer);
+    buffer.extend_from_slice(bytes);
+}
+
+fn encode_long(i: i64, buffer: &mut Vec<u8>) {
+    encode_variable(((i << 1) ^ (i >> 63)) as u64, buffer)
+}
+
+fn encode_variable(mut z: u64, buffer: &mut Vec<u8>) {
+    loop {
+        if z <= 0x7F {
+            buffer.push((z & 0x7F) as u8);
+            break;
+        } else {
+            buffer.push((0x80 | (z & 0x7F)) as u8);
+            z >>= 7;
+        }
+    }
+}
+
+impl Records {
+    pub fn new() -> Self {
+        Self { inner: Vec::new() }
+    }
+
+    pub fn push(&mut self, record: Record) {
+        self.inner.push(record);
+    }
+}
+
+impl Display for Assert {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(
+            f,
+            "{} => ({} {} {}) => {}",
+            self.expr, self.left, self.compare, self.right, self.result
+        )
+    }
+}
+
+impl Display for Record {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        writeln!(f, "=== TEST  {}", self.name)?;
+        let mut flag = true;
+        for assert in self.asserts.iter() {
+            flag &= assert.result;
+            writeln!(
+                f,
+                "{} => {} {} {} => {}",
+                assert.expr, assert.left, assert.compare, assert.right, assert.result
+            )?
+        }
+        writeln!(
+            f,
+            "--- {}  {} ({:?})",
+            match flag {
+                true => "PASS",
+                false => "FAIL",
+            },
+            self.name,
+            self.time.total
+        )
+    }
+}
+
+impl Display for Records {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        for record in self.inner.iter() {
+            writeln!(f, "{}", record)?;
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn test_encode_long() {
+    let mut buffer = Vec::new();
+    encode_long(27, &mut buffer);
+    assert_eq!(buffer, b"\x36");
+}
+
+#[test]
+fn test_encode_bytes() {
+    let mut buffer = Vec::new();
+    encode_bytes("foo", &mut buffer);
+    assert_eq!(buffer, b"\x06\x66\x6f\x6f");
+}
+
+#[test]
+fn test_encode_record() {
+    let mut data = Vec::new();
+    encode_long(27, &mut data);
+    encode_bytes("foo", &mut data);
+    let mut buffer = Vec::new();
+    encode_long(1, &mut buffer);
+    encode_long(data.len() as i64, &mut buffer);
+    buffer.extend_from_slice(&data);
+    println!("{:?}", buffer);
+    assert_eq!(buffer, b"\x02\x0a\x36\x06\x66\x6f\x6f");
+}
+
+#[test]
+fn test_writer() {
+    let mut writer = Writer::new(Vec::new());
+    let record = Record {
+        name: "test".to_string(),
+        time: Time::default(),
+        request: Request::default(),
+        response: Response::default(),
+        asserts: Vec::new(),
+        error: String::default(),
+    };
+    writer.write(&Vec::from(record));
+    let encoded = writer.into_inner();
+    let reader = avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
+    println!("schema:{:?}", reader.reader_schema());
+    for value in reader {
+        println!("{:?}", value.unwrap());
+    }
+}
