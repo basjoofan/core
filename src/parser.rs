@@ -3,39 +3,11 @@ use crate::Expr;
 use crate::Kind;
 use crate::Token;
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 pub struct Source {
-    requests: HashMap<String, (String, Vec<Expr>)>,
-    tests: HashMap<String, Vec<Expr>>,
-}
-
-impl Source {
-    pub fn new() -> Self {
-        Self {
-            requests: HashMap::new(),
-            tests: HashMap::new(),
-        }
-    }
-
-    pub fn from(requests: HashMap<String, (String, Vec<Expr>)>, tests: HashMap<String, Vec<Expr>>) -> Self {
-        Self { requests, tests }
-    }
-
-    pub fn load(&mut self, text: &str) -> Result<Vec<Expr>, String> {
-        let (exprs, source) = Parser::new(text).parse()?;
-        self.requests.extend(source.requests);
-        self.tests.extend(source.tests);
-        Ok(exprs)
-    }
-
-    pub fn tests(&self) -> HashSet<String> {
-        self.tests.keys().map(|key| key.to_owned()).collect::<HashSet<String>>()
-    }
-
-    pub fn get(&self, name: &str) -> Option<&Vec<Expr>> {
-        self.tests.get(name)
-    }
+    pub exprs: Vec<Expr>,
+    pub requests: HashMap<String, (String, Vec<Expr>)>,
+    pub tests: HashMap<String, Vec<Expr>>,
 }
 
 pub struct Parser {
@@ -93,7 +65,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<(Vec<Expr>, Source), String> {
+    pub fn parse(&mut self) -> Result<Source, String> {
         let mut exprs = Vec::new();
         let mut requests = HashMap::new();
         let mut tests = HashMap::new();
@@ -114,7 +86,7 @@ impl Parser {
             }
             self.next_token();
         }
-        Ok((exprs, Source::from(requests, tests)))
+        Ok(Source { exprs, requests, tests })
     }
 
     fn parse_expr(&mut self, mut precedence: u8) -> Result<Expr, String> {
@@ -287,8 +259,8 @@ impl Parser {
     }
 
     fn parse_array_literal(&mut self) -> Result<Expr, String> {
-        let elements = self.parse_expr_list(Kind::Rs)?;
-        Ok(Expr::Array(elements))
+        let items = self.parse_expr_list(Kind::Rs)?;
+        Ok(Expr::Array(items))
     }
 
     fn parse_map_literal(&mut self) -> Result<Expr, String> {
@@ -315,10 +287,10 @@ impl Parser {
         Ok(Expr::Index(Box::new(left), Box::new(index)))
     }
 
-    fn parse_field_expr(&mut self, object: Expr) -> Result<Expr, String> {
+    fn parse_field_expr(&mut self, left: Expr) -> Result<Expr, String> {
         self.peek_token_expect(Kind::Ident)?;
         let field = self.parse_current_string();
-        Ok(Expr::Field(Box::new(object), field))
+        Ok(Expr::Field(Box::new(left), field))
     }
 
     fn parse_block_expr(&mut self) -> Result<Vec<Expr>, String> {
@@ -367,7 +339,7 @@ fn test_parse_let_expr() {
     ];
     for (text, len, expected) in tests {
         match Parser::new(text).parse() {
-            Ok((exprs, ..)) => {
+            Ok(Source { exprs, .. }) => {
                 println!("{}", exprs.len());
                 println!("{:?}", exprs);
                 assert!(exprs.len() == len);
@@ -394,7 +366,7 @@ fn test_parse_let_expr() {
 #[test]
 fn test_parse_ident_expr() {
     let text = "foobar;";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -412,7 +384,7 @@ fn test_parse_ident_expr() {
 #[test]
 fn test_parse_integer_literal() {
     let text = "5;";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -430,7 +402,7 @@ fn test_parse_integer_literal() {
 #[test]
 fn test_parse_float_literal() {
     let text = "3.14159265358979323846264338327950288;";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("expr:{}", expr);
@@ -450,7 +422,7 @@ fn test_parse_float_literal() {
 fn test_parse_boolean_literal() {
     let tests = vec![("true;", true), ("false;", false)];
     for (text, expected) in tests {
-        if let Ok((exprs, ..)) = Parser::new(text).parse() {
+        if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
             assert!(exprs.len() == 1);
             if let Some(expr) = exprs.first() {
                 println!("{}", expr);
@@ -469,7 +441,7 @@ fn test_parse_boolean_literal() {
 #[test]
 fn test_parse_string_literal() {
     let text = r#""hello world";"#;
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -496,7 +468,7 @@ fn test_parse_unary_expr() {
         ("!false;", "!", "false"),
     ];
     for (text, expected_operator, expected_right) in tests {
-        if let Ok((exprs, ..)) = Parser::new(text).parse() {
+        if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
             assert!(exprs.len() == 1);
             if let Some(expr) = exprs.first() {
                 println!("{}", expr);
@@ -545,7 +517,7 @@ fn test_parse_binary_expr() {
     ];
     for (text, expected_left, expected_operator, expected_right) in tests {
         match Parser::new(text).parse() {
-            Ok((exprs, ..)) => {
+            Ok(Source { exprs, .. }) => {
                 assert!(exprs.len() == 1);
                 if let Some(expr) = exprs.first() {
                     println!("{}", expr);
@@ -603,7 +575,7 @@ fn test_parse_operator_precedence() {
         ("!add()", "(!add())"),
         ("-add()", "(-add())"),
         ("!array[1]", "(!(array[1]))"),
-        ("-object.field", "(-object.field)"),
+        ("-left.field", "(-left.field)"),
         ("3 > 2 && 2 > 1", "((3 > 2) && (2 > 1))"),
         ("a || b * c", "(a || (b * c))"),
         ("a && b < c", "(a && (b < c))"),
@@ -612,7 +584,7 @@ fn test_parse_operator_precedence() {
     ];
     for (text, expected) in tests {
         match Parser::new(text).parse() {
-            Ok((exprs, ..)) => {
+            Ok(Source { exprs, .. }) => {
                 let actual: String = exprs.iter().fold(String::new(), |mut output, e| {
                     use std::fmt::Write;
                     let _ = write!(output, "{e:?}");
@@ -631,7 +603,7 @@ fn test_parse_operator_precedence() {
 #[test]
 fn test_parse_if_expr() {
     let text = "if (x < y) { x }";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -651,7 +623,7 @@ fn test_parse_if_expr() {
 #[test]
 fn test_parse_if_else_expr() {
     let text = "if (x < y) { z;x } else { y }";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -672,7 +644,7 @@ fn test_parse_if_else_expr() {
 #[test]
 fn test_parse_call_expr() {
     let text = "add(1, 2 * 3, 4 + 5);";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -698,7 +670,7 @@ fn test_parse_call_expr_argument() {
         ("add(1, 2 * 3, 4 + 5);", "add", vec!["1", "2 * 3", "4 + 5"]),
     ];
     for (text, function_name, expected) in tests {
-        if let Ok((exprs, ..)) = Parser::new(text).parse() {
+        if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
             assert!(exprs.len() == 1);
             if let Some(expr) = exprs.first() {
                 println!("{}", expr);
@@ -718,12 +690,12 @@ fn test_parse_call_expr_argument() {
 #[test]
 fn test_parse_array_literal_empty() {
     let text = "[]";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
-            if let Expr::Array(elements) = expr {
-                assert!(elements.is_empty());
+            if let Expr::Array(items) = expr {
+                assert!(items.is_empty());
             } else {
                 unreachable!("array literal parse failed")
             }
@@ -736,15 +708,15 @@ fn test_parse_array_literal_empty() {
 #[test]
 fn test_parse_array_literal() {
     let text = "[1, 2 * 2, 3 + 3]";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
-            if let Expr::Array(elements) = expr {
-                assert!(elements.len() == 3);
-                assert!(elements[0].to_string() == "1");
-                assert!(elements[1].to_string() == "2 * 2");
-                assert!(elements[2].to_string() == "3 + 3");
+            if let Expr::Array(items) = expr {
+                assert!(items.len() == 3);
+                assert!(items[0].to_string() == "1");
+                assert!(items[1].to_string() == "2 * 2");
+                assert!(items[2].to_string() == "3 + 3");
             } else {
                 unreachable!("array literal parse failed")
             }
@@ -757,7 +729,7 @@ fn test_parse_array_literal() {
 #[test]
 fn test_parse_index_expr() {
     let text = "myArray[1 + 1]";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -775,14 +747,14 @@ fn test_parse_index_expr() {
 
 #[test]
 fn test_parse_field_expr() {
-    let text = "object.field";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    let text = "left.field";
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
-            if let Expr::Field(object, field) = expr {
-                assert!(object.to_string() == "object");
-                assert!(*field == "field");
+            if let Expr::Field(left, field) = expr {
+                assert!(left.to_string() == "left");
+                assert!(field == "field");
             } else {
                 unreachable!("field expr parse failed")
             }
@@ -795,7 +767,7 @@ fn test_parse_field_expr() {
 #[test]
 fn test_parse_map_literal_empty() {
     let text = "{}";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -813,7 +785,7 @@ fn test_parse_map_literal_empty() {
 #[test]
 fn test_parse_map_literal_one_element() {
     let text = "{1: true}";
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -843,7 +815,7 @@ fn test_parse_map_literal_string_key() {
         (String::from("\"two\""), String::from("2")),
         (String::from("\"three\""), String::from("3")),
     ];
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -871,7 +843,7 @@ fn test_parse_map_literal_boolean_key() {
         (String::from("true"), String::from("1")),
         (String::from("false"), String::from("2")),
     ];
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -900,7 +872,7 @@ fn test_parse_map_literal_integer_key() {
         (String::from("2"), String::from("2")),
         (String::from("3"), String::from("3")),
     ];
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -929,7 +901,7 @@ fn test_parse_map_literal_with_expr() {
         (String::from("\"two\""), String::from("10 - 8")),
         (String::from("\"three\""), String::from("15 / 5")),
     ];
-    if let Ok((exprs, ..)) = Parser::new(text).parse() {
+    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
             println!("{}", expr);
@@ -963,7 +935,7 @@ fn test_parse_request_literal() {
     ];
     for (text, expected_len, expected_name, expected_message) in tests {
         match Parser::new(text).parse() {
-            Ok((_, Source { requests, .. })) => {
+            Ok(Source { requests, .. }) => {
                 assert!(requests.len() == expected_len);
                 if let Some((name, (message, asserts))) = requests.into_iter().next() {
                     assert!(name == expected_name);
@@ -995,7 +967,7 @@ fn test_parse_request_asserts() {
     ];
     for (text, expected_len, expected_asserts) in tests {
         match Parser::new(text).parse() {
-            Ok((_, Source { requests, .. })) => {
+            Ok(Source { requests, .. }) => {
                 if let Some((_, (_, asserts))) = requests.into_iter().next() {
                     assert!(asserts.len() == expected_len);
                     assert!(asserts.iter().map(|assert| assert.to_string()).collect::<Vec<String>>() == expected_asserts);
@@ -1032,7 +1004,7 @@ fn test_parse_test_literal() {
     ];
     for (text, expected_name, expected_length) in tests {
         match Parser::new(text).parse() {
-            Ok((.., Source { tests, .. })) => {
+            Ok(Source { tests, .. }) => {
                 if let Some(block) = tests.get(expected_name) {
                     assert!(block.len() == expected_length);
                 } else {

@@ -1,4 +1,6 @@
 use crate::Context;
+use crate::Parser;
+use crate::Records;
 use crate::Source;
 use std::io::stdin;
 use std::io::BufRead;
@@ -13,7 +15,6 @@ pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub fn repl() {
     let mut lines = stdin().lock().lines();
     let mut context = Context::new();
-    let mut source = Source::new();
     loop {
         if let Some(Ok(text)) = lines.next() {
             if text == "exit" {
@@ -22,105 +23,102 @@ pub fn repl() {
             if text.trim().is_empty() {
                 continue;
             }
-            match source.load(&text) {
-                Ok(exprs) => match source.eval(&exprs, &mut context) {
-                    Ok(value) => {
-                        println!("{}", value);
-                    }
-                    Err(error) => println!("{}", error),
-                },
-                Err(error) => println!("{}", error),
-            }
+            context = eval(text, Some(context));
         }
     }
 }
 
-pub fn eval(text: String) {
-    let mut context = Context::new();
-    let mut source = Source::new();
-    match source.load(&text) {
-        Ok(exprs) => match source.eval(&exprs, &mut context) {
-            Ok(value) => {
-                println!("{}", value);
+pub fn eval(text: String, context: Option<Context>) -> Context {
+    let mut context = context.unwrap_or_default();
+    match Parser::new(&text).parse() {
+        Ok(Source { exprs, requests, .. }) => {
+            context.extend(requests);
+            match context.eval(&exprs, &mut Records::new()) {
+                Ok(value) => {
+                    println!("{}", value);
+                }
+                Err(error) => println!("{}", error),
             }
-            Err(error) => println!("{}", error),
-        },
+        }
         Err(error) => println!("{}", error),
     }
-}
-
-pub fn run(path: Option<PathBuf>) {
-    let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
-    eval(text);
+    context
 }
 
 pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iterations: u32, path: Option<PathBuf>) {
     let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
     let mut context = Context::new();
-    let mut source = Source::new();
-    match source.load(&text) {
-        Ok(exprs) => match source.eval(&exprs, &mut context) {
-            Ok(value) => {
-                println!("{}", value);
+    let mut tests = match Parser::new(&text).parse() {
+        Ok(Source { exprs, requests, tests }) => {
+            context.extend(requests);
+            match context.eval(&exprs, &mut Records::new()) {
+                Ok(_) => tests,
+                Err(error) => {
+                    println!("{}", error);
+                    return;
+                }
             }
-            Err(error) => {
-                println!("{}", error);
-                return;
-            }
-        },
+        }
         Err(error) => {
             println!("{}", error);
             return;
         }
-    }
+    };
     let mut handles = Vec::new();
-    let source = Arc::new(source);
-    let tests = source.tests();
     match name {
         Some(name) => {
-            if tests.contains(&name) {
-                let name = Arc::new(name);
-                let continuous = Arc::new(AtomicBool::new(true));
-                let iterations = iterations / concurrency;
-                for _ in 0..concurrency {
-                    let continuous = continuous.to_owned();
-                    let mut context = context.to_owned();
-                    let source = source.to_owned();
-                    let name = name.to_owned();
-                    handles.push(std::thread::spawn(move || {
-                        let mut i = iterations;
-                        while continuous.load(Ordering::Relaxed) && i > 0 {
-                            match source.test(name.as_str(), &mut context) {
-                                Ok(_) => {}
-                                Err(error) => {
-                                    println!("{}", error);
-                                    break;
+            match tests.remove(&name) {
+                Some(test) => {
+                    let name = Arc::new(name);
+                    let test = Arc::new(test);
+                    let continuous = Arc::new(AtomicBool::new(true));
+                    let iterations = iterations / concurrency;
+                    for _ in 0..concurrency {
+                        let continuous = continuous.to_owned();
+                        let _ = name.to_owned();
+                        let test = test.to_owned();
+                        let mut context = context.to_owned();
+                        handles.push(std::thread::spawn(move || {
+                            let mut i = iterations;
+                            while continuous.load(Ordering::Relaxed) && i > 0 {
+                                let mut records = Records::new();
+                                match context.eval(test.as_ref(), &mut records) {
+                                    Ok(_) => {}
+                                    Err(error) => {
+                                        println!("{}", error);
+                                        break;
+                                    }
                                 }
+                                println!("{}", records);
+                                i -= 1;
                             }
-                            i -= 1;
-                        }
-                    }));
+                        }));
+                    }
+                    // handle interrupt signal
+                    handle_interrupt(continuous.clone());
+                    // completed after thread sleep duration
+                    std::thread::spawn(move || {
+                        std::thread::sleep(duration);
+                        continuous.store(false, Ordering::Relaxed)
+                    });
                 }
-                // handle interrupt signal
-                handle_interrupt(continuous.clone());
-                // completed after thread sleep duration
-                std::thread::spawn(move || {
-                    std::thread::sleep(duration);
-                    continuous.store(false, Ordering::Relaxed)
-                });
-            } else {
-                println!("Test not found: {}", name)
+                None => {
+                    println!("Test not found: {}", name)
+                }
             }
         }
         None => {
-            for name in tests {
+            for (_, test) in tests {
                 let mut context = context.to_owned();
-                let source = source.to_owned();
-                handles.push(std::thread::spawn(move || match source.test(name.as_str(), &mut context) {
-                    Ok(_) => {}
-                    Err(error) => {
-                        println!("{}", error);
+                handles.push(std::thread::spawn(move || {
+                    let mut records = Records::new();
+                    match context.eval(test.as_ref(), &mut records) {
+                        Ok(_) => {}
+                        Err(error) => {
+                            println!("{}", error);
+                        }
                     }
+                    println!("{}", records);
                 }));
             }
         }

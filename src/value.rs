@@ -34,7 +34,7 @@ impl Display for Value {
             Value::Float(float) => write!(f, "{}", float),
             Value::Boolean(boolean) => write!(f, "{}", boolean),
             Value::String(string) => write!(f, "{}", string),
-            Value::Array(elements) => write!(f, "{:?}", elements),
+            Value::Array(items) => write!(f, "{:?}", items),
             Value::Map(pairs) => write!(f, "{:?}", pairs),
         }
     }

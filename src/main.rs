@@ -20,12 +20,6 @@ enum Commands {
         #[command()]
         text: String,
     },
-    /// Interpret and run
-    Run {
-        /// Source path
-        #[command()]
-        path: Option<PathBuf>,
-    },
     /// Run the tests
     Test {
         /// Test name
@@ -53,10 +47,7 @@ fn main() {
     }
     match interface.command {
         Some(Commands::Eval { text }) => {
-            command::eval(text);
-        }
-        Some(Commands::Run { path }) => {
-            command::run(path);
+            command::eval(text, None);
         }
         Some(Commands::Test {
             name,

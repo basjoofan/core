@@ -6,22 +6,22 @@ use std::fmt::Result;
 
 #[derive(Clone, PartialEq)]
 pub enum Expr {
-    Ident(String),
-    Let(String, Box<Expr>),
     Integer(i64),
     Float(f64),
     Boolean(bool),
     String(String),
+    Array(Vec<Expr>),
+    Map(Vec<(Expr, Expr)>),
+    Index(Box<Expr>, Box<Expr>),
+    // Field Access of a named field (left.field)
+    Field(Box<Expr>, String),
+    Ident(String),
+    Let(String, Box<Expr>),
     Unary(Token, Box<Expr>),
     Binary(Token, Box<Expr>, Box<Expr>),
     Paren(Box<Expr>),
     If(Box<Expr>, Vec<Expr>, Vec<Expr>),
     Call(String, Vec<Expr>),
-    Array(Vec<Expr>),
-    Map(Vec<(Expr, Expr)>),
-    Index(Box<Expr>, Box<Expr>),
-    // Field Access of a named field (object.field)
-    Field(Box<Expr>, String),
     // TODO Break A break, with an optional label to break and an optional expr.
     // TODO For A for loop: for pat in expr { ... }.
     // TODO Range A range expr: 1..2, 1.., ..2, 1..=2, ..=2.
@@ -48,14 +48,18 @@ macro_rules! join {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Expr::Ident(ident) => write!(f, "{}", ident),
-            Expr::Let(name, value) => {
-                write!(f, "let {} = {}", name, value)
-            }
             Expr::Integer(integer) => write!(f, "{}", integer),
             Expr::Float(float) => write!(f, "{}", float),
             Expr::Boolean(boolean) => write!(f, "{}", boolean),
             Expr::String(string) => write!(f, "\"{}\"", string),
+            Expr::Ident(ident) => write!(f, "{}", ident),
+            Expr::Array(items) => write!(f, "[{}]", join!(items, "{}", ", ")),
+            Expr::Map(pairs) => write!(f, "{{{}}}", join!(pairs, "{}", ": ", ", ")),
+            Expr::Index(left, index) => write!(f, "{}[{}]", left, index),
+            Expr::Field(left, field) => write!(f, "{}.{}", left, field),
+            Expr::Let(name, value) => {
+                write!(f, "let {} = {}", name, value)
+            }
             Expr::Unary(token, right) => write!(f, "{}{}", token, right),
             Expr::Binary(token, left, right) => {
                 write!(f, "{} {} {}", left, token, right)
@@ -69,10 +73,6 @@ impl Display for Expr {
                 write!(f, " }}")
             }
             Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{}", ", ")),
-            Expr::Array(elements) => write!(f, "[{}]", join!(elements, "{}", ", ")),
-            Expr::Map(pairs) => write!(f, "{{{}}}", join!(pairs, "{}", ": ", ", ")),
-            Expr::Index(left, index) => write!(f, "{}[{}]", left, index),
-            Expr::Field(object, field) => write!(f, "{}.{}", object, field),
         }
     }
 }
@@ -80,12 +80,12 @@ impl Display for Expr {
 impl Debug for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
+            Expr::Index(left, index) => write!(f, "({:?}[{:?}])", left, index),
             Expr::Unary(token, right) => write!(f, "({}{:?})", token, right),
             Expr::Binary(token, left, right) => {
                 write!(f, "({:?} {} {:?})", left, token, right)
             }
             Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{:?}", ", ")),
-            Expr::Index(left, index) => write!(f, "({:?}[{:?}])", left, index),
             _ => write!(f, "{}", self),
         }
     }

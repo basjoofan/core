@@ -95,7 +95,7 @@ impl Token {
             Kind::Not => 11, // !x
             Kind::Lp => 12,  // function()
             Kind::Ls => 13,  // array[index]
-            Kind::Dot => 13, // object.field
+            Kind::Dot => 13, // left.field
             _ => 0,
         }
     }

@@ -1,6 +1,9 @@
 use crate::http::Request;
 use crate::http::Response;
 use crate::http::Time;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use std::io::Write;
 
 const META: [(&str, &str); 2] = [
@@ -11,8 +14,6 @@ const META: [(&str, &str); 2] = [
     "name": "record",
     "type": "record",
     "fields": [
-        {"name": "test_id", "type": "string"},
-        {"name": "test_name", "type": "string"},
         {"name": "time_start", "type": "long"},
         {"name": "time_end", "type": "long"},
         {"name": "time_total", "type": "long"},
@@ -78,10 +79,12 @@ impl<W: Write> Writer<W> {
     }
 }
 
+pub struct Records {
+    inner: Vec<Record>,
+}
+
 pub struct Record {
-    pub test_id: String,
-    pub test_name: String,
-    pub request_name: String,
+    pub name: String,
     pub time: Time,
     pub request: Request,
     pub response: Response,
@@ -100,8 +103,6 @@ pub struct Assert {
 impl From<Record> for Vec<u8> {
     fn from(record: Record) -> Vec<u8> {
         let mut data = Vec::new();
-        encode_bytes(record.test_id.as_bytes(), &mut data);
-        encode_bytes(record.test_name.as_bytes(), &mut data);
         encode_long(record.time.start.as_nanos() as i64, &mut data);
         encode_long(record.time.end.as_nanos() as i64, &mut data);
         encode_long(record.time.total.as_nanos() as i64, &mut data);
@@ -110,7 +111,7 @@ impl From<Record> for Vec<u8> {
         encode_long(record.time.write.as_nanos() as i64, &mut data);
         encode_long(record.time.delay.as_nanos() as i64, &mut data);
         encode_long(record.time.read.as_nanos() as i64, &mut data);
-        encode_bytes(record.request_name.as_bytes(), &mut data);
+        encode_bytes(record.name.as_bytes(), &mut data);
         encode_bytes(record.request.method.as_ref(), &mut data);
         encode_bytes(record.request.url.to_string().as_bytes(), &mut data);
         encode_bytes(record.request.version.as_ref(), &mut data);
@@ -188,6 +189,60 @@ fn encode_variable(mut z: u64, buffer: &mut Vec<u8>) {
     }
 }
 
+impl Records {
+    pub fn new() -> Self {
+        Self { inner: Vec::new() }
+    }
+
+    pub fn push(&mut self, record: Record) {
+        self.inner.push(record);
+    }
+}
+
+impl Display for Assert {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(
+            f,
+            "{} => ({} {} {}) => {}",
+            self.expr, self.left, self.compare, self.right, self.result
+        )
+    }
+}
+
+impl Display for Record {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        writeln!(f, "=== TEST  {}", self.name)?;
+        let mut flag = true;
+        for assert in self.asserts.iter() {
+            flag &= assert.result;
+            writeln!(
+                f,
+                "{} => {} {} {} => {}",
+                assert.expr, assert.left, assert.compare, assert.right, assert.result
+            )?
+        }
+        writeln!(
+            f,
+            "--- {}  {} ({:?})",
+            match flag {
+                true => "PASS",
+                false => "FAIL",
+            },
+            self.name,
+            self.time.total
+        )
+    }
+}
+
+impl Display for Records {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        for record in self.inner.iter() {
+            writeln!(f, "{}", record)?;
+        }
+        Ok(())
+    }
+}
+
 #[test]
 fn test_encode_long() {
     let mut buffer = Vec::new();
@@ -219,9 +274,7 @@ fn test_encode_record() {
 fn test_writer() {
     let mut writer = Writer::new(Vec::new());
     let record = Record {
-        test_id: "1".to_string(),
-        test_name: "test".to_string(),
-        request_name: "test".to_string(),
+        name: "test".to_string(),
         time: Time::default(),
         request: Request::default(),
         response: Response::default(),

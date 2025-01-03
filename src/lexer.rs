@@ -196,7 +196,7 @@ fn test_segment() {
             status == 200,
             regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22"
             ]
-            object.field
+            left.field
             test expectStatusOk {
                 let response = get();
                 response.status
@@ -322,7 +322,7 @@ fn test_segment() {
         (Kind::Eq, "=="),
         (Kind::String, "2022-02-22"),
         (Kind::Rs, "]"),
-        (Kind::Ident, "object"),
+        (Kind::Ident, "left"),
         (Kind::Dot, "."),
         (Kind::Ident, "field"),
         (Kind::Test, "test"),

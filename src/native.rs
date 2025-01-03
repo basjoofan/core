@@ -1,10 +1,7 @@
-use crate::http;
 use crate::Value;
-use std::collections::HashMap;
-use std::time::Duration;
 
-pub fn println(objects: Vec<Value>) -> Value {
-    match format(objects) {
+pub fn println(values: Vec<Value>) -> Value {
+    match format(values) {
         error @ Value::Error(_) => error,
         value => {
             println!("{}", value);
@@ -13,8 +10,8 @@ pub fn println(objects: Vec<Value>) -> Value {
     }
 }
 
-pub fn print(objects: Vec<Value>) -> Value {
-    match format(objects) {
+pub fn print(values: Vec<Value>) -> Value {
+    match format(values) {
         error @ Value::Error(_) => error,
         value => {
             print!("{}", value);
@@ -23,16 +20,16 @@ pub fn print(objects: Vec<Value>) -> Value {
     }
 }
 
-pub fn format(mut objects: Vec<Value>) -> Value {
-    objects.reverse();
-    match objects.pop() {
+pub fn format(mut values: Vec<Value>) -> Value {
+    values.reverse();
+    match values.pop() {
         Some(Value::String(mut string)) => {
             let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
             let matches = regex.find_iter(&string);
             let mut ranges = Vec::new();
             matches.for_each(|m| ranges.push(m.range()));
             ranges.reverse();
-            let variables = objects.iter();
+            let variables = values.iter();
             if variables.len() != ranges.len() {
                 Value::Error(format!("wrong number of arguments. got={}, want={}", variables.len(), ranges.len()))
             } else {
@@ -47,105 +44,32 @@ pub fn format(mut objects: Vec<Value>) -> Value {
     }
 }
 
-pub fn length(objects: Vec<Value>) -> Value {
-    if objects.len() != 1 {
-        Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
-    } else if let Some(object) = objects.first() {
-        match object {
+pub fn length(values: Vec<Value>) -> Value {
+    if values.len() != 1 {
+        Value::Error(format!("wrong number of arguments. got={}, want=1", values.len()))
+    } else if let Some(value) = values.first() {
+        match value {
             Value::String(string) => Value::Integer(string.len() as i64),
-            Value::Array(elements) => Value::Integer(elements.len() as i64),
+            Value::Array(items) => Value::Integer(items.len() as i64),
             Value::Map(pairs) => Value::Integer(pairs.len() as i64),
-            _ => Value::Error(format!("function length not supported type {:?}", object)),
+            _ => Value::Error(format!("function length not supported type {:?}", value)),
         }
     } else {
         Value::Error("function length need a parameter".to_string())
     }
 }
 
-pub fn append(mut objects: Vec<Value>) -> Value {
-    objects.reverse();
-    match objects.pop() {
+pub fn append(mut values: Vec<Value>) -> Value {
+    values.reverse();
+    match values.pop() {
         Some(Value::Array(mut array)) => {
-            while let Some(object) = objects.pop() {
-                array.push(object);
+            while let Some(value) = values.pop() {
+                array.push(value);
             }
             Value::Array(array)
         }
         None => Value::Error("function length need a parameter".to_string()),
         _ => Value::Error("first parameter must be a array".to_string()),
-    }
-}
-
-pub fn http(objects: Vec<Value>) -> Value {
-    if objects.len() != 1 {
-        Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
-    } else if let Some(object) = objects.first() {
-        match object {
-            Value::String(message) => {
-                let client = http::Client::default();
-                let (request, response, time, error) = client.send(message);
-                let mut record = HashMap::new();
-                record.insert(String::from("request"), request.into_value());
-                record.insert(String::from("response"), response.into_value());
-                record.insert(String::from("time"), time.into_value());
-                record.insert(String::from("error"), Value::String(error));
-                Value::Map(record)
-            }
-            _ => Value::Error(format!("function send not supported type {:?}", object)),
-        }
-    } else {
-        Value::Error("function send need a parameter".to_string())
-    }
-}
-
-pub fn track(objects: Vec<Value>) -> Value {
-    if objects.len() != 1 {
-        Value::Error(format!("wrong number of arguments. got={}, want=1", objects.len()))
-    } else if let Some(object) = objects.first() {
-        match object {
-            Value::Map(record) => {
-                let name = record.get("name").unwrap_or(&Value::None);
-                println!("=== TEST  {}", name);
-                let mut flag = true;
-                if let Some(Value::Array(asserts)) = record.get("asserts") {
-                    for assert in asserts {
-                        if let Value::Map(assert) = assert {
-                            let result = !matches!(assert.get("result"), Some(Value::Boolean(false)));
-                            println!(
-                                "{} => {} {} {} => {}",
-                                assert.get("expr").unwrap_or(&Value::None),
-                                assert.get("left").unwrap_or(&Value::None),
-                                assert.get("compare").unwrap_or(&Value::None),
-                                assert.get("right").unwrap_or(&Value::None),
-                                result
-                            );
-                            flag &= result;
-                        }
-                    }
-                }
-                println!(
-                    "--- {}  {} ({:?})",
-                    match flag {
-                        true => "PASS",
-                        false => "FAIL",
-                    },
-                    name,
-                    match record.get("time") {
-                        Some(Value::Map(time)) => {
-                            match time.get("total") {
-                                Some(Value::Integer(total)) => Duration::from_nanos(*total as u64),
-                                _ => Duration::ZERO,
-                            }
-                        }
-                        _ => Duration::ZERO,
-                    }
-                );
-                Value::None
-            }
-            _ => Value::Error(format!("function send not supported type {:?}", object)),
-        }
-    } else {
-        Value::Error("function send need a parameter".to_string())
     }
 }
 
