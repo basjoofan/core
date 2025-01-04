@@ -5,9 +5,6 @@ use std::{path::PathBuf, time::Duration};
 #[derive(Parser)]
 #[command(name = command::NAME, version, about, long_about = None)]
 struct Interface {
-    /// Use verbose output
-    #[arg(short, long)]
-    verbose: bool,
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -25,42 +22,43 @@ enum Commands {
         /// Test name
         #[command()]
         name: Option<String>,
-        /// Concurrency
+        /// Threads
         #[arg(short, long, default_value_t = 1)]
-        concurrency: u32,
+        threads: u32,
         /// Duration
         #[arg(short, long, value_parser = humantime::parse_duration)]
         duration: Option<Duration>,
-        /// Iterations
+        /// Number
         #[arg(short, long, default_value_t = 1)]
-        iterations: u32,
-        /// File
+        number: u32,
+        /// Path
         #[arg(short, long)]
-        file: Option<PathBuf>,
+        path: Option<PathBuf>,
+        /// Record
+        #[arg(short, long)]
+        record: Option<PathBuf>,
     },
 }
 
 fn main() {
     let interface = Interface::parse();
-    if interface.verbose {
-        println!("Use verbose output...");
-    }
     match interface.command {
         Some(Commands::Eval { text }) => {
             command::eval(text, None);
         }
         Some(Commands::Test {
             name,
-            concurrency,
+            threads,
             duration,
-            iterations,
-            file,
+            number,
+            path,
+            record,
         }) => {
-            let (duration, iterations) = match duration {
+            let (duration, number) = match duration {
                 Some(duration) => (duration, u32::MAX),
-                None => (Duration::MAX, iterations),
+                None => (Duration::MAX, number),
             };
-            command::test(name, concurrency, duration, iterations, file);
+            command::test(name, threads, duration, number, path, record);
         }
         None => {
             command::repl();

@@ -2,6 +2,8 @@ use crate::Context;
 use crate::Parser;
 use crate::Records;
 use crate::Source;
+use crate::Writer;
+use std::fs::File;
 use std::io::stdin;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -45,7 +47,7 @@ pub fn eval(text: String, context: Option<Context>) -> Context {
     context
 }
 
-pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iterations: u32, path: Option<PathBuf>) {
+pub fn test(name: Option<String>, threads: u32, duration: Duration, number: u32, path: Option<PathBuf>, record: Option<PathBuf>) {
     let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
     let mut context = Context::new();
     let mut tests = match Parser::new(&text).parse() {
@@ -72,15 +74,16 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
                     let name = Arc::new(name);
                     let test = Arc::new(test);
                     let continuous = Arc::new(AtomicBool::new(true));
-                    let iterations = iterations / concurrency;
-                    for _ in 0..concurrency {
+                    let maximun = number / threads;
+                    for thread in 0..threads {
                         let continuous = continuous.to_owned();
-                        let _ = name.to_owned();
+                        let name = name.to_owned();
                         let test = test.to_owned();
+                        let mut writer = writer(record.as_ref(), thread);
                         let mut context = context.to_owned();
                         handles.push(std::thread::spawn(move || {
-                            let mut i = iterations;
-                            while continuous.load(Ordering::Relaxed) && i > 0 {
+                            let mut number = u32::default();
+                            while continuous.load(Ordering::Relaxed) && number < maximun {
                                 let mut records = Records::new();
                                 match context.eval(test.as_ref(), &mut records) {
                                     Ok(_) => {}
@@ -90,7 +93,10 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
                                     }
                                 }
                                 println!("{}", records);
-                                i -= 1;
+                                if let Some(ref mut writer) = writer {
+                                    writer.write(records, &name, thread, number)
+                                }
+                                number += 1;
                             }
                         }));
                     }
@@ -108,7 +114,8 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
             }
         }
         None => {
-            for (_, test) in tests {
+            for (thread, (name, test)) in tests.into_iter().enumerate() {
+                let mut writer = writer(record.as_ref(), thread as u32);
                 let mut context = context.to_owned();
                 handles.push(std::thread::spawn(move || {
                     let mut records = Records::new();
@@ -119,6 +126,9 @@ pub fn test(name: Option<String>, concurrency: u32, duration: Duration, iteratio
                         }
                     }
                     println!("{}", records);
+                    if let Some(ref mut writer) = writer {
+                        writer.write(records, &name, thread as u32, u32::default())
+                    }
                 }));
             }
         }
@@ -147,6 +157,18 @@ fn read(path: PathBuf, text: &mut String) -> std::io::Result<()> {
         text.push_str(&std::fs::read_to_string(path)?)
     }
     Ok(())
+}
+
+fn writer(path: Option<&PathBuf>, thread: u32) -> Option<Writer<File>> {
+    path.map(|path| {
+        let file = path.join(format!("{}{:06}", std::env::var("POD").unwrap_or_default(), thread));
+        let display = file.display();
+        let file = match File::create(&file) {
+            Err(error) => panic!("Create file {} error: {:?}", display, error),
+            Ok(file) => file,
+        };
+        Writer::new(file)
+    })
 }
 
 fn handle_interrupt(continuous: Arc<AtomicBool>) {

@@ -5,6 +5,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use std::io::Write;
+use std::sync::Arc;
 
 const META: [(&str, &str); 2] = [
     (
@@ -14,6 +15,10 @@ const META: [(&str, &str); 2] = [
     "name": "record",
     "type": "record",
     "fields": [
+        {"name": "name", "type": "string"},
+        {"name": "thread", "type": "long"},
+        {"name": "number", "type": "long"},
+        {"name": "order", "type": "long"},
         {"name": "time_start", "type": "long"},
         {"name": "time_end", "type": "long"},
         {"name": "time_total", "type": "long"},
@@ -69,84 +74,63 @@ impl<W: Write> Writer<W> {
         Writer { w }
     }
 
-    fn write(&mut self, data: &[u8]) {
-        let _ = self.w.write(data);
+    pub fn write(&mut self, records: Records, name: &str, thread: u32, number: u32) {
+        let mut data = Vec::new();
+        for (order, record) in records.inner.iter().enumerate() {
+            encode_bytes(name.as_bytes(), &mut data);
+            encode_long(thread as i64, &mut data);
+            encode_long(number as i64, &mut data);
+            encode_long(order as i64, &mut data);
+            encode_long(record.time.start.as_nanos() as i64, &mut data);
+            encode_long(record.time.end.as_nanos() as i64, &mut data);
+            encode_long(record.time.total.as_nanos() as i64, &mut data);
+            encode_long(record.time.resolve.as_nanos() as i64, &mut data);
+            encode_long(record.time.connect.as_nanos() as i64, &mut data);
+            encode_long(record.time.write.as_nanos() as i64, &mut data);
+            encode_long(record.time.delay.as_nanos() as i64, &mut data);
+            encode_long(record.time.read.as_nanos() as i64, &mut data);
+            encode_bytes(record.name.as_bytes(), &mut data);
+            encode_bytes(record.request.method.as_ref(), &mut data);
+            encode_bytes(record.request.url.to_string().as_bytes(), &mut data);
+            encode_bytes(record.request.version.as_ref(), &mut data);
+            encode_long(record.request.headers.len() as i64, &mut data);
+            for header in record.request.headers.iter() {
+                encode_long(2, &mut data);
+                encode_bytes(header.name.as_bytes(), &mut data);
+                encode_bytes(header.value.as_bytes(), &mut data);
+            }
+            encode_bytes(record.request.body.as_bytes(), &mut data);
+            encode_bytes(record.response.version.as_bytes(), &mut data);
+            encode_long(record.response.status as i64, &mut data);
+            encode_bytes(record.response.reason.as_bytes(), &mut data);
+            encode_long(record.response.headers.len() as i64, &mut data);
+            for header in record.response.headers.iter() {
+                encode_long(2, &mut data);
+                encode_bytes(header.name.as_bytes(), &mut data);
+                encode_bytes(header.value.as_bytes(), &mut data);
+            }
+            encode_bytes(record.response.body.as_bytes(), &mut data);
+            encode_long(record.asserts.len() as i64, &mut data);
+            for assert in record.asserts.iter() {
+                encode_bytes(assert.expr.as_bytes(), &mut data);
+                encode_bytes(assert.left.as_bytes(), &mut data);
+                encode_bytes(assert.compare.as_bytes(), &mut data);
+                encode_bytes(assert.right.as_bytes(), &mut data);
+                encode_bool(assert.result, &mut data);
+            }
+            encode_bytes(record.error.as_bytes(), &mut data);
+        }
+        let mut buffer = Vec::new();
+        encode_long(records.inner.len() as i64, &mut buffer);
+        encode_long(data.len() as i64, &mut buffer);
+        buffer.extend_from_slice(&data);
+        buffer.extend_from_slice(MARKER);
+        let _ = self.w.write(&buffer);
     }
 
     fn into_inner(mut self) -> W {
         let _ = self.w.flush();
         self.w
-    }
-}
-
-pub struct Records {
-    inner: Vec<Record>,
-}
-
-pub struct Record {
-    pub name: String,
-    pub time: Time,
-    pub request: Request,
-    pub response: Response,
-    pub asserts: Vec<Assert>,
-    pub error: String,
-}
-
-pub struct Assert {
-    pub expr: String,
-    pub left: String,
-    pub compare: String,
-    pub right: String,
-    pub result: bool,
-}
-
-impl From<Record> for Vec<u8> {
-    fn from(record: Record) -> Vec<u8> {
-        let mut data = Vec::new();
-        encode_long(record.time.start.as_nanos() as i64, &mut data);
-        encode_long(record.time.end.as_nanos() as i64, &mut data);
-        encode_long(record.time.total.as_nanos() as i64, &mut data);
-        encode_long(record.time.resolve.as_nanos() as i64, &mut data);
-        encode_long(record.time.connect.as_nanos() as i64, &mut data);
-        encode_long(record.time.write.as_nanos() as i64, &mut data);
-        encode_long(record.time.delay.as_nanos() as i64, &mut data);
-        encode_long(record.time.read.as_nanos() as i64, &mut data);
-        encode_bytes(record.name.as_bytes(), &mut data);
-        encode_bytes(record.request.method.as_ref(), &mut data);
-        encode_bytes(record.request.url.to_string().as_bytes(), &mut data);
-        encode_bytes(record.request.version.as_ref(), &mut data);
-        encode_long(record.request.headers.len() as i64, &mut data);
-        for header in record.request.headers.into_iter() {
-            encode_long(2, &mut data);
-            encode_bytes(header.name.as_bytes(), &mut data);
-            encode_bytes(header.value.as_bytes(), &mut data);
-        }
-        encode_bytes(record.request.body.as_bytes(), &mut data);
-        encode_bytes(record.response.version.as_bytes(), &mut data);
-        encode_long(record.response.status as i64, &mut data);
-        encode_bytes(record.response.reason.as_bytes(), &mut data);
-        encode_long(record.response.headers.len() as i64, &mut data);
-        for header in record.response.headers.into_iter() {
-            encode_long(2, &mut data);
-            encode_bytes(header.name.as_bytes(), &mut data);
-            encode_bytes(header.value.as_bytes(), &mut data);
-        }
-        encode_bytes(record.response.body.as_bytes(), &mut data);
-        encode_long(record.asserts.len() as i64, &mut data);
-        for assert in record.asserts.into_iter() {
-            encode_bytes(assert.expr.as_bytes(), &mut data);
-            encode_bytes(assert.left.as_bytes(), &mut data);
-            encode_bytes(assert.compare.as_bytes(), &mut data);
-            encode_bytes(assert.right.as_bytes(), &mut data);
-            encode_bool(assert.result, &mut data);
-        }
-        encode_bytes(record.error.as_bytes(), &mut data);
-        let mut buffer = Vec::new();
-        encode_long(1, &mut buffer);
-        encode_long(data.len() as i64, &mut buffer);
-        buffer.extend_from_slice(&data);
-        buffer.extend_from_slice(MARKER);
-        buffer
     }
 }
 
@@ -187,6 +171,27 @@ fn encode_variable(mut z: u64, buffer: &mut Vec<u8>) {
             z >>= 7;
         }
     }
+}
+
+pub struct Records {
+    inner: Vec<Record>,
+}
+
+pub struct Record {
+    pub name: String,
+    pub time: Time,
+    pub request: Request,
+    pub response: Response,
+    pub asserts: Vec<Assert>,
+    pub error: String,
+}
+
+pub struct Assert {
+    pub expr: String,
+    pub left: String,
+    pub compare: String,
+    pub right: String,
+    pub result: bool,
 }
 
 impl Records {
@@ -281,7 +286,7 @@ fn test_writer() {
         asserts: Vec::new(),
         error: String::default(),
     };
-    writer.write(&Vec::from(record));
+    writer.write(Records { inner: vec![record] }, "test", 0, 0);
     let encoded = writer.into_inner();
     let reader = avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
     println!("schema:{:?}", reader.reader_schema());
