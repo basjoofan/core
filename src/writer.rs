@@ -5,7 +5,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use std::io::Write;
-use std::sync::Arc;
 
 const META: [(&str, &str); 2] = [
     (
@@ -126,11 +125,6 @@ impl<W: Write> Writer<W> {
         buffer.extend_from_slice(&data);
         buffer.extend_from_slice(MARKER);
         let _ = self.w.write(&buffer);
-    }
-
-    fn into_inner(mut self) -> W {
-        let _ = self.w.flush();
-        self.w
     }
 }
 
@@ -287,7 +281,7 @@ fn test_writer() {
         error: String::default(),
     };
     writer.write(Records { inner: vec![record] }, "test", 0, 0);
-    let encoded = writer.into_inner();
+    let encoded = writer.w;
     let reader = avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
     println!("schema:{:?}", reader.reader_schema());
     for value in reader {

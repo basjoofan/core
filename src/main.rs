@@ -26,7 +26,7 @@ enum Commands {
         #[arg(short, long, default_value_t = 1)]
         threads: u32,
         /// Duration
-        #[arg(short, long, value_parser = humantime::parse_duration)]
+        #[arg(short, long, value_parser = parse_duration)]
         duration: Option<Duration>,
         /// Number
         #[arg(short, long, default_value_t = 1)]
@@ -64,4 +64,21 @@ fn main() {
             command::repl();
         }
     }
+}
+
+fn parse_duration(s: &str) -> Result<Duration, String> {
+    let mut chars = s.chars();
+    let last = chars.next_back();
+    let value = match chars.as_str().parse::<u64>() {
+        Ok(value) => value,
+        Err(_) => return Err(format!("Invalid number: {}", chars.as_str())),
+    };
+    let duration = match last {
+        Some('s') => Duration::from_secs(value),
+        Some('m') => Duration::from_secs(value * 60),
+        Some('h') => Duration::from_secs(value * 3600),
+        Some(c) => return Err(format!("Unknown time unit: {}, supported units: s, m, h", c)),
+        None => return Err("Time unit needed, for example 1s or 2m".to_string()),
+    };
+    Ok(duration)
 }
