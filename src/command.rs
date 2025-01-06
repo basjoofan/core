@@ -2,6 +2,7 @@ use crate::Context;
 use crate::Parser;
 use crate::Records;
 use crate::Source;
+use crate::Stats;
 use crate::Writer;
 use std::fs::File;
 use std::io::stdin;
@@ -47,7 +48,15 @@ pub fn eval(text: String, context: Option<Context>) -> Context {
     context
 }
 
-pub fn test(name: Option<String>, threads: u32, duration: Duration, number: u32, path: Option<PathBuf>, record: Option<PathBuf>) {
+pub fn test(
+    name: Option<String>,
+    threads: u32,
+    duration: Duration,
+    number: u32,
+    path: Option<PathBuf>,
+    record: Option<PathBuf>,
+    stat: bool,
+) {
     let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
     let mut context = Context::new();
     let mut tests = match Parser::new(&text).parse() {
@@ -67,6 +76,7 @@ pub fn test(name: Option<String>, threads: u32, duration: Duration, number: u32,
         }
     };
     let mut handles = Vec::new();
+    let (sender, receiver) = std::sync::mpsc::channel();
     match name {
         Some(name) => {
             match tests.remove(&name) {
@@ -76,6 +86,7 @@ pub fn test(name: Option<String>, threads: u32, duration: Duration, number: u32,
                     let continuous = Arc::new(AtomicBool::new(true));
                     let maximun = number / threads;
                     for thread in 0..threads {
+                        let sender = sender.to_owned();
                         let continuous = continuous.to_owned();
                         let name = name.to_owned();
                         let test = test.to_owned();
@@ -92,10 +103,11 @@ pub fn test(name: Option<String>, threads: u32, duration: Duration, number: u32,
                                         break;
                                     }
                                 }
-                                println!("{}", records);
+                                print!("{}", records);
                                 if let Some(ref mut writer) = writer {
-                                    writer.write(records, &name, thread, number)
+                                    writer.write(&records, &name, thread, number)
                                 }
+                                stat.then(|| sender.send(records));
                                 number += 1;
                             }
                         }));
@@ -125,14 +137,26 @@ pub fn test(name: Option<String>, threads: u32, duration: Duration, number: u32,
                             println!("{}", error);
                         }
                     }
-                    println!("{}", records);
+                    print!("{}", records);
                     if let Some(ref mut writer) = writer {
-                        writer.write(records, &name, thread as u32, u32::default())
+                        writer.write(&records, &name, thread as u32, u32::default())
                     }
                 }));
             }
         }
     }
+    handles.push(std::thread::spawn(move || {
+        stat.then(|| {
+            let mut stats = Stats::default();
+            for records in receiver {
+                for record in records.iter() {
+                    stats.add(&record.name, record.time.total.as_millis());
+                }
+            }
+            print!("{}", stats);
+        });
+    }));
+    std::mem::drop(sender);
     for handle in handles {
         let _ = handle.join();
     }

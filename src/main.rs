@@ -37,6 +37,9 @@ enum Commands {
         /// Record
         #[arg(short, long)]
         record: Option<PathBuf>,
+        /// Stat
+        #[arg(short, long)]
+        stat: bool,
     },
 }
 
@@ -53,12 +56,13 @@ fn main() {
             number,
             path,
             record,
+            stat,
         }) => {
             let (duration, number) = match duration {
                 Some(duration) => (duration, u32::MAX),
                 None => (Duration::MAX, number),
             };
-            command::test(name, threads, duration, number, path, record);
+            command::test(name, threads, duration, number, path, record, stat);
         }
         None => {
             command::repl();

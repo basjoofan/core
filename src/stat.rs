@@ -56,7 +56,7 @@ impl Stats {
                 stat.add(millis);
             }
             None => {
-                self.stats.insert(name.clone(), Stat::new(millis));
+                self.stats.insert(name.to_owned(), Stat::new(millis));
             }
         };
     }
@@ -65,7 +65,7 @@ impl Stats {
 impl Display for Stats {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         for (name, stat) in self.stats.iter() {
-            writeln!(f, "{}  {}", stat, name)?
+            writeln!(f, "{} {}", name, stat)?
         }
         Ok(())
     }

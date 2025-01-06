@@ -73,7 +73,7 @@ impl<W: Write> Writer<W> {
         Writer { w }
     }
 
-    pub fn write(&mut self, records: Records, name: &str, thread: u32, number: u32) {
+    pub fn write(&mut self, records: &Records, name: &str, thread: u32, number: u32) {
         let mut data = Vec::new();
         for (order, record) in records.inner.iter().enumerate() {
             encode_bytes(name.as_bytes(), &mut data);
@@ -167,6 +167,7 @@ fn encode_variable(mut z: u64, buffer: &mut Vec<u8>) {
     }
 }
 
+#[derive(Default)]
 pub struct Records {
     inner: Vec<Record>,
 }
@@ -195,6 +196,10 @@ impl Records {
 
     pub fn push(&mut self, record: Record) {
         self.inner.push(record);
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<Record> {
+        self.inner.iter()
     }
 }
 
@@ -236,7 +241,7 @@ impl Display for Record {
 impl Display for Records {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         for record in self.inner.iter() {
-            writeln!(f, "{}", record)?;
+            write!(f, "{}", record)?;
         }
         Ok(())
     }
@@ -280,7 +285,7 @@ fn test_writer() {
         asserts: Vec::new(),
         error: String::default(),
     };
-    writer.write(Records { inner: vec![record] }, "test", 0, 0);
+    writer.write(&Records { inner: vec![record] }, "test", 0, 0);
     let encoded = writer.w;
     let reader = avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
     println!("schema:{:?}", reader.reader_schema());
