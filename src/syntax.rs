@@ -1,4 +1,6 @@
 use crate::Token;
+use crate::Value;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -26,6 +28,25 @@ pub enum Expr {
     // TODO For A for loop: for pat in expr { ... }.
     // TODO Range A range expr: 1..2, 1.., ..2, 1..=2, ..=2.
     // TODO While A while loop: while expr { ... }.
+}
+
+impl Expr {
+    pub fn eval(&self) -> Value {
+        match self {
+            Expr::Integer(integer) => Value::Integer(*integer),
+            Expr::Float(float) => Value::Float(*float),
+            Expr::Boolean(boolean) => Value::Boolean(*boolean),
+            Expr::String(string) => Value::String(string.clone()),
+            Expr::Array(items) => Value::Array(items.iter().map(|e| e.eval()).collect::<Vec<Value>>()),
+            Expr::Map(pairs) => Value::Map(
+                pairs
+                    .iter()
+                    .map(|(k, v)| (k.eval().to_string(), v.eval()))
+                    .collect::<HashMap<String, Value>>(),
+            ),
+            _ => Value::None,
+        }
+    }
 }
 
 macro_rules! join {

@@ -2,6 +2,8 @@ use super::Error;
 use super::Header;
 use super::Headers;
 use super::Stream;
+use crate::Parser;
+use crate::Source;
 use crate::Value;
 use std::collections::HashMap;
 use std::io::BufRead;
@@ -77,9 +79,11 @@ impl Response {
         }
         map.insert(String::from("headers"), Value::Map(headers));
         map.insert(String::from("body"), Value::String(self.body.to_string()));
-        // TODO parse json value
-        // let json = Parser::new(&self.body).parse().eval(&mut Context::default());
-        // map.insert(String::from("json"), json);
+        if let Ok(Source { exprs, .. }) = Parser::new(&self.body).parse() {
+            if let Some(expr) = exprs.first() {
+                map.insert(String::from("json"), expr.eval());
+            }
+        }
         map
     }
 }
@@ -114,4 +118,11 @@ fn test_from_message_json() {
     assert_eq!(200, response.status);
     assert_eq!(7, response.headers.len());
     assert_eq!("    {\n    \"origin\": \"104.28.152.141\"\n    }\n    ", response.body);
+    assert_eq!(
+        Some(&Value::Map(HashMap::from_iter(vec![(
+            String::from("origin"),
+            Value::String(String::from("104.28.152.141"))
+        )]))),
+        response.to_map().get("json")
+    )
 }
