@@ -21,7 +21,7 @@ fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
     }
     let output = child.wait_with_output().expect("Failed to read stdout");
     println!("output:{}", String::from_utf8_lossy(&output.stdout).trim());
-    assert!(String::from_utf8_lossy(&output.stdout).trim() == "2\nnone");
+    assert!(String::from_utf8_lossy(&output.stdout).trim() == "2\nnull");
     Ok(())
 }
 
@@ -29,13 +29,13 @@ fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
 fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.arg("eval").arg(r#"print("{integer}", 1 + 1 )"#);
-    cmd.assert().success().stdout(predicate::str::diff("2none\n"));
+    cmd.assert().success().stdout(predicate::str::diff("2null\n"));
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.arg("eval").arg(r#"let x = 1 + 1; print("{integer}", x);"#);
-    cmd.assert().success().stdout(predicate::str::diff("2none\n"));
+    cmd.assert().success().stdout(predicate::str::diff("2null\n"));
     let mut cmd = Command::cargo_bin(NAME)?;
     cmd.arg("eval").arg(r#"println("{string}", "Hello Am!")"#);
-    cmd.assert().success().stdout(predicate::str::diff("Hello Am!\nnone\n"));
+    cmd.assert().success().stdout(predicate::str::diff("Hello Am!\nnull\n"));
     Ok(())
 }
 

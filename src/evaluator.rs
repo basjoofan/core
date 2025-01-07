@@ -155,16 +155,16 @@ fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context, records: 
 
 fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mut Context, records: &mut Records) -> Result<Value, String> {
     match token.kind {
-        Kind::Add => Ok(eval_expr(left, context, records)? + eval_expr(right, context, records)?),
-        Kind::Sub => Ok(eval_expr(left, context, records)? - eval_expr(right, context, records)?),
-        Kind::Mul => Ok(eval_expr(left, context, records)? * eval_expr(right, context, records)?),
-        Kind::Div => Ok(eval_expr(left, context, records)? / eval_expr(right, context, records)?),
-        Kind::Rem => Ok(eval_expr(left, context, records)? % eval_expr(right, context, records)?),
-        Kind::Bx => Ok(eval_expr(left, context, records)? ^ eval_expr(right, context, records)?),
-        Kind::Bo => Ok(eval_expr(left, context, records)? | eval_expr(right, context, records)?),
-        Kind::Ba => Ok(eval_expr(left, context, records)? & eval_expr(right, context, records)?),
-        Kind::Sl => Ok(eval_expr(left, context, records)? << eval_expr(right, context, records)?),
-        Kind::Sr => Ok(eval_expr(left, context, records)? >> eval_expr(right, context, records)?),
+        Kind::Add => eval_expr(left, context, records)? + eval_expr(right, context, records)?,
+        Kind::Sub => eval_expr(left, context, records)? - eval_expr(right, context, records)?,
+        Kind::Mul => eval_expr(left, context, records)? * eval_expr(right, context, records)?,
+        Kind::Div => eval_expr(left, context, records)? / eval_expr(right, context, records)?,
+        Kind::Rem => eval_expr(left, context, records)? % eval_expr(right, context, records)?,
+        Kind::Bx => eval_expr(left, context, records)? ^ eval_expr(right, context, records)?,
+        Kind::Bo => eval_expr(left, context, records)? | eval_expr(right, context, records)?,
+        Kind::Ba => eval_expr(left, context, records)? & eval_expr(right, context, records)?,
+        Kind::Sl => eval_expr(left, context, records)? << eval_expr(right, context, records)?,
+        Kind::Sr => eval_expr(left, context, records)? >> eval_expr(right, context, records)?,
         Kind::Lo => match eval_expr(left, context, records)? {
             Value::Boolean(false) | Value::Null => eval_expr(right, context, records),
             left => Ok(left),
@@ -268,11 +268,11 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
             Ok(Value::Map(context.inner))
         }
         None => match name {
-            "println" => Ok(native::println(arguments)),
-            "print" => Ok(native::print(arguments)),
-            "format" => Ok(native::format(arguments)),
-            "length" => Ok(native::length(arguments)),
-            "append" => Ok(native::append(arguments)),
+            "println" => Ok(native::println(arguments)?),
+            "print" => Ok(native::print(arguments)?),
+            "format" => Ok(native::format(arguments)?),
+            "length" => Ok(native::length(arguments)?),
+            "append" => Ok(native::append(arguments)?),
             _ => Err(format!("function {} not found", name)),
         },
     }
@@ -557,14 +557,6 @@ mod tests {
             ("length(\"\")", Value::Integer(0)),
             ("length(\"two\")", Value::Integer(3)),
             ("length(\"hello world\")", Value::Integer(11)),
-            (
-                "length(1)",
-                Value::Error(String::from("function length not supported type Integer(1)")),
-            ),
-            (
-                "length(\"one\", \"two\")",
-                Value::Error(String::from("wrong number of arguments. got=2, want=1")),
-            ),
             ("length([])", Value::Integer(0)),
             ("length([1, 2, 3])", Value::Integer(3)),
         ];

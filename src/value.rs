@@ -16,7 +16,6 @@ use std::ops::Sub;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Null,
-    Error(String),
     Integer(i64),
     Float(f64),
     Boolean(bool),
@@ -29,7 +28,6 @@ impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Value::Null => write!(f, "null"),
-            Value::Error(message) => write!(f, "{}", message),
             Value::Integer(integer) => write!(f, "{}", integer),
             Value::Float(float) => write!(f, "{}", float),
             Value::Boolean(boolean) => write!(f, "{}", boolean),
@@ -41,117 +39,117 @@ impl Display for Value {
 }
 
 impl Add for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn add(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left + right),
-            (Value::Float(left), Value::Float(right)) => Value::Float(left + right),
-            (Value::Integer(left), Value::Float(right)) => Value::Float(left as f64 + right),
-            (Value::Float(left), Value::Integer(right)) => Value::Float(left + right as f64),
-            (Value::String(left), Value::String(right)) => Value::String(left + &right),
-            (left, right) => Value::Error(format!("type mismatch: {} + {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left + right)),
+            (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left + right)),
+            (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 + right)),
+            (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left + right as f64)),
+            (Value::String(left), Value::String(right)) => Ok(Value::String(left + &right)),
+            (left, right) => Err(format!("type mismatch: {} + {}", left, right)),
         }
     }
 }
 
 impl Sub for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn sub(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left - right),
-            (Value::Float(left), Value::Float(right)) => Value::Float(left - right),
-            (Value::Integer(left), Value::Float(right)) => Value::Float(left as f64 - right),
-            (Value::Float(left), Value::Integer(right)) => Value::Float(left - right as f64),
-            (left, right) => Value::Error(format!("type mismatch: {} - {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left - right)),
+            (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left - right)),
+            (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 - right)),
+            (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left - right as f64)),
+            (left, right) => Err(format!("type mismatch: {} - {}", left, right)),
         }
     }
 }
 
 impl Mul for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn mul(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left * right),
-            (Value::Float(left), Value::Float(right)) => Value::Float(left * right),
-            (Value::Integer(left), Value::Float(right)) => Value::Float(left as f64 * right),
-            (Value::Float(left), Value::Integer(right)) => Value::Float(left * right as f64),
-            (left, right) => Value::Error(format!("type mismatch: {} * {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left * right)),
+            (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left * right)),
+            (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 * right)),
+            (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left * right as f64)),
+            (left, right) => Err(format!("type mismatch: {} * {}", left, right)),
         }
     }
 }
 
 impl Div for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn div(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left / right),
-            (Value::Float(left), Value::Float(right)) => Value::Float(left / right),
-            (Value::Integer(left), Value::Float(right)) => Value::Float(left as f64 / right),
-            (Value::Float(left), Value::Integer(right)) => Value::Float(left / right as f64),
-            (left, right) => Value::Error(format!("type mismatch: {} / {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left / right)),
+            (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left / right)),
+            (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 / right)),
+            (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left / right as f64)),
+            (left, right) => Err(format!("type mismatch: {} / {}", left, right)),
         }
     }
 }
 
 impl Rem for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn rem(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left % right),
-            (Value::Float(left), Value::Float(right)) => Value::Float(left % right),
-            (Value::Integer(left), Value::Float(right)) => Value::Float(left as f64 % right),
-            (Value::Float(left), Value::Integer(right)) => Value::Float(left % right as f64),
-            (left, right) => Value::Error(format!("type mismatch: {} % {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left % right)),
+            (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left % right)),
+            (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 % right)),
+            (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left % right as f64)),
+            (left, right) => Err(format!("type mismatch: {} % {}", left, right)),
         }
     }
 }
 
 impl BitXor for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn bitxor(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left ^ right),
-            (left, right) => Value::Error(format!("type mismatch: {} ^ {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left ^ right)),
+            (left, right) => Err(format!("type mismatch: {} ^ {}", left, right)),
         }
     }
 }
 
 impl BitOr for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn bitor(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left | right),
-            (left, right) => Value::Error(format!("type mismatch: {} | {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left | right)),
+            (left, right) => Err(format!("type mismatch: {} | {}", left, right)),
         }
     }
 }
 
 impl BitAnd for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn bitand(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left & right),
-            (left, right) => Value::Error(format!("type mismatch: {} & {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left & right)),
+            (left, right) => Err(format!("type mismatch: {} & {}", left, right)),
         }
     }
 }
 
 impl Shl for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn shl(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left << right),
-            (left, right) => Value::Error(format!("type mismatch: {} << {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left << right)),
+            (left, right) => Err(format!("type mismatch: {} << {}", left, right)),
         }
     }
 }
 
 impl Shr for Value {
-    type Output = Self;
+    type Output = std::result::Result<Self, String>;
     fn shr(self, other: Self) -> Self::Output {
         match (self, other) {
-            (Value::Integer(left), Value::Integer(right)) => Value::Integer(left >> right),
-            (left, right) => Value::Error(format!("type mismatch: {} >> {}", left, right)),
+            (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left >> right)),
+            (left, right) => Err(format!("type mismatch: {} >> {}", left, right)),
         }
     }
 }

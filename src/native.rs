@@ -1,26 +1,26 @@
 use crate::Value;
 
-pub fn println(values: Vec<Value>) -> Value {
+pub fn println(values: Vec<Value>) -> Result<Value, String> {
     match format(values) {
-        error @ Value::Error(_) => error,
-        value => {
+        error @ Err(_) => error,
+        Ok(value) => {
             println!("{}", value);
-            Value::Null
+            Ok(Value::Null)
         }
     }
 }
 
-pub fn print(values: Vec<Value>) -> Value {
+pub fn print(values: Vec<Value>) -> Result<Value, String> {
     match format(values) {
-        error @ Value::Error(_) => error,
-        value => {
+        error @ Err(_) => error,
+        Ok(value) => {
             print!("{}", value);
-            Value::Null
+            Ok(Value::Null)
         }
     }
 }
 
-pub fn format(mut values: Vec<Value>) -> Value {
+pub fn format(mut values: Vec<Value>) -> Result<Value, String> {
     values.reverse();
     match values.pop() {
         Some(Value::String(mut string)) => {
@@ -31,45 +31,45 @@ pub fn format(mut values: Vec<Value>) -> Value {
             ranges.reverse();
             let variables = values.iter();
             if variables.len() != ranges.len() {
-                Value::Error(format!("wrong number of arguments. got={}, want={}", variables.len(), ranges.len()))
+                Err(format!("wrong number of arguments. got={}, want={}", variables.len(), ranges.len()))
             } else {
                 for (range, variable) in ranges.into_iter().zip(variables) {
                     string.replace_range(range, &variable.to_string());
                 }
-                Value::String(string)
+                Ok(Value::String(string))
             }
         }
-        None => Value::Error("function length need a parameter".to_string()),
-        _ => Value::Error("first parameter must be a string".to_string()),
+        None => Err("function length need a parameter".to_string()),
+        _ => Err("first parameter must be a string".to_string()),
     }
 }
 
-pub fn length(values: Vec<Value>) -> Value {
+pub fn length(values: Vec<Value>) -> Result<Value, String> {
     if values.len() != 1 {
-        Value::Error(format!("wrong number of arguments. got={}, want=1", values.len()))
+        Err(format!("wrong number of arguments. got={}, want=1", values.len()))
     } else if let Some(value) = values.first() {
         match value {
-            Value::String(string) => Value::Integer(string.len() as i64),
-            Value::Array(items) => Value::Integer(items.len() as i64),
-            Value::Map(pairs) => Value::Integer(pairs.len() as i64),
-            _ => Value::Error(format!("function length not supported type {:?}", value)),
+            Value::String(string) => Ok(Value::Integer(string.len() as i64)),
+            Value::Array(items) => Ok(Value::Integer(items.len() as i64)),
+            Value::Map(pairs) => Ok(Value::Integer(pairs.len() as i64)),
+            _ => Err(format!("function length not supported type {:?}", value)),
         }
     } else {
-        Value::Error("function length need a parameter".to_string())
+        Err("function length need a parameter".to_string())
     }
 }
 
-pub fn append(mut values: Vec<Value>) -> Value {
+pub fn append(mut values: Vec<Value>) -> Result<Value, String> {
     values.reverse();
     match values.pop() {
         Some(Value::Array(mut array)) => {
             while let Some(value) = values.pop() {
                 array.push(value);
             }
-            Value::Array(array)
+            Ok(Value::Array(array))
         }
-        None => Value::Error("function length need a parameter".to_string()),
-        _ => Value::Error("first parameter must be a array".to_string()),
+        None => Err("function length need a parameter".to_string()),
+        _ => Err("first parameter must be a array".to_string()),
     }
 }
 
@@ -97,9 +97,15 @@ fn test_format() {
         ),
     ];
     for (test, expected) in tests {
-        let actual = format(test);
-        println!("{}=={}", actual, expected);
-        assert_eq!(actual, expected);
+        match format(test) {
+            Ok(actual) => {
+                println!("{}=={}", actual, expected);
+                assert_eq!(actual, expected);
+            }
+            Err(error) => {
+                unreachable!("{}", error);
+            }
+        }
     }
 }
 
@@ -120,8 +126,14 @@ fn test_append() {
         ),
     ];
     for (test, expected) in tests {
-        let actual = append(test);
-        println!("{}=={}", actual, expected);
-        assert_eq!(actual, expected);
+        match append(test) {
+            Ok(actual) => {
+                println!("{}=={}", actual, expected);
+                assert_eq!(actual, expected);
+            }
+            Err(error) => {
+                unreachable!("{}", error);
+            }
+        }
     }
 }
