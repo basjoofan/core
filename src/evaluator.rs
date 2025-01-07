@@ -100,14 +100,14 @@ fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context, records: &
                 let item = items.remove(index);
                 Ok(item)
             } else {
-                Ok(Value::None)
+                Ok(Value::Null)
             }
         }
         (Value::Map(mut pairs), key) => {
             let element = pairs.remove(&key.to_string());
             match element {
                 Some(element) => Ok(element),
-                None => Ok(Value::None),
+                None => Ok(Value::Null),
             }
         }
         (value, _) => Err(format!("index operator not support: {:?}", value)),
@@ -121,7 +121,7 @@ fn eval_field_expr(map: &Expr, field: &String, context: &mut Context, records: &
             let value = pairs.remove(field);
             Ok(match value {
                 Some(value) => value,
-                None => Value::None,
+                None => Value::Null,
             })
         }
         map => Err(format!("field operator not support: {:?}", map)),
@@ -144,7 +144,7 @@ fn eval_let_expr(name: &String, expr: &Expr, context: &mut Context, records: &mu
 fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context, records: &mut Records) -> Result<Value, String> {
     let right = eval_expr(right, context, records)?;
     match (token.kind, right) {
-        (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::None) => Ok(Value::Boolean(true)),
+        (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => Ok(Value::Boolean(true)),
         (Kind::Not, Value::Integer(integer)) => Ok(Value::Integer(!integer)),
         (Kind::Not, _) => Ok(Value::Boolean(false)),
         (Kind::Sub, Value::Integer(integer)) => Ok(Value::Integer(-integer)),
@@ -166,11 +166,11 @@ fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mut Cont
         Kind::Sl => Ok(eval_expr(left, context, records)? << eval_expr(right, context, records)?),
         Kind::Sr => Ok(eval_expr(left, context, records)? >> eval_expr(right, context, records)?),
         Kind::Lo => match eval_expr(left, context, records)? {
-            Value::Boolean(false) | Value::None => eval_expr(right, context, records),
+            Value::Boolean(false) | Value::Null => eval_expr(right, context, records),
             left => Ok(left),
         },
         Kind::La => match eval_expr(left, context, records)? {
-            left @ (Value::Boolean(false) | Value::None) => Ok(left),
+            left @ (Value::Boolean(false) | Value::Null) => Ok(left),
             _ => eval_expr(right, context, records),
         },
         Kind::Lt => Ok(Value::Boolean(
@@ -204,7 +204,7 @@ fn eval_if_expr(
 ) -> Result<Value, String> {
     let condition = eval_expr(condition, context, records)?;
     match condition {
-        Value::Boolean(false) | Value::None => eval_block(alternative, context, records),
+        Value::Boolean(false) | Value::Null => eval_block(alternative, context, records),
         _ => eval_block(consequence, context, records),
     }
 }
@@ -223,7 +223,7 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
             for (variable, range) in ranges.into_iter() {
                 let variable = match context.inner.get(variable) {
                     Some(variable) => variable.to_string(),
-                    None => Value::None.to_string(),
+                    None => Value::Null.to_string(),
                 };
                 message.replace_range(range, variable.as_str());
             }
@@ -235,8 +235,8 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
                 .iter()
                 .filter_map(|assert| match assert {
                     Expr::Binary(token, left, right) => {
-                        let left = eval_expr(left, &mut context, records).unwrap_or(Value::None);
-                        let right = eval_expr(right, &mut context, records).unwrap_or(Value::None);
+                        let left = eval_expr(left, &mut context, records).unwrap_or(Value::Null);
+                        let right = eval_expr(right, &mut context, records).unwrap_or(Value::Null);
                         match token.kind {
                             Kind::Lt => Some(left < right),
                             Kind::Gt => Some(left > right),
@@ -279,7 +279,7 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
 }
 
 fn eval_block(exprs: &[Expr], context: &mut Context, records: &mut Records) -> Result<Value, String> {
-    let mut result = Value::None;
+    let mut result = Value::Null;
     for expr in exprs {
         result = eval_expr(expr, context, records)?;
     }
@@ -499,13 +499,13 @@ mod tests {
             ("[1, 2, 3][1]", Value::Integer(2)),
             ("[1, 2, 3][0 + 2]", Value::Integer(3)),
             ("[[1, 1, 1]][0][0]", Value::Integer(1)),
-            ("[][0]", Value::None),
-            ("[1, 2, 3][99]", Value::None),
-            ("[1][-1]", Value::None),
+            ("[][0]", Value::Null),
+            ("[1, 2, 3][99]", Value::Null),
+            ("[1][-1]", Value::Null),
             ("{1: 1, 2: 2}[1]", Value::Integer(1)),
             ("{1: 1, 2: 2}[2]", Value::Integer(2)),
-            ("{1: 1}[0]", Value::None),
-            ("{}[0]", Value::None),
+            ("{1: 1}[0]", Value::Null),
+            ("{}[0]", Value::Null),
         ];
         run_eval_tests(tests);
     }
@@ -542,10 +542,10 @@ mod tests {
             ("if (1 < 2) { 10 }", Value::Integer(10)),
             ("if (1 < 2) { 10 } else { 20 }", Value::Integer(10)),
             ("if (1 > 2) { 10 } else { 20 }", Value::Integer(20)),
-            ("if (1 > 2) { 10 }", Value::None),
-            ("if (false) { 10 }", Value::None),
+            ("if (1 > 2) { 10 }", Value::Null),
+            ("if (false) { 10 }", Value::Null),
             ("if ((if (false) { 10 })) { 10 } else { 20 }", Value::Integer(20)),
-            ("if (true) {} else { 10 }", Value::None),
+            ("if (true) {} else { 10 }", Value::Null),
             ("if (true) { 1; 2 } else { 3 }", Value::Integer(2)),
         ];
         run_eval_tests(tests);

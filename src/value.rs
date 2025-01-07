@@ -15,7 +15,7 @@ use std::ops::Sub;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    None,
+    Null,
     Error(String),
     Integer(i64),
     Float(f64),
@@ -28,7 +28,7 @@ pub enum Value {
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Value::None => write!(f, "none"),
+            Value::Null => write!(f, "null"),
             Value::Error(message) => write!(f, "{}", message),
             Value::Integer(integer) => write!(f, "{}", integer),
             Value::Float(float) => write!(f, "{}", float),

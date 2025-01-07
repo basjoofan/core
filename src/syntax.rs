@@ -44,7 +44,7 @@ impl Expr {
                     .map(|(k, v)| (k.eval().to_string(), v.eval()))
                     .collect::<HashMap<String, Value>>(),
             ),
-            _ => Value::None,
+            _ => Value::Null,
         }
     }
 }

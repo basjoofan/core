@@ -5,7 +5,7 @@ pub fn println(values: Vec<Value>) -> Value {
         error @ Value::Error(_) => error,
         value => {
             println!("{}", value);
-            Value::None
+            Value::Null
         }
     }
 }
@@ -15,7 +15,7 @@ pub fn print(values: Vec<Value>) -> Value {
         error @ Value::Error(_) => error,
         value => {
             print!("{}", value);
-            Value::None
+            Value::Null
         }
     }
 }
