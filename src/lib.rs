@@ -1,25 +1,35 @@
-mod evaluator;
-mod http;
+macro_rules! not_wasm {
+    ($($item:item)*) => {$(
+        #[cfg(not(target_arch = "wasm32"))]
+        $item
+    )*}
+}
+
 mod lexer;
-mod native;
 mod parser;
-mod stat;
 mod syntax;
 mod token;
 mod value;
-mod writer;
 
-use evaluator::Context;
-use parser::Parser;
-use parser::Source;
-use stat::Stats;
+pub use parser::Parser;
+pub use parser::Source;
+
 use syntax::Expr;
 use token::Kind;
 use token::Token;
 use value::Value;
-use writer::Assert;
-use writer::Record;
-use writer::Records;
-use writer::Writer;
 
-pub mod command;
+not_wasm! {
+    mod evaluator;
+    mod http;
+    mod native;
+    mod stat;
+    mod writer;
+    pub mod command;
+    use stat::Stats;
+    use writer::Assert;
+    use writer::Record;
+    use writer::Records;
+    use writer::Writer;
+    use evaluator::Context;
+}
