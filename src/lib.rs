@@ -13,13 +13,14 @@ mod value;
 
 pub use parser::Parser;
 pub use parser::Source;
-
 use syntax::Expr;
 use token::Kind;
 use token::Token;
 use value::Value;
 
 not_wasm! {
+    mod context;
+    use context::Context;
     mod evaluator;
     mod http;
     mod native;
@@ -27,9 +28,8 @@ not_wasm! {
     mod writer;
     pub mod command;
     use stat::Stats;
-    use writer::Assert;
-    use writer::Record;
-    use writer::Records;
+    use context::Assert;
+    use context::Record;
     use writer::Writer;
-    use evaluator::Context;
+    use evaluator::eval_block;
 }

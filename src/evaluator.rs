@@ -1,61 +1,31 @@
 use crate::http;
 use crate::native;
 use crate::Assert;
+use crate::Context;
 use crate::Expr;
 use crate::Kind;
 use crate::Record;
-use crate::Records;
 use crate::Token;
 use crate::Value;
 use std::collections::HashMap;
 
-#[derive(Default, Clone)]
-pub struct Context {
-    inner: HashMap<String, Value>,
-    requests: HashMap<String, (String, Vec<Expr>)>,
-}
-
-impl Context {
-    pub fn new() -> Self {
-        Self {
-            inner: HashMap::new(),
-            requests: HashMap::new(),
-        }
-    }
-
-    pub fn from(inner: HashMap<String, Value>) -> Self {
-        Self {
-            inner,
-            requests: HashMap::new(),
-        }
-    }
-
-    pub fn extend(&mut self, requests: HashMap<String, (String, Vec<Expr>)>) {
-        self.requests.extend(requests);
-    }
-
-    pub fn eval(&mut self, exprs: &[Expr], records: &mut Records) -> Result<Value, String> {
-        eval_block(exprs, self, records)
-    }
-}
-
-fn eval_expr(expr: &Expr, context: &mut Context, records: &mut Records) -> Result<Value, String> {
+fn eval_expr(expr: &Expr, context: &mut Context) -> Result<Value, String> {
     match expr {
         Expr::Integer(integer) => eval_integer_literal(integer),
         Expr::Float(float) => eval_float_literal(float),
         Expr::Boolean(boolean) => eval_boolean_literal(boolean),
         Expr::String(string) => eval_string_literal(string),
-        Expr::Array(items) => eval_array_literal(items, context, records),
-        Expr::Map(pairs) => eval_map_literal(pairs, context, records),
-        Expr::Index(value, index) => eval_index_expr(value, index, context, records),
-        Expr::Field(map, field) => eval_field_expr(map, field, context, records),
+        Expr::Array(items) => eval_array_literal(items, context),
+        Expr::Map(pairs) => eval_map_literal(pairs, context),
+        Expr::Index(value, index) => eval_index_expr(value, index, context),
+        Expr::Field(map, field) => eval_field_expr(map, field, context),
         Expr::Ident(ident) => eval_ident_expr(ident, context),
-        Expr::Let(name, expr) => eval_let_expr(name, expr, context, records),
-        Expr::Unary(token, right) => eval_unary_expr(token, right, context, records),
-        Expr::Binary(token, left, right) => eval_binary_expr(token, left, right, context, records),
-        Expr::Paren(expr) => eval_expr(expr, context, records),
-        Expr::If(condition, consequence, alternative) => eval_if_expr(condition, consequence, alternative, context, records),
-        Expr::Call(name, arguments) => eval_call_expr(name, arguments, context, records),
+        Expr::Let(name, expr) => eval_let_expr(name, expr, context),
+        Expr::Unary(token, right) => eval_unary_expr(token, right, context),
+        Expr::Binary(token, left, right) => eval_binary_expr(token, left, right, context),
+        Expr::Paren(expr) => eval_expr(expr, context),
+        Expr::If(condition, consequence, alternative) => eval_if_expr(condition, consequence, alternative, context),
+        Expr::Call(name, arguments) => eval_call_expr(name, arguments, context),
     }
 }
 
@@ -75,24 +45,24 @@ fn eval_string_literal(string: &String) -> Result<Value, String> {
     Ok(Value::String(string.to_owned()))
 }
 
-fn eval_array_literal(items: &[Expr], context: &mut Context, records: &mut Records) -> Result<Value, String> {
-    Ok(Value::Array(eval_list(items, context, records)?))
+fn eval_array_literal(items: &[Expr], context: &mut Context) -> Result<Value, String> {
+    Ok(Value::Array(eval_list(items, context)?))
 }
 
-fn eval_map_literal(pairs: &Vec<(Expr, Expr)>, context: &mut Context, records: &mut Records) -> Result<Value, String> {
+fn eval_map_literal(pairs: &Vec<(Expr, Expr)>, context: &mut Context) -> Result<Value, String> {
     let mut map = HashMap::new();
     for (key, value) in pairs {
-        let key = eval_expr(key, context, records)?;
-        let value = eval_expr(value, context, records)?;
+        let key = eval_expr(key, context)?;
+        let value = eval_expr(value, context)?;
         map.insert(key.to_string(), value);
     }
     Ok(Value::Map(map))
 }
 
-fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context, records: &mut Records) -> Result<Value, String> {
+fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context) -> Result<Value, String> {
     // TODO enhance indent expr get variable use reference
-    let value = eval_expr(value, context, records)?;
-    let index = eval_expr(index, context, records)?;
+    let value = eval_expr(value, context)?;
+    let index = eval_expr(index, context)?;
     match (value, index) {
         (Value::Array(mut items), Value::Integer(index)) => {
             let index = index as usize;
@@ -114,9 +84,9 @@ fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context, records: &
     }
 }
 
-fn eval_field_expr(map: &Expr, field: &String, context: &mut Context, records: &mut Records) -> Result<Value, String> {
+fn eval_field_expr(map: &Expr, field: &String, context: &mut Context) -> Result<Value, String> {
     // TODO enhance indent expr get variable use reference
-    match eval_expr(map, context, records)? {
+    match eval_expr(map, context)? {
         Value::Map(mut pairs) => {
             let value = pairs.remove(field);
             Ok(match value {
@@ -129,20 +99,20 @@ fn eval_field_expr(map: &Expr, field: &String, context: &mut Context, records: &
 }
 
 fn eval_ident_expr(ident: &String, context: &mut Context) -> Result<Value, String> {
-    match context.inner.get(ident) {
+    match context.get(ident) {
         Some(value) => Ok(value.to_owned()),
         None => Err(format!("ident:{} not found", ident)),
     }
 }
 
-fn eval_let_expr(name: &String, expr: &Expr, context: &mut Context, records: &mut Records) -> Result<Value, String> {
-    let value = eval_expr(expr, context, records)?;
-    context.inner.insert(name.to_owned(), value.to_owned());
+fn eval_let_expr(name: &String, expr: &Expr, context: &mut Context) -> Result<Value, String> {
+    let value = eval_expr(expr, context)?;
+    context.set(name.to_owned(), value.to_owned());
     Ok(value)
 }
 
-fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context, records: &mut Records) -> Result<Value, String> {
-    let right = eval_expr(right, context, records)?;
+fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context) -> Result<Value, String> {
+    let right = eval_expr(right, context)?;
     match (token.kind, right) {
         (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => Ok(Value::Boolean(true)),
         (Kind::Not, Value::Integer(integer)) => Ok(Value::Integer(!integer)),
@@ -153,65 +123,47 @@ fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context, records: 
     }
 }
 
-fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mut Context, records: &mut Records) -> Result<Value, String> {
+fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mut Context) -> Result<Value, String> {
     match token.kind {
-        Kind::Add => eval_expr(left, context, records)? + eval_expr(right, context, records)?,
-        Kind::Sub => eval_expr(left, context, records)? - eval_expr(right, context, records)?,
-        Kind::Mul => eval_expr(left, context, records)? * eval_expr(right, context, records)?,
-        Kind::Div => eval_expr(left, context, records)? / eval_expr(right, context, records)?,
-        Kind::Rem => eval_expr(left, context, records)? % eval_expr(right, context, records)?,
-        Kind::Bx => eval_expr(left, context, records)? ^ eval_expr(right, context, records)?,
-        Kind::Bo => eval_expr(left, context, records)? | eval_expr(right, context, records)?,
-        Kind::Ba => eval_expr(left, context, records)? & eval_expr(right, context, records)?,
-        Kind::Sl => eval_expr(left, context, records)? << eval_expr(right, context, records)?,
-        Kind::Sr => eval_expr(left, context, records)? >> eval_expr(right, context, records)?,
-        Kind::Lo => match eval_expr(left, context, records)? {
-            Value::Boolean(false) | Value::Null => eval_expr(right, context, records),
+        Kind::Add => eval_expr(left, context)? + eval_expr(right, context)?,
+        Kind::Sub => eval_expr(left, context)? - eval_expr(right, context)?,
+        Kind::Mul => eval_expr(left, context)? * eval_expr(right, context)?,
+        Kind::Div => eval_expr(left, context)? / eval_expr(right, context)?,
+        Kind::Rem => eval_expr(left, context)? % eval_expr(right, context)?,
+        Kind::Bx => eval_expr(left, context)? ^ eval_expr(right, context)?,
+        Kind::Bo => eval_expr(left, context)? | eval_expr(right, context)?,
+        Kind::Ba => eval_expr(left, context)? & eval_expr(right, context)?,
+        Kind::Sl => eval_expr(left, context)? << eval_expr(right, context)?,
+        Kind::Sr => eval_expr(left, context)? >> eval_expr(right, context)?,
+        Kind::Lo => match eval_expr(left, context)? {
+            Value::Boolean(false) | Value::Null => eval_expr(right, context),
             left => Ok(left),
         },
-        Kind::La => match eval_expr(left, context, records)? {
+        Kind::La => match eval_expr(left, context)? {
             left @ (Value::Boolean(false) | Value::Null) => Ok(left),
-            _ => eval_expr(right, context, records),
+            _ => eval_expr(right, context),
         },
-        Kind::Lt => Ok(Value::Boolean(
-            eval_expr(left, context, records)? < eval_expr(right, context, records)?,
-        )),
-        Kind::Gt => Ok(Value::Boolean(
-            eval_expr(left, context, records)? > eval_expr(right, context, records)?,
-        )),
-        Kind::Le => Ok(Value::Boolean(
-            eval_expr(left, context, records)? <= eval_expr(right, context, records)?,
-        )),
-        Kind::Ge => Ok(Value::Boolean(
-            eval_expr(left, context, records)? >= eval_expr(right, context, records)?,
-        )),
-        Kind::Eq => Ok(Value::Boolean(
-            eval_expr(left, context, records)? == eval_expr(right, context, records)?,
-        )),
-        Kind::Ne => Ok(Value::Boolean(
-            eval_expr(left, context, records)? != eval_expr(right, context, records)?,
-        )),
+        Kind::Lt => Ok(Value::Boolean(eval_expr(left, context)? < eval_expr(right, context)?)),
+        Kind::Gt => Ok(Value::Boolean(eval_expr(left, context)? > eval_expr(right, context)?)),
+        Kind::Le => Ok(Value::Boolean(eval_expr(left, context)? <= eval_expr(right, context)?)),
+        Kind::Ge => Ok(Value::Boolean(eval_expr(left, context)? >= eval_expr(right, context)?)),
+        Kind::Eq => Ok(Value::Boolean(eval_expr(left, context)? == eval_expr(right, context)?)),
+        Kind::Ne => Ok(Value::Boolean(eval_expr(left, context)? != eval_expr(right, context)?)),
         _ => Err(format!("not support operator: {} {} {}", left, token, right)),
     }
 }
 
-fn eval_if_expr(
-    condition: &Expr,
-    consequence: &[Expr],
-    alternative: &[Expr],
-    context: &mut Context,
-    records: &mut Records,
-) -> Result<Value, String> {
-    let condition = eval_expr(condition, context, records)?;
+fn eval_if_expr(condition: &Expr, consequence: &[Expr], alternative: &[Expr], context: &mut Context) -> Result<Value, String> {
+    let condition = eval_expr(condition, context)?;
     match condition {
-        Value::Boolean(false) | Value::Null => eval_block(alternative, context, records),
-        _ => eval_block(consequence, context, records),
+        Value::Boolean(false) | Value::Null => eval_block(alternative, context),
+        _ => eval_block(consequence, context),
     }
 }
 
-fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records: &mut Records) -> Result<Value, String> {
-    let arguments = eval_list(arguments, context, records)?;
-    match context.requests.get(name) {
+fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Result<Value, String> {
+    let arguments = eval_list(arguments, context)?;
+    match context.request(name) {
         Some((message, asserts)) => {
             let name = name.to_string();
             let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
@@ -221,7 +173,7 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
             ranges.reverse();
             let mut message = message.to_string();
             for (variable, range) in ranges.into_iter() {
-                let variable = match context.inner.get(variable) {
+                let variable = match context.get(variable) {
                     Some(variable) => variable.to_string(),
                     None => Value::Null.to_string(),
                 };
@@ -230,13 +182,13 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
             let client = http::Client::default();
             let (request, response, time, error) = client.send(message.as_str());
             let map = response.to_map();
-            let mut context = Context::from(map);
+            let mut local = Context::from(map);
             let asserts = asserts
                 .iter()
                 .filter_map(|assert| match assert {
                     Expr::Binary(token, left, right) => {
-                        let left = eval_expr(left, &mut context, records).unwrap_or(Value::Null);
-                        let right = eval_expr(right, &mut context, records).unwrap_or(Value::Null);
+                        let left = eval_expr(left, &mut local).unwrap_or(Value::Null);
+                        let right = eval_expr(right, &mut local).unwrap_or(Value::Null);
                         match token.kind {
                             Kind::Lt => Some(left < right),
                             Kind::Gt => Some(left > right),
@@ -257,7 +209,7 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
                     _ => None,
                 })
                 .collect::<Vec<Assert>>();
-            records.push(Record {
+            context.push(Record {
                 name,
                 request,
                 response,
@@ -265,7 +217,7 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
                 error,
                 asserts,
             });
-            Ok(Value::Map(context.inner))
+            Ok(Value::Map(local.into_map()))
         }
         None => match name {
             "println" => Ok(native::println(arguments)?),
@@ -278,18 +230,18 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context, records
     }
 }
 
-fn eval_block(exprs: &[Expr], context: &mut Context, records: &mut Records) -> Result<Value, String> {
+pub fn eval_block(exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
     let mut result = Value::Null;
     for expr in exprs {
-        result = eval_expr(expr, context, records)?;
+        result = eval_expr(expr, context)?;
     }
     Ok(result)
 }
 
-fn eval_list(items: &[Expr], context: &mut Context, records: &mut Records) -> Result<Vec<Value>, String> {
+fn eval_list(items: &[Expr], context: &mut Context) -> Result<Vec<Value>, String> {
     let mut values = Vec::with_capacity(items.len());
     for item in items {
-        values.push(eval_expr(item, context, records)?);
+        values.push(eval_expr(item, context)?);
     }
     Ok(values)
 }
@@ -300,7 +252,6 @@ mod tests {
     use crate::parser::Parser;
     use crate::parser::Source;
     use crate::Context;
-    use crate::Records;
     use crate::Value;
     use std::collections::HashMap;
 
@@ -308,9 +259,8 @@ mod tests {
         for (text, expect) in tests {
             let Source { exprs, requests, .. } = Parser::new(text).parse().unwrap();
             let mut context = Context::new();
-            let mut records = Records::new();
             context.extend(requests);
-            match eval_block(&exprs, &mut context, &mut records) {
+            match eval_block(&exprs, &mut context) {
                 Ok(value) => {
                     println!("{:?} => {} = {}", exprs, value, expect);
                     assert_eq!(value, expect);

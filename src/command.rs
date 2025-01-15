@@ -1,6 +1,6 @@
+use crate::eval_block;
 use crate::Context;
 use crate::Parser;
-use crate::Records;
 use crate::Source;
 use crate::Stats;
 use crate::Writer;
@@ -36,7 +36,7 @@ pub fn eval(text: String, context: Option<Context>) -> Context {
     match Parser::new(&text).parse() {
         Ok(Source { exprs, requests, .. }) => {
             context.extend(requests);
-            match context.eval(&exprs, &mut Records::new()) {
+            match eval_block(&exprs, &mut context) {
                 Ok(value) => {
                     println!("{}", value);
                 }
@@ -62,7 +62,7 @@ pub fn test(
     let mut tests = match Parser::new(&text).parse() {
         Ok(Source { exprs, requests, tests }) => {
             context.extend(requests);
-            match context.eval(&exprs, &mut Records::new()) {
+            match eval_block(&exprs, &mut context) {
                 Ok(_) => tests,
                 Err(error) => {
                     println!("{}", error);
@@ -95,15 +95,15 @@ pub fn test(
                         handles.push(std::thread::spawn(move || {
                             let mut number = u32::default();
                             while continuous.load(Ordering::Relaxed) && number < maximun {
-                                let mut records = Records::new();
-                                match context.eval(test.as_ref(), &mut records) {
+                                match eval_block(test.as_ref(), &mut context) {
                                     Ok(_) => {}
                                     Err(error) => {
                                         println!("{}", error);
                                         break;
                                     }
                                 }
-                                print!("{}", records);
+                                let records = context.records();
+                                records.iter().for_each(|record| println!("{}", record));
                                 if let Some(ref mut writer) = writer {
                                     writer.write(&records, &name, thread, number)
                                 }
@@ -130,14 +130,14 @@ pub fn test(
                 let mut writer = writer(record.as_ref(), thread as u32);
                 let mut context = context.to_owned();
                 handles.push(std::thread::spawn(move || {
-                    let mut records = Records::new();
-                    match context.eval(test.as_ref(), &mut records) {
+                    match eval_block(test.as_ref(), &mut context) {
                         Ok(_) => {}
                         Err(error) => {
                             println!("{}", error);
                         }
                     }
-                    print!("{}", records);
+                    let records = context.records();
+                    records.iter().for_each(|record| println!("{}", record));
                     if let Some(ref mut writer) = writer {
                         writer.write(&records, &name, thread as u32, u32::default())
                     }

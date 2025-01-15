@@ -1,9 +1,4 @@
-use crate::http::Request;
-use crate::http::Response;
-use crate::http::Time;
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result;
+use crate::Record;
 use std::io::Write;
 
 const META: [(&str, &str); 2] = [
@@ -73,9 +68,9 @@ impl<W: Write> Writer<W> {
         Writer { w }
     }
 
-    pub fn write(&mut self, records: &Records, name: &str, thread: u32, number: u32) {
+    pub fn write(&mut self, records: &[Record], name: &str, thread: u32, number: u32) {
         let mut data = Vec::new();
-        for (order, record) in records.inner.iter().enumerate() {
+        for (order, record) in records.iter().enumerate() {
             encode_bytes(name.as_bytes(), &mut data);
             encode_long(thread as i64, &mut data);
             encode_long(number as i64, &mut data);
@@ -120,7 +115,7 @@ impl<W: Write> Writer<W> {
             encode_bytes(record.error.as_bytes(), &mut data);
         }
         let mut buffer = Vec::new();
-        encode_long(records.inner.len() as i64, &mut buffer);
+        encode_long(records.len() as i64, &mut buffer);
         encode_long(data.len() as i64, &mut buffer);
         buffer.extend_from_slice(&data);
         buffer.extend_from_slice(MARKER);
@@ -167,86 +162,6 @@ fn encode_variable(mut z: u64, buffer: &mut Vec<u8>) {
     }
 }
 
-#[derive(Default)]
-pub struct Records {
-    inner: Vec<Record>,
-}
-
-pub struct Record {
-    pub name: String,
-    pub time: Time,
-    pub request: Request,
-    pub response: Response,
-    pub asserts: Vec<Assert>,
-    pub error: String,
-}
-
-pub struct Assert {
-    pub expr: String,
-    pub left: String,
-    pub compare: String,
-    pub right: String,
-    pub result: bool,
-}
-
-impl Records {
-    pub fn new() -> Self {
-        Self { inner: Vec::new() }
-    }
-
-    pub fn push(&mut self, record: Record) {
-        self.inner.push(record);
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<Record> {
-        self.inner.iter()
-    }
-}
-
-impl Display for Assert {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(
-            f,
-            "{} => ({} {} {}) => {}",
-            self.expr, self.left, self.compare, self.right, self.result
-        )
-    }
-}
-
-impl Display for Record {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        writeln!(f, "=== TEST  {}", self.name)?;
-        let mut flag = true;
-        for assert in self.asserts.iter() {
-            flag &= assert.result;
-            writeln!(
-                f,
-                "{} => {} {} {} => {}",
-                assert.expr, assert.left, assert.compare, assert.right, assert.result
-            )?
-        }
-        writeln!(
-            f,
-            "--- {}  {} ({:?})",
-            match flag {
-                true => "PASS",
-                false => "FAIL",
-            },
-            self.name,
-            self.time.total
-        )
-    }
-}
-
-impl Display for Records {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        for record in self.inner.iter() {
-            write!(f, "{}", record)?;
-        }
-        Ok(())
-    }
-}
-
 #[test]
 fn test_encode_long() {
     let mut buffer = Vec::new();
@@ -279,13 +194,13 @@ fn test_writer() {
     let mut writer = Writer::new(Vec::new());
     let record = Record {
         name: "test".to_string(),
-        time: Time::default(),
-        request: Request::default(),
-        response: Response::default(),
+        time: crate::http::Time::default(),
+        request: crate::http::Request::default(),
+        response: crate::http::Response::default(),
         asserts: Vec::new(),
         error: String::default(),
     };
-    writer.write(&Records { inner: vec![record] }, "test", 0, 0);
+    writer.write(&vec![record], "test", 0, 0);
     let encoded = writer.w;
     let reader = avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
     println!("schema:{:?}", reader.reader_schema());
