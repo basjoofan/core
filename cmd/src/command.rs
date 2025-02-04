@@ -1,9 +1,9 @@
-use crate::eval_block;
-use crate::Context;
-use crate::Parser;
-use crate::Source;
-use crate::Stats;
-use crate::Writer;
+use lib::eval_block;
+use lib::Context;
+use lib::Parser;
+use lib::Source;
+use lib::Stats;
+use lib::Writer;
 use std::fs::File;
 use std::io::stdin;
 use std::io::BufRead;
@@ -12,8 +12,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
-
-pub const NAME: &str = env!("CARGO_PKG_NAME");
 
 pub fn repl() {
     let mut lines = stdin().lock().lines();
@@ -177,7 +175,7 @@ fn read(path: PathBuf, text: &mut String) -> std::io::Result<()> {
         for entry in entries {
             read(entry, text)?;
         }
-    } else if path.is_file() && path.extension() == Some(std::ffi::OsStr::new(NAME)) {
+    } else if path.is_file() && path.extension() == Some(std::ffi::OsStr::new("fan")) {
         text.push_str(&std::fs::read_to_string(path)?)
     }
     Ok(())

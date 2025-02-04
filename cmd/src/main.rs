@@ -1,9 +1,9 @@
-use am::command;
+mod command;
 use clap::{Parser, Subcommand};
 use std::{path::PathBuf, time::Duration};
 
 #[derive(Parser)]
-#[command(name = command::NAME, version, about, long_about = None)]
+#[command(name = env!("CARGO_PKG_DESCRIPTION"), version, about, long_about = None)]
 struct Interface {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -11,13 +11,13 @@ struct Interface {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Evaluate source code
+    /// Evaluate codes
     Eval {
         /// Source code
         #[command()]
         text: String,
     },
-    /// Run the tests
+    /// Run tests
     Test {
         /// Test name
         #[command()]
