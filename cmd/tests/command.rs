@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 #[test]
 #[allow(clippy::zombie_processes)]
 fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
-    let mut child = Command::cargo_bin("fan")?
+    let mut child = Command::cargo_bin("basjoofan")?
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -26,13 +26,13 @@ fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::cargo_bin("fan")?;
+    let mut cmd = Command::cargo_bin("basjoofan")?;
     cmd.arg("eval").arg(r#"print("{integer}", 1 + 1 )"#);
     cmd.assert().success().stdout(predicate::str::diff("2null\n"));
-    let mut cmd = Command::cargo_bin("fan")?;
+    let mut cmd = Command::cargo_bin("basjoofan")?;
     cmd.arg("eval").arg(r#"let x = 1 + 1; print("{integer}", x);"#);
     cmd.assert().success().stdout(predicate::str::diff("2null\n"));
-    let mut cmd = Command::cargo_bin("fan")?;
+    let mut cmd = Command::cargo_bin("basjoofan")?;
     cmd.arg("eval").arg(r#"println("{string}", "Hello Basjoofan!")"#);
     cmd.assert().success().stdout(predicate::str::diff("Hello Basjoofan!\nnull\n"));
     Ok(())
@@ -57,17 +57,17 @@ fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     "#;
     file.write_str(text)?;
     // command test
-    let mut command = Command::cargo_bin("fan")?;
+    let mut command = Command::cargo_bin("basjoofan")?;
     command.current_dir(&temp);
     command.arg("test");
     command.assert().success().stdout(predicate::str::contains("--- PASS  get ("));
     // command test call
-    let mut command = Command::cargo_bin("fan")?;
+    let mut command = Command::cargo_bin("basjoofan")?;
     command.current_dir(&temp);
     command.arg("test").arg("call");
     command.assert().success().stdout(predicate::str::contains("--- PASS  get ("));
     // command test blank
-    let mut command = Command::cargo_bin("fan")?;
+    let mut command = Command::cargo_bin("basjoofan")?;
     command.current_dir(&temp);
     command.arg("test").arg("blank");
     command.assert().success().stdout(predicate::str::diff("Test not found: blank\n"));

@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use std::{path::PathBuf, time::Duration};
 
 #[derive(Parser)]
-#[command(name = env!("CARGO_PKG_DESCRIPTION"), version, about, long_about = None)]
+#[command(version, about, long_about = None)]
 struct Interface {
     #[command(subcommand)]
     command: Option<Commands>,

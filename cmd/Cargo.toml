@@ -9,7 +9,7 @@ keywords = ["continuous", "test", "http"]
 edition = "2021"
 
 [[bin]]
-name = "fan"
+name = "basjoofan"
 path = "src/main.rs"
 
 [dependencies]
