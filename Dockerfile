@@ -6,4 +6,4 @@ RUN cargo build --release
 # runtime stage use alpine as base image
 FROM alpine:3.20.2
 # copy compiled file from build stage
-COPY --from=builder ./target/release/fan /usr/bin
+COPY --from=builder ./target/release/basjoofan /usr/bin
