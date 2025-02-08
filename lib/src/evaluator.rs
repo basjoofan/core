@@ -187,6 +187,7 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Resu
                 .iter()
                 .filter_map(|assert| match assert {
                     Expr::Binary(token, left, right) => {
+                        let expr = format!("{} {} {}", left, token, right);
                         let left = eval_expr(left, &mut local).unwrap_or(Value::Null);
                         let right = eval_expr(right, &mut local).unwrap_or(Value::Null);
                         match token.kind {
@@ -199,7 +200,7 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Resu
                             _ => None,
                         }
                         .map(|result| Assert {
-                            expr: format!("{} {} {}", left, token, right),
+                            expr,
                             left: left.to_string(),
                             compare: token.to_string(),
                             right: right.to_string(),

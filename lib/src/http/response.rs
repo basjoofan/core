@@ -98,7 +98,7 @@ fn parse<T: std::str::FromStr + std::default::Default>(str: Option<&str>) -> T {
 #[test]
 fn test_from_message_json() {
     let message = r#"HTTP/1.1 200 OK
-    Date: Sun, 21 Jul 2024 14:32:11 GMT
+    Date: Sun, 21 Jul 2025 14:32:11 GMT
     Content-Type: application/json
     Content-Length: 33
     Connection: close
