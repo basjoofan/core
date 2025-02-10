@@ -43,11 +43,12 @@ enum Commands {
     },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let interface = Interface::parse();
     match interface.command {
         Some(Commands::Eval { text }) => {
-            command::eval(text, None);
+            command::eval(text, None).await;
         }
         Some(Commands::Test {
             name,
@@ -62,10 +63,10 @@ fn main() {
                 Some(duration) => (duration, u32::MAX),
                 None => (Duration::MAX, number),
             };
-            command::test(name, threads, duration, number, path, record, stat);
+            command::test(name, threads, duration, number, path, record, stat).await;
         }
         None => {
-            command::repl();
+            command::repl().await;
         }
     }
 }

@@ -18,3 +18,4 @@ regex = { version = "1.11.1" }
 
 [dev-dependencies]
 avro = { version = "0.17.0", package = "apache-avro" }
+tokio = { version = "1.43.0", features = ["rt-multi-thread"] }

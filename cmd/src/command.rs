@@ -15,11 +15,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::runtime;
 use tokio::signal;
+use tokio::task;
 use tokio::time;
 
-pub fn repl() {
+pub async fn repl() {
     let mut lines = stdin().lock().lines();
     let mut context = Context::new();
     loop {
@@ -30,17 +30,17 @@ pub fn repl() {
             if text.trim().is_empty() {
                 continue;
             }
-            context = eval(text, Some(context));
+            context = eval(text, Some(context)).await;
         }
     }
 }
 
-pub fn eval(text: String, context: Option<Context>) -> Context {
+pub async fn eval(text: String, context: Option<Context>) -> Context {
     let mut context = context.unwrap_or_default();
     match Parser::new(&text).parse() {
         Ok(Source { exprs, requests, .. }) => {
             context.extend(requests);
-            match eval_block(&exprs, &mut context) {
+            match eval_block(&exprs, &mut context).await {
                 Ok(value) => {
                     println!("{}", value);
                 }
@@ -52,7 +52,7 @@ pub fn eval(text: String, context: Option<Context>) -> Context {
     context
 }
 
-pub fn test(
+pub async fn test(
     name: Option<String>,
     threads: u32,
     duration: Duration,
@@ -66,7 +66,7 @@ pub fn test(
     let mut tests = match Parser::new(&text).parse() {
         Ok(Source { exprs, requests, tests }) => {
             context.extend(requests);
-            match eval_block(&exprs, &mut context) {
+            match eval_block(&exprs, &mut context).await {
                 Ok(_) => tests,
                 Err(error) => {
                     println!("{}", error);
@@ -79,10 +79,7 @@ pub fn test(
             return;
         }
     };
-    let runtime = match runtime::Runtime::new() {
-        Ok(runtime) => runtime,
-        Err(error) => panic!("Could not create async runtime: {:?}", error),
-    };
+
     let mut handles = Vec::new();
     let (sender, receiver) = std::sync::mpsc::channel();
     match name {
@@ -100,10 +97,10 @@ pub fn test(
                         let test = test.to_owned();
                         let mut writer = writer(record.as_ref(), thread);
                         let mut context = context.to_owned();
-                        handles.push(runtime.spawn(async move {
+                        handles.push(task::spawn(async move {
                             let mut number = u32::default();
                             while continuous.load(Ordering::Relaxed) && number < maximun {
-                                match eval_block(test.as_ref(), &mut context) {
+                                match eval_block(test.as_ref(), &mut context).await {
                                     Ok(_) => {}
                                     Err(error) => {
                                         println!("{}", error);
@@ -121,10 +118,12 @@ pub fn test(
                         }));
                     }
                     // handle interrupt signal
-                    runtime.spawn(register(continuous.clone()));
+                    task::spawn(register(continuous.clone()));
                     // completed after thread sleep duration
-                    runtime.spawn(async move {
+                    task::spawn(async move {
+                        println!("sleep {:?}", duration);
                         time::sleep(duration).await;
+                        println!("wake up {:?}", duration);
                         continuous.store(false, Ordering::Relaxed)
                     });
                 }
@@ -137,8 +136,8 @@ pub fn test(
             for (thread, (name, test)) in tests.into_iter().enumerate() {
                 let mut writer = writer(record.as_ref(), thread as u32);
                 let mut context = context.to_owned();
-                handles.push(runtime.spawn(async move {
-                    match eval_block(test.as_ref(), &mut context) {
+                handles.push(task::spawn(async move {
+                    match eval_block(test.as_ref(), &mut context).await {
                         Ok(_) => {}
                         Err(error) => {
                             println!("{}", error);
@@ -153,7 +152,7 @@ pub fn test(
             }
         }
     }
-    handles.push(runtime.spawn(async move {
+    handles.push(task::spawn_blocking(move || {
         stat.then(|| {
             let mut stats = Stats::default();
             for records in receiver {
@@ -166,7 +165,7 @@ pub fn test(
     }));
     std::mem::drop(sender);
     for handle in handles {
-        let _ = runtime.block_on(handle);
+        let _ = handle.await;
     }
 }
 

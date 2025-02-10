@@ -9,23 +9,23 @@ use crate::Token;
 use crate::Value;
 use std::collections::HashMap;
 
-fn eval_expr(expr: &Expr, context: &mut Context) -> Result<Value, String> {
+async fn eval_expr(expr: &Expr, context: &mut Context) -> Result<Value, String> {
     match expr {
         Expr::Integer(integer) => eval_integer_literal(integer),
         Expr::Float(float) => eval_float_literal(float),
         Expr::Boolean(boolean) => eval_boolean_literal(boolean),
         Expr::String(string) => eval_string_literal(string),
-        Expr::Array(items) => eval_array_literal(items, context),
-        Expr::Map(pairs) => eval_map_literal(pairs, context),
-        Expr::Index(value, index) => eval_index_expr(value, index, context),
-        Expr::Field(map, field) => eval_field_expr(map, field, context),
+        Expr::Array(items) => Box::pin(eval_array_literal(items, context)).await,
+        Expr::Map(pairs) => Box::pin(eval_map_literal(pairs, context)).await,
+        Expr::Index(value, index) => Box::pin(eval_index_expr(value, index, context)).await,
+        Expr::Field(map, field) => Box::pin(eval_field_expr(map, field, context)).await,
         Expr::Ident(ident) => eval_ident_expr(ident, context),
-        Expr::Let(name, expr) => eval_let_expr(name, expr, context),
-        Expr::Unary(token, right) => eval_unary_expr(token, right, context),
-        Expr::Binary(token, left, right) => eval_binary_expr(token, left, right, context),
-        Expr::Paren(expr) => eval_expr(expr, context),
-        Expr::If(condition, consequence, alternative) => eval_if_expr(condition, consequence, alternative, context),
-        Expr::Call(name, arguments) => eval_call_expr(name, arguments, context),
+        Expr::Let(name, expr) => Box::pin(eval_let_expr(name, expr, context)).await,
+        Expr::Unary(token, right) => Box::pin(eval_unary_expr(token, right, context)).await,
+        Expr::Binary(token, left, right) => Box::pin(eval_binary_expr(token, left, right, context)).await,
+        Expr::Paren(expr) => Box::pin(eval_expr(expr, context)).await,
+        Expr::If(condition, consequence, alternative) => Box::pin(eval_if_expr(condition, consequence, alternative, context)).await,
+        Expr::Call(name, arguments) => Box::pin(eval_call_expr(name, arguments, context)).await,
     }
 }
 
@@ -45,24 +45,24 @@ fn eval_string_literal(string: &String) -> Result<Value, String> {
     Ok(Value::String(string.to_owned()))
 }
 
-fn eval_array_literal(items: &[Expr], context: &mut Context) -> Result<Value, String> {
-    Ok(Value::Array(eval_list(items, context)?))
+async fn eval_array_literal(items: &[Expr], context: &mut Context) -> Result<Value, String> {
+    Ok(Value::Array(eval_list(items, context).await?))
 }
 
-fn eval_map_literal(pairs: &Vec<(Expr, Expr)>, context: &mut Context) -> Result<Value, String> {
+async fn eval_map_literal(pairs: &Vec<(Expr, Expr)>, context: &mut Context) -> Result<Value, String> {
     let mut map = HashMap::new();
     for (key, value) in pairs {
-        let key = eval_expr(key, context)?;
-        let value = eval_expr(value, context)?;
+        let key = eval_expr(key, context).await?;
+        let value = eval_expr(value, context).await?;
         map.insert(key.to_string(), value);
     }
     Ok(Value::Map(map))
 }
 
-fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context) -> Result<Value, String> {
+async fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context) -> Result<Value, String> {
     // TODO enhance indent expr get variable use reference
-    let value = eval_expr(value, context)?;
-    let index = eval_expr(index, context)?;
+    let value = eval_expr(value, context).await?;
+    let index = eval_expr(index, context).await?;
     match (value, index) {
         (Value::Array(mut items), Value::Integer(index)) => {
             let index = index as usize;
@@ -84,9 +84,9 @@ fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context) -> Result<
     }
 }
 
-fn eval_field_expr(map: &Expr, field: &String, context: &mut Context) -> Result<Value, String> {
+async fn eval_field_expr(map: &Expr, field: &String, context: &mut Context) -> Result<Value, String> {
     // TODO enhance indent expr get variable use reference
-    match eval_expr(map, context)? {
+    match eval_expr(map, context).await? {
         Value::Map(mut pairs) => {
             let value = pairs.remove(field);
             Ok(match value {
@@ -105,14 +105,14 @@ fn eval_ident_expr(ident: &String, context: &mut Context) -> Result<Value, Strin
     }
 }
 
-fn eval_let_expr(name: &String, expr: &Expr, context: &mut Context) -> Result<Value, String> {
-    let value = eval_expr(expr, context)?;
+async fn eval_let_expr(name: &String, expr: &Expr, context: &mut Context) -> Result<Value, String> {
+    let value = eval_expr(expr, context).await?;
     context.set(name.to_owned(), value.to_owned());
     Ok(value)
 }
 
-fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context) -> Result<Value, String> {
-    let right = eval_expr(right, context)?;
+async fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context) -> Result<Value, String> {
+    let right = eval_expr(right, context).await?;
     match (token.kind, right) {
         (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => Ok(Value::Boolean(true)),
         (Kind::Not, Value::Integer(integer)) => Ok(Value::Integer(!integer)),
@@ -123,48 +123,48 @@ fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context) -> Result
     }
 }
 
-fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mut Context) -> Result<Value, String> {
+async fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mut Context) -> Result<Value, String> {
     match token.kind {
-        Kind::Add => eval_expr(left, context)? + eval_expr(right, context)?,
-        Kind::Sub => eval_expr(left, context)? - eval_expr(right, context)?,
-        Kind::Mul => eval_expr(left, context)? * eval_expr(right, context)?,
-        Kind::Div => eval_expr(left, context)? / eval_expr(right, context)?,
-        Kind::Rem => eval_expr(left, context)? % eval_expr(right, context)?,
-        Kind::Bx => eval_expr(left, context)? ^ eval_expr(right, context)?,
-        Kind::Bo => eval_expr(left, context)? | eval_expr(right, context)?,
-        Kind::Ba => eval_expr(left, context)? & eval_expr(right, context)?,
-        Kind::Sl => eval_expr(left, context)? << eval_expr(right, context)?,
-        Kind::Sr => eval_expr(left, context)? >> eval_expr(right, context)?,
-        Kind::Lo => match eval_expr(left, context)? {
-            Value::Boolean(false) | Value::Null => eval_expr(right, context),
+        Kind::Add => eval_expr(left, context).await? + eval_expr(right, context).await?,
+        Kind::Sub => eval_expr(left, context).await? - eval_expr(right, context).await?,
+        Kind::Mul => eval_expr(left, context).await? * eval_expr(right, context).await?,
+        Kind::Div => eval_expr(left, context).await? / eval_expr(right, context).await?,
+        Kind::Rem => eval_expr(left, context).await? % eval_expr(right, context).await?,
+        Kind::Bx => eval_expr(left, context).await? ^ eval_expr(right, context).await?,
+        Kind::Bo => eval_expr(left, context).await? | eval_expr(right, context).await?,
+        Kind::Ba => eval_expr(left, context).await? & eval_expr(right, context).await?,
+        Kind::Sl => eval_expr(left, context).await? << eval_expr(right, context).await?,
+        Kind::Sr => eval_expr(left, context).await? >> eval_expr(right, context).await?,
+        Kind::Lo => match eval_expr(left, context).await? {
+            Value::Boolean(false) | Value::Null => eval_expr(right, context).await,
             left => Ok(left),
         },
-        Kind::La => match eval_expr(left, context)? {
+        Kind::La => match eval_expr(left, context).await? {
             left @ (Value::Boolean(false) | Value::Null) => Ok(left),
-            _ => eval_expr(right, context),
+            _ => eval_expr(right, context).await,
         },
-        Kind::Lt => Ok(Value::Boolean(eval_expr(left, context)? < eval_expr(right, context)?)),
-        Kind::Gt => Ok(Value::Boolean(eval_expr(left, context)? > eval_expr(right, context)?)),
-        Kind::Le => Ok(Value::Boolean(eval_expr(left, context)? <= eval_expr(right, context)?)),
-        Kind::Ge => Ok(Value::Boolean(eval_expr(left, context)? >= eval_expr(right, context)?)),
-        Kind::Eq => Ok(Value::Boolean(eval_expr(left, context)? == eval_expr(right, context)?)),
-        Kind::Ne => Ok(Value::Boolean(eval_expr(left, context)? != eval_expr(right, context)?)),
+        Kind::Lt => Ok(Value::Boolean(eval_expr(left, context).await? < eval_expr(right, context).await?)),
+        Kind::Gt => Ok(Value::Boolean(eval_expr(left, context).await? > eval_expr(right, context).await?)),
+        Kind::Le => Ok(Value::Boolean(eval_expr(left, context).await? <= eval_expr(right, context).await?)),
+        Kind::Ge => Ok(Value::Boolean(eval_expr(left, context).await? >= eval_expr(right, context).await?)),
+        Kind::Eq => Ok(Value::Boolean(eval_expr(left, context).await? == eval_expr(right, context).await?)),
+        Kind::Ne => Ok(Value::Boolean(eval_expr(left, context).await? != eval_expr(right, context).await?)),
         _ => Err(format!("not support operator: {} {} {}", left, token, right)),
     }
 }
 
-fn eval_if_expr(condition: &Expr, consequence: &[Expr], alternative: &[Expr], context: &mut Context) -> Result<Value, String> {
-    let condition = eval_expr(condition, context)?;
+async fn eval_if_expr(condition: &Expr, consequence: &[Expr], alternative: &[Expr], context: &mut Context) -> Result<Value, String> {
+    let condition = eval_expr(condition, context).await?;
     match condition {
-        Value::Boolean(false) | Value::Null => eval_block(alternative, context),
-        _ => eval_block(consequence, context),
+        Value::Boolean(false) | Value::Null => eval_block(alternative, context).await,
+        _ => eval_block(consequence, context).await,
     }
 }
 
-fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Result<Value, String> {
-    let arguments = eval_list(arguments, context)?;
+async fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Result<Value, String> {
+    let arguments = eval_list(arguments, context).await?;
     match context.request(name) {
-        Some((message, asserts)) => {
+        Some((message, exprs)) => {
             let name = name.to_string();
             let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
             let matches = regex.find_iter(message);
@@ -183,13 +183,13 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Resu
             let (request, response, time, error) = client.send(message.as_str());
             let map = response.to_map();
             let mut local = Context::from(map);
-            let asserts = asserts
-                .iter()
-                .filter_map(|assert| match assert {
+            let mut asserts = Vec::new();
+            for assert in exprs {
+                match assert {
                     Expr::Binary(token, left, right) => {
                         let expr = format!("{} {} {}", left, token, right);
-                        let left = eval_expr(left, &mut local).unwrap_or(Value::Null);
-                        let right = eval_expr(right, &mut local).unwrap_or(Value::Null);
+                        let left = eval_expr(left, &mut local).await.unwrap_or(Value::Null);
+                        let right = eval_expr(right, &mut local).await.unwrap_or(Value::Null);
                         match token.kind {
                             Kind::Lt => Some(left < right),
                             Kind::Gt => Some(left > right),
@@ -199,17 +199,19 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Resu
                             Kind::Ne => Some(left != right),
                             _ => None,
                         }
-                        .map(|result| Assert {
-                            expr,
-                            left: left.to_string(),
-                            compare: token.to_string(),
-                            right: right.to_string(),
-                            result,
-                        })
+                        .map(|result| {
+                            asserts.push(Assert {
+                                expr,
+                                left: left.to_string(),
+                                compare: token.to_string(),
+                                right: right.to_string(),
+                                result,
+                            });
+                        });
                     }
-                    _ => None,
-                })
-                .collect::<Vec<Assert>>();
+                    _ => {}
+                }
+            }
             context.push(Record {
                 name,
                 request,
@@ -231,18 +233,18 @@ fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Resu
     }
 }
 
-pub fn eval_block(exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
+pub async fn eval_block(exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
     let mut result = Value::Null;
     for expr in exprs {
-        result = eval_expr(expr, context)?;
+        result = eval_expr(expr, context).await?;
     }
     Ok(result)
 }
 
-fn eval_list(items: &[Expr], context: &mut Context) -> Result<Vec<Value>, String> {
+async fn eval_list(items: &[Expr], context: &mut Context) -> Result<Vec<Value>, String> {
     let mut values = Vec::with_capacity(items.len());
     for item in items {
-        values.push(eval_expr(item, context)?);
+        values.push(eval_expr(item, context).await?);
     }
     Ok(values)
 }
@@ -257,11 +259,12 @@ mod tests {
     use std::collections::HashMap;
 
     fn run_eval_tests(tests: Vec<(&str, Value)>) {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
         for (text, expect) in tests {
             let Source { exprs, requests, .. } = Parser::new(text).parse().unwrap();
             let mut context = Context::new();
             context.extend(requests);
-            match eval_block(&exprs, &mut context) {
+            match runtime.block_on(eval_block(&exprs, &mut context)) {
                 Ok(value) => {
                     println!("{:?} => {} = {}", exprs, value, expect);
                     assert_eq!(value, expect);
