@@ -120,6 +120,7 @@ impl<W: Write> Writer<W> {
         buffer.extend_from_slice(&data);
         buffer.extend_from_slice(MARKER);
         let _ = self.w.write(&buffer);
+        let _ = self.w.flush();
     }
 }
 

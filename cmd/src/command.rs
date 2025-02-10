@@ -4,6 +4,9 @@ use lib::Parser;
 use lib::Source;
 use lib::Stats;
 use lib::Writer;
+use std::env::current_dir;
+use std::env::var;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::stdin;
 use std::io::BufRead;
@@ -12,6 +15,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::runtime;
+use tokio::signal;
+use tokio::time;
 
 pub fn repl() {
     let mut lines = stdin().lock().lines();
@@ -55,7 +61,7 @@ pub fn test(
     record: Option<PathBuf>,
     stat: bool,
 ) {
-    let text = read_to_string(path.unwrap_or(std::env::current_dir().unwrap()));
+    let text = read_to_string(path.unwrap_or(current_dir().unwrap()));
     let mut context = Context::new();
     let mut tests = match Parser::new(&text).parse() {
         Ok(Source { exprs, requests, tests }) => {
@@ -72,6 +78,10 @@ pub fn test(
             println!("{}", error);
             return;
         }
+    };
+    let runtime = match runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => panic!("Could not create async runtime: {:?}", error),
     };
     let mut handles = Vec::new();
     let (sender, receiver) = std::sync::mpsc::channel();
@@ -90,7 +100,7 @@ pub fn test(
                         let test = test.to_owned();
                         let mut writer = writer(record.as_ref(), thread);
                         let mut context = context.to_owned();
-                        handles.push(std::thread::spawn(move || {
+                        handles.push(runtime.spawn(async move {
                             let mut number = u32::default();
                             while continuous.load(Ordering::Relaxed) && number < maximun {
                                 match eval_block(test.as_ref(), &mut context) {
@@ -103,7 +113,7 @@ pub fn test(
                                 let records = context.records();
                                 records.iter().for_each(|record| println!("{}", record));
                                 if let Some(ref mut writer) = writer {
-                                    writer.write(&records, &name, thread, number)
+                                    writer.write(&records, &name, thread, number);
                                 }
                                 stat.then(|| sender.send(records));
                                 number += 1;
@@ -111,10 +121,10 @@ pub fn test(
                         }));
                     }
                     // handle interrupt signal
-                    handle_interrupt(continuous.clone());
+                    runtime.spawn(register(continuous.clone()));
                     // completed after thread sleep duration
-                    std::thread::spawn(move || {
-                        std::thread::sleep(duration);
+                    runtime.spawn(async move {
+                        time::sleep(duration).await;
                         continuous.store(false, Ordering::Relaxed)
                     });
                 }
@@ -127,7 +137,7 @@ pub fn test(
             for (thread, (name, test)) in tests.into_iter().enumerate() {
                 let mut writer = writer(record.as_ref(), thread as u32);
                 let mut context = context.to_owned();
-                handles.push(std::thread::spawn(move || {
+                handles.push(runtime.spawn(async move {
                     match eval_block(test.as_ref(), &mut context) {
                         Ok(_) => {}
                         Err(error) => {
@@ -143,7 +153,7 @@ pub fn test(
             }
         }
     }
-    handles.push(std::thread::spawn(move || {
+    handles.push(runtime.spawn(async move {
         stat.then(|| {
             let mut stats = Stats::default();
             for records in receiver {
@@ -156,7 +166,7 @@ pub fn test(
     }));
     std::mem::drop(sender);
     for handle in handles {
-        let _ = handle.join();
+        let _ = runtime.block_on(handle);
     }
 }
 
@@ -175,7 +185,7 @@ fn read(path: PathBuf, text: &mut String) -> std::io::Result<()> {
         for entry in entries {
             read(entry, text)?;
         }
-    } else if path.is_file() && path.extension() == Some(std::ffi::OsStr::new("fan")) {
+    } else if path.is_file() && path.extension() == Some(OsStr::new("fan")) {
         text.push_str(&std::fs::read_to_string(path)?)
     }
     Ok(())
@@ -183,7 +193,7 @@ fn read(path: PathBuf, text: &mut String) -> std::io::Result<()> {
 
 fn writer(path: Option<&PathBuf>, thread: u32) -> Option<Writer<File>> {
     path.map(|path| {
-        let file = path.join(format!("{}{:06}", std::env::var("POD").unwrap_or_default(), thread));
+        let file = path.join(format!("{}{:06}", var("POD").unwrap_or_default(), thread));
         let display = file.display();
         let file = match File::create(&file) {
             Err(error) => panic!("Create file {} error: {:?}", display, error),
@@ -193,8 +203,10 @@ fn writer(path: Option<&PathBuf>, thread: u32) -> Option<Writer<File>> {
     })
 }
 
-fn handle_interrupt(continuous: Arc<AtomicBool>) {
-    let _ = ctrlc::set_handler(move || {
-        continuous.store(false, Ordering::Relaxed);
-    });
+async fn register(continuous: Arc<AtomicBool>) {
+    match signal::ctrl_c().await {
+        Err(error) => panic!("Failed to listen for interrupt: {:?}", error),
+        Ok(result) => result,
+    };
+    continuous.store(false, Ordering::Relaxed);
 }
