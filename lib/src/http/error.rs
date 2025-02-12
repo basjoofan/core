@@ -3,8 +3,7 @@ macro_rules! http_error {
         #[derive(Debug)]
         #[non_exhaustive]
         pub enum Error {
-            ReadFailed(std::io::Error),
-            WriteFailed(std::io::Error),
+            ConnectFailed(std::io::Error),
             $(
                 $name,
             )+
@@ -15,8 +14,7 @@ macro_rules! http_error {
         impl std::fmt::Display for Error {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
-                    Error::ReadFailed(error) => error.fmt(f),
-                    Error::WriteFailed(error) => error.fmt(f),
+                    Error::ConnectFailed(error) => error.fmt(f),
                     $(
                         Error::$name => f.write_str($description),
                     )+

@@ -1,15 +1,14 @@
 use super::Content;
-use super::Error;
 use super::Header;
 use super::Headers;
 use super::Method;
+use super::Stream;
 use super::Url;
 use super::Version;
-use std::io::BufWriter;
-use std::io::Write;
-use std::path::Path;
+use tokio::io::AsyncWriteExt;
+use tokio::io::WriteHalf;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Request {
     /// The request's method
     pub method: Method,
@@ -60,24 +59,24 @@ impl Request {
                     }
                     content = Content::Byte(serializer.finish().into_bytes());
                 }
-                Some("multipart/form-data") => {
-                    let mut parts = multipart::client::lazy::Multipart::new();
-                    for line in lines.by_ref() {
-                        if let Some((name, value)) = line.trim().split_once(':') {
-                            let (name, value) = (name.trim(), value.trim());
-                            if value.starts_with('@') {
-                                parts.add_file(name, Path::new(&value[1..value.len()]));
-                            } else {
-                                parts.add_text(name, value);
-                            }
-                            body.push_str(line);
-                        }
-                    }
-                    match parts.prepare() {
-                        Ok(parts) => content = Content::Multipart(parts),
-                        Err(_) => content = Content::Empty,
-                    }
-                }
+                // Some("multipart/form-data") => {
+                //     let mut parts = multipart::client::lazy::Multipart::new();
+                //     for line in lines.by_ref() {
+                //         if let Some((name, value)) = line.trim().split_once(':') {
+                //             let (name, value) = (name.trim(), value.trim());
+                //             if value.starts_with('@') {
+                //                 parts.add_file(name, Path::new(&value[1..value.len()]));
+                //             } else {
+                //                 parts.add_text(name, value);
+                //             }
+                //             body.push_str(line);
+                //         }
+                //     }
+                //     match parts.prepare() {
+                //         Ok(parts) => content = Content::Multipart(parts),
+                //         Err(_) => content = Content::Empty,
+                //     }
+                // }
                 _ => {
                     body = String::from_iter(lines);
                     if body.trim().is_empty() {
@@ -102,15 +101,18 @@ impl Request {
         }
     }
 
-    pub fn write<W: Write>(&mut self, writer: W, mut content: Content) -> Result<(), Error> {
-        let mut writer = BufWriter::new(writer);
-        write!(writer, "{} {} {}\r\n", self.method, self.url.path, self.version).map_err(Error::WriteFailed)?;
+    pub async fn write(&mut self, writer: &mut WriteHalf<Stream>, mut content: Content) -> Result<(), std::io::Error> {
+        writer
+            .write_all(format!("{} {} {}\r\n", self.method, self.url.path, self.version).as_bytes())
+            .await?;
         for header in self.headers.iter() {
-            write!(writer, "{}: {}\r\n", header.name, header.value).map_err(Error::WriteFailed)?;
+            writer
+                .write_all(format!("{}: {}\r\n", header.name, header.value).as_bytes())
+                .await?;
         }
-        write!(writer, "\r\n").map_err(Error::WriteFailed)?;
-        content.write(&mut writer)?;
-        writer.flush().map_err(|_e| Error::WriteFlushFailed)?;
+        writer.write_all("\r\n".as_bytes()).await?;
+        content.write(writer).await?;
+        writer.flush().await?;
         Ok(())
     }
 }

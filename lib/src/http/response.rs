@@ -1,4 +1,3 @@
-use super::Error;
 use super::Header;
 use super::Headers;
 use super::Stream;
@@ -6,11 +5,12 @@ use crate::Parser;
 use crate::Source;
 use crate::Value;
 use std::collections::HashMap;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::Read;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::AsyncReadExt;
+use tokio::io::BufReader;
+use tokio::io::ReadHalf;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Response {
     /// The response's version
     pub version: String,
@@ -26,14 +26,15 @@ pub struct Response {
 
 impl Response {
     /// Converts a stream to an http response.
-    pub fn from(mut reader: BufReader<Stream>, f: Option<impl FnMut()>) -> Result<Response, Error> {
+    pub async fn from(reader: &mut ReadHalf<Stream>, f: Option<impl FnMut()>) -> Result<Response, std::io::Error> {
+        let mut reader = BufReader::new(reader);
         let mut buf = Vec::with_capacity(1);
-        reader.read(&mut buf).map_err(Error::ReadFailed)?;
+        reader.read_exact(&mut buf).await?;
         if let Some(mut f) = f {
             f()
         }
         let mut line = String::from_utf8(buf).unwrap_or_default();
-        reader.read_line(&mut line).map_err(Error::ReadFailed)?;
+        reader.read_line(&mut line).await?;
         let mut splits = line.split_whitespace();
         let version = parse::<String>(splits.next());
         let status = parse::<u16>(splits.next());
@@ -42,7 +43,7 @@ impl Response {
         let mut headers = Headers::default();
         loop {
             let mut line = String::new();
-            reader.read_line(&mut line).map_err(Error::ReadFailed)?;
+            reader.read_line(&mut line).await?;
             if line.trim().is_empty() {
                 break;
             } else if let Some((name, value)) = line.split_once(':') {
@@ -53,7 +54,7 @@ impl Response {
             }
         }
         let mut body = String::default();
-        reader.read_to_string(&mut body).map_err(Error::ReadFailed)?;
+        reader.read_to_string(&mut body).await?;
         Ok(Response {
             version,
             status,
@@ -95,8 +96,8 @@ fn parse<T: std::str::FromStr + std::default::Default>(str: Option<&str>) -> T {
     }
 }
 
-#[test]
-fn test_from_message_json() {
+#[tokio::test]
+async fn test_from_message_json() {
     let message = r#"HTTP/1.1 200 OK
     Date: Sun, 21 Jul 2025 14:32:11 GMT
     Content-Type: application/json
@@ -110,11 +111,9 @@ fn test_from_message_json() {
     "origin": "104.28.152.141"
     }
     "#;
-    let response = Response::from(
-        BufReader::new(Stream::Mock(std::io::Cursor::new(message.as_bytes().to_owned()))),
-        None::<Box<dyn FnMut()>>,
-    )
-    .unwrap();
+    let stream = Stream::Mock(std::io::Cursor::new(message.as_bytes().to_owned()));
+    let (mut reader, _) = tokio::io::split(stream);
+    let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>).await.unwrap();
     assert_eq!(200, response.status);
     assert_eq!(7, response.headers.len());
     assert_eq!("    {\n    \"origin\": \"104.28.152.141\"\n    }\n    ", response.body);

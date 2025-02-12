@@ -180,36 +180,32 @@ async fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -
                 message.replace_range(range, variable.as_str());
             }
             let client = http::Client::default();
-            let (request, response, time, error) = client.send(message.as_str());
+            let (request, response, time, error) = client.send(message.as_str()).await;
             let map = response.to_map();
             let mut local = Context::from(map);
             let mut asserts = Vec::new();
             for assert in exprs {
-                match assert {
-                    Expr::Binary(token, left, right) => {
-                        let expr = format!("{} {} {}", left, token, right);
-                        let left = eval_expr(left, &mut local).await.unwrap_or(Value::Null);
-                        let right = eval_expr(right, &mut local).await.unwrap_or(Value::Null);
-                        match token.kind {
-                            Kind::Lt => Some(left < right),
-                            Kind::Gt => Some(left > right),
-                            Kind::Le => Some(left <= right),
-                            Kind::Ge => Some(left >= right),
-                            Kind::Eq => Some(left == right),
-                            Kind::Ne => Some(left != right),
-                            _ => None,
-                        }
-                        .map(|result| {
-                            asserts.push(Assert {
-                                expr,
-                                left: left.to_string(),
-                                compare: token.to_string(),
-                                right: right.to_string(),
-                                result,
-                            });
+                if let Expr::Binary(token, left, right) = assert {
+                    let expr = format!("{} {} {}", left, token, right);
+                    let left = eval_expr(left, &mut local).await.unwrap_or(Value::Null);
+                    let right = eval_expr(right, &mut local).await.unwrap_or(Value::Null);
+                    if let Some(result) = match token.kind {
+                        Kind::Lt => Some(left < right),
+                        Kind::Gt => Some(left > right),
+                        Kind::Le => Some(left <= right),
+                        Kind::Ge => Some(left >= right),
+                        Kind::Eq => Some(left == right),
+                        Kind::Ne => Some(left != right),
+                        _ => None,
+                    } {
+                        asserts.push(Assert {
+                            expr,
+                            left: left.to_string(),
+                            compare: token.to_string(),
+                            right: right.to_string(),
+                            result,
                         });
-                    }
-                    _ => {}
+                    };
                 }
             }
             context.push(Record {

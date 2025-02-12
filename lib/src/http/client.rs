@@ -2,34 +2,42 @@ use super::Request;
 use super::Response;
 use super::Stream;
 use super::Time;
-use std::io::BufReader;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
+use tokio::io::split;
 
-#[derive(Default)]
 pub struct Client {
-    connect_tiomeout: Option<Duration>,
-    read_tiomeout: Option<Duration>,
+    connect_tiomeout: Duration,
+    // TODO read_tiomeout: Option<Duration>,
+}
+
+impl Default for Client {
+    fn default() -> Self {
+        Self {
+            connect_tiomeout: Duration::from_secs(200000000),
+        }
+    }
 }
 
 impl Client {
     /// Send this request and wait for the record.
-    pub fn send(&self, message: &str) -> (Request, Response, Time, String) {
+    pub async fn send(&self, message: &str) -> (Request, Response, Time, String) {
         let (mut request, content) = Request::from(message);
         let mut time = Time::default();
         let start = Instant::now();
-        let mut stream = match Stream::connect(&request.url, self.connect_tiomeout, self.read_tiomeout) {
+        let stream = match Stream::connect(&request.url, self.connect_tiomeout).await {
             Ok(stream) => stream,
             Err(error) => return (request, Response::default(), time, error.to_string()),
         };
         time.resolve = stream.resolve();
         time.connect = start.elapsed() - time.resolve;
-        if let Err(error) = request.write(&mut stream, content) {
+        let (mut reader, mut writer) = split(stream);
+        if let Err(error) = request.write(&mut writer, content).await {
             return (request, Response::default(), time, error.to_string());
         };
         let read = Instant::now();
-        let response = match Response::from(BufReader::new(stream), Some(|| time.delay = read.elapsed())) {
+        let response = match Response::from(&mut reader, Some(|| time.delay = read.elapsed())).await {
             Ok(response) => response,
             Err(error) => return (request, Response::default(), time, error.to_string()),
         };
@@ -42,14 +50,15 @@ impl Client {
     }
 }
 
-#[test]
-fn test_send_message_get() {
+#[tokio::test]
+async fn test_send_message_get() {
     let message = r#"
     GET https://www.baidu.com
     Host: www.baidu.com
     Connection: close"#;
     let client = Client::default();
-    let (request, response, time, _) = client.send(message);
+    let (request, response, time, error) = client.send(message).await;
+    println!("error: {}", error);
     assert_eq!("GET", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -57,15 +66,17 @@ fn test_send_message_get() {
     println!("{:?}", response.body);
 }
 
-#[test]
-fn test_send_message_post() {
+#[tokio::test]
+async fn test_send_message_post() {
     let message = r#"
     POST https://httpbin.org/post
     Host: httpbin.org
     Accept-Encoding: gzip, deflate
     Connection: close"#;
     let client = Client::default();
-    let (request, response, time, _) = client.send(message);
+    let (request, response, time, error) = client.send(message).await;
+    println!("error: {}", error);
+    println!("request: {:?}", request);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -73,8 +84,8 @@ fn test_send_message_post() {
     println!("{:?}", response.body);
 }
 
-#[test]
-fn test_send_message_post_form() {
+#[tokio::test]
+async fn test_send_message_post_form() {
     let message = r#"
     POST https://httpbin.org/post
     Host: httpbin.org
@@ -83,7 +94,9 @@ fn test_send_message_post_form() {
 
     a: b"#;
     let client = Client::default();
-    let (request, response, time, _) = client.send(message);
+    let (request, response, time, error) = client.send(message).await;
+    println!("error: {}", error);
+    println!("request: {:?}", request);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -91,8 +104,8 @@ fn test_send_message_post_form() {
     println!("{:?}", response.body);
 }
 
-#[test]
-fn test_send_message_post_multipart() {
+#[tokio::test]
+async fn test_send_message_post_multipart() {
     let message = r#"
     POST https://httpbin.org/post
     Host: httpbin.org
@@ -102,7 +115,8 @@ fn test_send_message_post_multipart() {
     a: b
     f: @src/lib.rs"#;
     let client = Client::default();
-    let (request, response, time, _) = client.send(message);
+    let (request, response, time, error) = client.send(message).await;
+    println!("error: {}", error);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -110,8 +124,8 @@ fn test_send_message_post_multipart() {
     println!("{:?}", response.body);
 }
 
-#[test]
-fn test_send_message_post_json() {
+#[tokio::test]
+async fn test_send_message_post_json() {
     let message = r#"
     POST https://httpbin.org/post
     Host: httpbin.org
@@ -132,7 +146,8 @@ fn test_send_message_post_json() {
     }
     "#;
     let client = Client::default();
-    let (request, response, time, _) = client.send(message);
+    let (request, response, time, error) = client.send(message).await;
+    println!("error: {}", error);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);

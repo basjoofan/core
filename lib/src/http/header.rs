@@ -1,11 +1,12 @@
 use std::slice::Iter;
 use std::vec::IntoIter;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Headers {
     inner: Vec<Header>,
 }
 
+#[derive(Debug)]
 pub struct Header {
     pub name: String,
     pub value: String,

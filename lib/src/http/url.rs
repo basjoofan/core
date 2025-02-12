@@ -1,5 +1,6 @@
 use super::Scheme;
 
+#[derive(Debug)]
 pub struct Url {
     pub scheme: Scheme,
     pub host: String,
