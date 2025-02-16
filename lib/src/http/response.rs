@@ -1,4 +1,3 @@
-use super::Header;
 use super::Headers;
 use super::Stream;
 use crate::Parser;
@@ -47,10 +46,7 @@ impl Response {
             if line.trim().is_empty() {
                 break;
             } else if let Some((name, value)) = line.split_once(':') {
-                headers.insert(Header {
-                    name: name.trim().to_string(),
-                    value: value.trim().to_string(),
-                });
+                headers.insert(name.trim().to_string(), value.trim().to_string());
             }
         }
         let mut body = String::default();

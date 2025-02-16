@@ -1,5 +1,4 @@
 use std::slice::Iter;
-use std::vec::IntoIter;
 
 #[derive(Default, Debug)]
 pub struct Headers {
@@ -13,8 +12,16 @@ pub struct Header {
 }
 
 impl Headers {
-    pub fn insert(&mut self, header: Header) {
-        self.inner.push(header)
+    pub fn insert(&mut self, name: String, value: String) {
+        self.inner.push(Header { name, value });
+    }
+
+    pub fn replace(&mut self, name: String, value: String) {
+        for header in self.inner.iter_mut() {
+            if header.name == name {
+                header.value = value.clone();
+            }
+        }
     }
 
     pub fn iter(&self) -> Iter<'_, Header> {
@@ -27,13 +34,5 @@ impl Headers {
 
     pub fn len(&self) -> usize {
         self.inner.len()
-    }
-}
-
-impl IntoIterator for Headers {
-    type Item = Header;
-    type IntoIter = IntoIter<Header>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.inner.into_iter()
     }
 }

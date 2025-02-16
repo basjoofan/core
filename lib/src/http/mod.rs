@@ -9,8 +9,8 @@ mod time;
 mod url;
 
 use content::Content;
+use content::Part;
 use error::Error;
-use header::Header;
 use header::Headers;
 use stream::Stream;
 use url::Url;

@@ -1,29 +1,35 @@
-use super::Stream;
-// use std::io::Read;
+use tokio::fs::File;
+use tokio::io::copy;
+use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
-use tokio::io::WriteHalf;
 
 pub enum Content {
     Empty,
-    Byte(Vec<u8>),
-    // TODO Multipart(multipart::client::lazy::PreparedFields<'a>),
+    Bytes(Vec<u8>),
+    Parts(Vec<Part>),
+}
+
+pub enum Part {
+    Bytes(Vec<u8>),
+    File(File),
 }
 
 impl Content {
-    pub async fn write(&mut self, writer: &mut WriteHalf<Stream>) -> Result<(), std::io::Error> {
+    pub async fn write<W: AsyncWrite + Unpin>(self, mut writer: W) -> Result<(), std::io::Error> {
         match self {
             Content::Empty => Ok(()),
-            Content::Byte(bytes) => writer.write_all(bytes).await,
-            // Content::Multipart(_) => {
-            //     // let mut buffer = [0; 1024];
-            //     // while let Ok(read) = prepared.read(&mut buffer) {
-            //     //     if read == 0 {
-            //     //         break;
-            //     //     }
-            //     //     writer.write_all(&buffer[0..read]).await?;
-            //     // }
-            //     Ok(())
-            // }
+            Content::Bytes(bytes) => writer.write_all(&bytes).await,
+            Content::Parts(parts) => {
+                for part in parts {
+                    match part {
+                        Part::Bytes(bytes) => writer.write_all(&bytes).await?,
+                        Part::File(mut file) => {
+                            let _ = copy(&mut file, &mut writer).await?;
+                        }
+                    }
+                }
+                Ok(())
+            }
         }
     }
 }

@@ -23,7 +23,10 @@ impl Default for Client {
 impl Client {
     /// Send this request and wait for the record.
     pub async fn send(&self, message: &str) -> (Request, Response, Time, String) {
-        let (mut request, content) = Request::from(message);
+        let (mut request, content) = match Request::from(message).await {
+            Ok((request, content)) => (request, content),
+            Err(error) => return (Request::default(), Response::default(), Time::default(), error.to_string()),
+        };
         let mut time = Time::default();
         let start = Instant::now();
         let stream = match Stream::connect(&request.url, self.connect_tiomeout).await {
@@ -117,6 +120,8 @@ async fn test_send_message_post_multipart() {
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
     println!("error: {}", error);
+    println!("request: {:?}", request);
+    println!("response: {:?}", response);
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
