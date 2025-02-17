@@ -19,6 +19,7 @@ use tokio::io::stdin;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::signal;
+use tokio::sync;
 use tokio::task;
 use tokio::time;
 
@@ -83,9 +84,8 @@ pub async fn test(
             return;
         }
     };
-
     let mut handles = Vec::new();
-    let (sender, receiver) = std::sync::mpsc::channel();
+    let (sender, mut receiver) = sync::mpsc::channel(threads as usize);
     match name {
         Some(name) => {
             match tests.remove(&name) {
@@ -116,7 +116,9 @@ pub async fn test(
                                 if let Some(ref mut writer) = writer {
                                     writer.write(&records, &name, thread, number).await;
                                 }
-                                stat.then(|| sender.send(records));
+                                if stat {
+                                    let _ = sender.send(records).await;
+                                }
                                 number += 1;
                             }
                         }));
@@ -154,16 +156,16 @@ pub async fn test(
             }
         }
     }
-    handles.push(task::spawn_blocking(move || {
-        stat.then(|| {
+    handles.push(task::spawn(async move {
+        if stat {
             let mut stats = Stats::default();
-            for records in receiver {
+            while let Some(records) = receiver.recv().await {
                 for record in records.iter() {
                     stats.add(&record.name, record.time.total.as_millis());
                 }
             }
             print!("{}", stats);
-        });
+        }
     }));
     std::mem::drop(sender);
     for handle in handles {
