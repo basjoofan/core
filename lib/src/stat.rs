@@ -1,7 +1,9 @@
+use crate::Record;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
+use tokio::sync::mpsc::Receiver;
 
 struct Stat {
     count: u128,
@@ -69,4 +71,14 @@ impl Display for Stats {
         }
         Ok(())
     }
+}
+
+pub async fn receive(mut receiver: Receiver<Vec<Record>>) {
+    let mut stats = Stats::default();
+    while let Some(records) = receiver.recv().await {
+        for record in records.iter() {
+            stats.add(&record.name, record.time.total.as_millis());
+        }
+    }
+    print!("{}", stats);
 }

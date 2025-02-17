@@ -1,8 +1,8 @@
 use lib::eval_block;
+use lib::receive;
 use lib::Context;
 use lib::Parser;
 use lib::Source;
-use lib::Stats;
 use lib::Writer;
 use std::env::current_dir;
 use std::env::var;
@@ -84,8 +84,8 @@ pub async fn test(
             return;
         }
     };
-    let mut handles = Vec::new();
-    let (sender, mut receiver) = sync::mpsc::channel(threads as usize);
+    let mut set = task::JoinSet::new();
+    let (sender, receiver) = sync::mpsc::channel(threads as usize);
     match name {
         Some(name) => {
             match tests.remove(&name) {
@@ -101,7 +101,7 @@ pub async fn test(
                         let test = test.to_owned();
                         let mut writer = writer(record.as_ref(), thread).await;
                         let mut context = context.to_owned();
-                        handles.push(task::spawn(async move {
+                        set.spawn(async move {
                             let mut number = u32::default();
                             while continuous.load(Ordering::Relaxed) && number < maximun {
                                 match eval_block(test.as_ref(), &mut context).await {
@@ -121,7 +121,7 @@ pub async fn test(
                                 }
                                 number += 1;
                             }
-                        }));
+                        });
                     }
                     // handle interrupt signal
                     task::spawn(register(continuous.clone()));
@@ -140,7 +140,7 @@ pub async fn test(
             for (thread, (name, test)) in tests.into_iter().enumerate() {
                 let mut writer = writer(record.as_ref(), thread as u32).await;
                 let mut context = context.to_owned();
-                handles.push(task::spawn(async move {
+                set.spawn(async move {
                     match eval_block(test.as_ref(), &mut context).await {
                         Ok(_) => {}
                         Err(error) => {
@@ -152,24 +152,18 @@ pub async fn test(
                     if let Some(ref mut writer) = writer {
                         writer.write(&records, &name, thread as u32, u32::default()).await
                     }
-                }));
+                });
             }
         }
     }
-    handles.push(task::spawn(async move {
-        if stat {
-            let mut stats = Stats::default();
-            while let Some(records) = receiver.recv().await {
-                for record in records.iter() {
-                    stats.add(&record.name, record.time.total.as_millis());
-                }
-            }
-            print!("{}", stats);
-        }
-    }));
+    stat.then(|| {
+        set.spawn(receive(receiver));
+    });
     std::mem::drop(sender);
-    for handle in handles {
-        let _ = handle.await;
+    while let Some(result) = set.join_next().await {
+        if let Err(error) = result {
+            println!("Task error: {}", error);
+        }
     }
 }
 
