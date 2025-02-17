@@ -1,5 +1,6 @@
 use crate::Record;
-use std::io::Write;
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
 
 const META: [(&str, &str); 2] = [
     (
@@ -62,13 +63,13 @@ pub struct Writer<W> {
     w: W,
 }
 
-impl<W: Write> Writer<W> {
-    pub fn new(mut w: W) -> Self {
-        let _ = w.write(&header());
+impl<W: AsyncWrite + Unpin> Writer<W> {
+    pub async fn new(mut w: W) -> Self {
+        let _ = w.write(&header()).await;
         Writer { w }
     }
 
-    pub fn write(&mut self, records: &[Record], name: &str, thread: u32, number: u32) {
+    pub async fn write(&mut self, records: &[Record], name: &str, thread: u32, number: u32) {
         let mut data = Vec::new();
         for (order, record) in records.iter().enumerate() {
             encode_bytes(name.as_bytes(), &mut data);
@@ -119,8 +120,8 @@ impl<W: Write> Writer<W> {
         encode_long(data.len() as i64, &mut buffer);
         buffer.extend_from_slice(&data);
         buffer.extend_from_slice(MARKER);
-        let _ = self.w.write(&buffer);
-        let _ = self.w.flush();
+        let _ = self.w.write(&buffer).await;
+        let _ = self.w.flush().await;
     }
 }
 
@@ -190,9 +191,9 @@ fn test_encode_record() {
     assert_eq!(buffer, b"\x02\x0a\x36\x06\x66\x6f\x6f");
 }
 
-#[test]
-fn test_writer() {
-    let mut writer = Writer::new(Vec::new());
+#[tokio::test]
+async fn test_writer() {
+    let mut writer = Writer::new(Vec::new()).await;
     let record = Record {
         name: "test".to_string(),
         time: crate::http::Time::default(),
@@ -201,7 +202,7 @@ fn test_writer() {
         asserts: Vec::new(),
         error: String::default(),
     };
-    writer.write(&vec![record], "test", 0, 0);
+    writer.write(&vec![record], "test", 0, 0).await;
     let encoded = writer.w;
     let reader = avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
     println!("schema:{:?}", reader.reader_schema());

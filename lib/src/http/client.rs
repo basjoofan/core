@@ -15,7 +15,7 @@ pub struct Client {
 impl Default for Client {
     fn default() -> Self {
         Self {
-            connect_tiomeout: Duration::from_secs(200000000),
+            connect_tiomeout: Duration::from_secs(120),
         }
     }
 }
