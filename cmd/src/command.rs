@@ -7,8 +7,6 @@ use lib::Writer;
 use std::env::current_dir;
 use std::env::var;
 use std::ffi::OsStr;
-use std::io::stdin;
-use std::io::BufRead;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -17,15 +15,19 @@ use std::time::Duration;
 use tokio::fs::read;
 use tokio::fs::read_dir;
 use tokio::fs::File;
+use tokio::io::stdin;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
 use tokio::signal;
 use tokio::task;
 use tokio::time;
 
 pub async fn repl() {
-    let mut lines = stdin().lock().lines();
+    let stdin = BufReader::new(stdin());
+    let mut lines = stdin.lines();
     let mut context = Context::new();
     loop {
-        if let Some(Ok(text)) = lines.next() {
+        if let Ok(Some(text)) = lines.next_line().await {
             if text == "exit" {
                 break;
             }
