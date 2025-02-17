@@ -121,9 +121,7 @@ pub async fn test(
                     task::spawn(register(continuous.clone()));
                     // completed after thread sleep duration
                     task::spawn(async move {
-                        println!("sleep {:?}", duration);
                         time::sleep(duration).await;
-                        println!("wake up {:?}", duration);
                         continuous.store(false, Ordering::Relaxed)
                     });
                 }
