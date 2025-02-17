@@ -59,7 +59,7 @@ pub async fn eval(text: String, context: Option<Context>) -> Context {
 
 pub async fn test(
     name: Option<String>,
-    threads: u32,
+    tasks: u32,
     duration: Duration,
     number: u32,
     path: Option<PathBuf>,
@@ -85,7 +85,7 @@ pub async fn test(
         }
     };
     let mut set = task::JoinSet::new();
-    let (sender, receiver) = sync::mpsc::channel(threads as usize);
+    let (sender, receiver) = sync::mpsc::channel(tasks as usize);
     match name {
         Some(name) => {
             match tests.remove(&name) {
@@ -93,13 +93,13 @@ pub async fn test(
                     let name = Arc::new(name);
                     let test = Arc::new(test);
                     let continuous = Arc::new(AtomicBool::new(true));
-                    let maximun = number / threads;
-                    for thread in 0..threads {
+                    let maximun = number / tasks;
+                    for task in 0..tasks {
                         let sender = sender.to_owned();
                         let continuous = continuous.to_owned();
                         let name = name.to_owned();
                         let test = test.to_owned();
-                        let mut writer = writer(record.as_ref(), thread).await;
+                        let mut writer = writer(record.as_ref(), task).await;
                         let mut context = context.to_owned();
                         set.spawn(async move {
                             let mut number = u32::default();
@@ -114,7 +114,7 @@ pub async fn test(
                                 let records = context.records();
                                 records.iter().for_each(|record| println!("{}", record));
                                 if let Some(ref mut writer) = writer {
-                                    writer.write(&records, &name, thread, number).await;
+                                    writer.write(&records, &name, task, number).await;
                                 }
                                 if stat {
                                     let _ = sender.send(records).await;
@@ -125,7 +125,7 @@ pub async fn test(
                     }
                     // handle interrupt signal
                     task::spawn(register(continuous.clone()));
-                    // completed after thread sleep duration
+                    // completed after task sleep duration
                     task::spawn(async move {
                         time::sleep(duration).await;
                         continuous.store(false, Ordering::Relaxed)
@@ -137,8 +137,8 @@ pub async fn test(
             }
         }
         None => {
-            for (thread, (name, test)) in tests.into_iter().enumerate() {
-                let mut writer = writer(record.as_ref(), thread as u32).await;
+            for (task, (name, test)) in tests.into_iter().enumerate() {
+                let mut writer = writer(record.as_ref(), task as u32).await;
                 let mut context = context.to_owned();
                 set.spawn(async move {
                     match eval_block(test.as_ref(), &mut context).await {
@@ -150,7 +150,7 @@ pub async fn test(
                     let records = context.records();
                     records.iter().for_each(|record| println!("{}", record));
                     if let Some(ref mut writer) = writer {
-                        writer.write(&records, &name, thread as u32, u32::default()).await
+                        writer.write(&records, &name, task as u32, u32::default()).await
                     }
                 });
             }
@@ -186,10 +186,10 @@ async fn read_bytes(path: PathBuf, text: &mut Vec<u8>) -> std::io::Result<()> {
     Ok(())
 }
 
-async fn writer(path: Option<&PathBuf>, thread: u32) -> Option<Writer<File>> {
+async fn writer(path: Option<&PathBuf>, task: u32) -> Option<Writer<File>> {
     match path {
         Some(path) => {
-            let file = path.join(format!("{}{:06}", var("POD").unwrap_or_default(), thread));
+            let file = path.join(format!("{}{:06}", var("POD").unwrap_or_default(), task));
             let display = file.display();
             let file = match File::create(&file).await {
                 Err(error) => panic!("Create file {} error: {:?}", display, error),

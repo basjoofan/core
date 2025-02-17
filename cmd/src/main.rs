@@ -22,9 +22,9 @@ enum Commands {
         /// Test name
         #[command()]
         name: Option<String>,
-        /// Threads
+        /// Tasks
         #[arg(short, long, default_value_t = 1)]
-        threads: u32,
+        tasks: u32,
         /// Duration
         #[arg(short, long, value_parser = parse_duration)]
         duration: Option<Duration>,
@@ -52,7 +52,7 @@ async fn main() {
         }
         Some(Commands::Test {
             name,
-            threads,
+            tasks,
             duration,
             number,
             path,
@@ -63,7 +63,7 @@ async fn main() {
                 Some(duration) => (duration, u32::MAX),
                 None => (Duration::MAX, number),
             };
-            command::test(name, threads, duration, number, path, record, stat).await;
+            command::test(name, tasks, duration, number, path, record, stat).await;
         }
         None => {
             command::repl().await;

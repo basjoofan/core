@@ -11,7 +11,7 @@ const META: [(&str, &str); 2] = [
     "type": "record",
     "fields": [
         {"name": "name", "type": "string"},
-        {"name": "thread", "type": "long"},
+        {"name": "task", "type": "long"},
         {"name": "number", "type": "long"},
         {"name": "order", "type": "long"},
         {"name": "time_start", "type": "long"},
@@ -69,11 +69,11 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
         Writer { w }
     }
 
-    pub async fn write(&mut self, records: &[Record], name: &str, thread: u32, number: u32) {
+    pub async fn write(&mut self, records: &[Record], name: &str, task: u32, number: u32) {
         let mut data = Vec::new();
         for (order, record) in records.iter().enumerate() {
             encode_bytes(name.as_bytes(), &mut data);
-            encode_long(thread as i64, &mut data);
+            encode_long(task as i64, &mut data);
             encode_long(number as i64, &mut data);
             encode_long(order as i64, &mut data);
             encode_long(record.time.start.as_nanos() as i64, &mut data);
