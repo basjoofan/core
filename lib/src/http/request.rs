@@ -4,6 +4,7 @@ use super::Method;
 use super::Part;
 use super::Url;
 use super::Version;
+use rand::Rng;
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::AsyncWrite;
@@ -61,8 +62,9 @@ impl Request {
                     content = Content::Bytes(bytes);
                 }
                 Some("multipart/form-data") => {
-                    let boundary = String::from("BasjoofanBoundary");
-                    // TODO : random boundary rand = "0.9.0"
+                    let mut boundary = String::from("FormDataBoundary");
+                    let rng = rand::rng();
+                    boundary.extend(rng.sample_iter(rand::distr::Alphanumeric).take(boundary.len()).map(char::from));
                     headers.replace(String::from("Content-Type"), format!("multipart/form-data; boundary={}", boundary));
                     let mut parts = Vec::new();
                     for line in lines.by_ref() {
@@ -152,7 +154,10 @@ async fn test_from_message_get() {
     let message = r#"
     GET http://httpbin.org/get
     Host: httpbin.org"#;
-    let (request, _) = Request::from(message).await.unwrap();
+    let (mut request, content) = Request::from(message).await.unwrap();
+    let mut writer = tokio::io::stdout();
+    request.write(&mut writer, content).await.unwrap();
+    writer.write_all("\r\n".as_bytes()).await.unwrap();
     assert_eq!("GET", request.method.as_ref());
 }
 
