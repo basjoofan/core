@@ -21,5 +21,5 @@ pub use context::Context;
 pub use evaluator::eval_block;
 pub use parser::Parser;
 pub use parser::Source;
-pub use stat::receive;
+pub use stat::Stats;
 pub use writer::Writer;

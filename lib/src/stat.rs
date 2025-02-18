@@ -1,9 +1,7 @@
-use crate::Record;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
-use tokio::sync::mpsc::Receiver;
 
 struct Stat {
     count: u128,
@@ -11,27 +9,34 @@ struct Stat {
     avg: u128,
     max: u128,
     min: u128,
+    failed: u128,
 }
 
 impl Stat {
     pub fn new(millis: u128) -> Self {
+        let (count, failed) = if millis > 0 { (1, 0) } else { (0, 1) };
         Stat {
-            count: 1,
+            count,
             sum: millis,
             avg: millis,
             max: millis,
             min: millis,
+            failed,
         }
     }
     pub fn add(&mut self, millis: u128) {
-        self.count += 1;
-        self.sum += millis;
-        self.avg = self.sum / self.count;
-        if millis > self.max {
-            self.max = millis;
-        }
-        if millis < self.min {
-            self.min = millis;
+        if millis == 0 {
+            self.failed += 1;
+        } else {
+            self.count += 1;
+            self.sum += millis;
+            self.avg = self.sum / self.count;
+            if millis > self.max {
+                self.max = millis;
+            }
+            if self.min == 0 || millis < self.min {
+                self.min = millis;
+            }
         }
     }
 }
@@ -40,8 +45,8 @@ impl Display for Stat {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(
             f,
-            "count={}  sum={}  avg={}  max={}  min={}",
-            self.count, self.sum, self.avg, self.max, self.min
+            "count={}  sum={}  avg={}  max={}  min={}  failed={}",
+            self.count, self.sum, self.avg, self.max, self.min, self.failed
         )
     }
 }
@@ -71,14 +76,4 @@ impl Display for Stats {
         }
         Ok(())
     }
-}
-
-pub async fn receive(mut receiver: Receiver<Vec<Record>>) {
-    let mut stats = Stats::default();
-    while let Some(records) = receiver.recv().await {
-        for record in records.iter() {
-            stats.add(&record.name, record.time.total.as_millis());
-        }
-    }
-    print!("{}", stats);
 }

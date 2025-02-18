@@ -1,8 +1,8 @@
 use lib::eval_block;
-use lib::receive;
 use lib::Context;
 use lib::Parser;
 use lib::Source;
+use lib::Stats;
 use lib::Writer;
 use std::env::current_dir;
 use std::env::var;
@@ -85,7 +85,7 @@ pub async fn test(
         }
     };
     let mut set = task::JoinSet::new();
-    let (sender, receiver) = sync::mpsc::channel(tasks as usize);
+    let (sender, mut receiver) = sync::mpsc::channel(tasks as usize);
     match name {
         Some(name) => {
             match tests.remove(&name) {
@@ -157,7 +157,15 @@ pub async fn test(
         }
     }
     stat.then(|| {
-        set.spawn(receive(receiver));
+        set.spawn(async move {
+            let mut stats = Stats::default();
+            while let Some(records) = receiver.recv().await {
+                for record in records.iter() {
+                    stats.add(&record.name, record.time.total.as_millis());
+                }
+            }
+            print!("{}", stats);
+        });
     });
     std::mem::drop(sender);
     while let Some(result) = set.join_next().await {
