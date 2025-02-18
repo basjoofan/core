@@ -1,8 +1,10 @@
+use std::collections::HashMap;
 use std::slice::Iter;
 
 #[derive(Default, Debug)]
 pub struct Headers {
-    inner: Vec<Header>,
+    indices: HashMap<String, Vec<usize>>,
+    entries: Vec<Header>,
 }
 
 #[derive(Debug)]
@@ -13,26 +15,29 @@ pub struct Header {
 
 impl Headers {
     pub fn insert(&mut self, name: String, value: String) {
-        self.inner.push(Header { name, value });
+        self.indices.entry(name.to_lowercase()).or_default().push(self.entries.len());
+        self.entries.push(Header { name, value });
     }
 
-    pub fn replace(&mut self, name: String, value: String) {
-        for header in self.inner.iter_mut() {
-            if header.name == name {
-                header.value = value.clone();
+    pub fn replace(&mut self, name: &str, value: String) {
+        if let Some(indices) = self.indices.get(name.to_lowercase().as_str()) {
+            if let Some(index) = indices.first() {
+                if let Some(header) = self.entries.get_mut(*index) {
+                    header.value = value;
+                }
             }
         }
     }
 
     pub fn iter(&self) -> Iter<'_, Header> {
-        self.inner.iter()
+        self.entries.iter()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
+        self.entries.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.inner.len()
+        self.entries.len()
     }
 }

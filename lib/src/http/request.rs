@@ -65,7 +65,7 @@ impl Request {
                     let mut boundary = String::from("FormDataBoundary");
                     let rng = rand::rng();
                     boundary.extend(rng.sample_iter(rand::distr::Alphanumeric).take(boundary.len()).map(char::from));
-                    headers.replace(String::from("Content-Type"), format!("multipart/form-data; boundary={}", boundary));
+                    headers.replace("content-type", format!("multipart/form-data; boundary={}", boundary));
                     let mut parts = Vec::new();
                     for line in lines.by_ref() {
                         if let Some((name, value)) = line.trim().split_once(':') {
