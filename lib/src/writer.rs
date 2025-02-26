@@ -204,7 +204,7 @@ async fn test_writer() {
     };
     writer.write(&vec![record], "test", 0, 0).await;
     let encoded = writer.w;
-    let reader = avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
+    let reader = apache_avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
     println!("schema:{:?}", reader.reader_schema());
     for value in reader {
         println!("{:?}", value.unwrap());

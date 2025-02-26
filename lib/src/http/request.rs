@@ -84,7 +84,7 @@ impl Request {
                                     )
                                     .into_bytes(),
                                 );
-                                if let Some(mime) = guess::from_path(path).first() {
+                                if let Some(mime) = mime_guess::from_path(path).first() {
                                     bytes.append(&mut format!("Content-Type: {}\r\n\r\n", mime).into_bytes());
                                 };
                                 length += bytes.len() + metadata.len() as usize + 2;
