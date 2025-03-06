@@ -152,8 +152,8 @@ impl Request {
 #[tokio::test]
 async fn test_from_message_get() {
     let message = r#"
-    GET http://httpbin.org/get
-    Host: httpbin.org"#;
+    GET http://domain/get
+    Host: domain"#;
     let (mut request, content) = Request::from(message).await.unwrap();
     let mut writer = tokio::io::stdout();
     request.write(&mut writer, content).await.unwrap();
@@ -164,8 +164,8 @@ async fn test_from_message_get() {
 #[tokio::test]
 async fn test_from_message_post_multipart() {
     let message = r#"
-    POST https://httpbin.org/post
-    Host: httpbin.org
+    POST https://domain/post
+    Host: domain
     Content-Type: multipart/form-data
 
     a: b

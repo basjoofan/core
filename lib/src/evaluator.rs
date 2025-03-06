@@ -254,13 +254,12 @@ mod tests {
     use crate::Value;
     use std::collections::HashMap;
 
-    fn run_eval_tests(tests: Vec<(&str, Value)>) {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
+    async fn run_eval_tests(tests: Vec<(&str, Value)>) {
         for (text, expect) in tests {
             let Source { exprs, requests, .. } = Parser::new(text).parse().unwrap();
             let mut context = Context::new();
             context.extend(requests);
-            match runtime.block_on(eval_block(&exprs, &mut context)) {
+            match eval_block(&exprs, &mut context).await {
                 Ok(value) => {
                     println!("{:?} => {} = {}", exprs, value, expect);
                     assert_eq!(value, expect);
@@ -270,8 +269,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_integer_arithmetic() {
+    #[tokio::test]
+    async fn test_integer_arithmetic() {
         let tests = vec![
             ("1", Value::Integer(1)),
             ("2", Value::Integer(2)),
@@ -301,11 +300,11 @@ mod tests {
             ("5 >> 2", Value::Integer(1)),
             ("-5 >> 2", Value::Integer(-2)),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_float_arithmetic() {
+    #[tokio::test]
+    async fn test_float_arithmetic() {
         let tests = vec![
             ("1.0", Value::Float(1.0)),
             ("0.2", Value::Float(0.2)),
@@ -326,11 +325,11 @@ mod tests {
             ("-5.0 + 10.0 + -5.0", Value::Float(0.0)),
             ("(0.5 + 1.5 * 0.2 + 1.5 / 3.0) * 2.0 + -1.0", Value::Float(1.6)),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_boolean_arithmetic() {
+    #[tokio::test]
+    async fn test_boolean_arithmetic() {
         let tests = vec![
             ("true", Value::Boolean(true)),
             ("false", Value::Boolean(false)),
@@ -361,21 +360,21 @@ mod tests {
             ("!!false", Value::Boolean(false)),
             ("!(if (false) { 5; })", Value::Boolean(true)),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_string_literal() {
+    #[tokio::test]
+    async fn test_string_literal() {
         let tests = vec![
             (r#""hello world""#, Value::String(String::from("hello world"))),
             (r#""hello" + " world""#, Value::String(String::from("hello world"))),
             (r#""hello"+" world"+"!""#, Value::String(String::from("hello world!"))),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_logical_expr() {
+    #[tokio::test]
+    async fn test_logical_expr() {
         let tests = vec![
             ("true || true", Value::Boolean(true)),
             ("true || false", Value::Boolean(true)),
@@ -402,11 +401,11 @@ mod tests {
             ("true && false && 1 == 1", Value::Boolean(false)),
             ("let flag = true && false && 1 == 1;", Value::Boolean(false)),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_array_literal() {
+    #[tokio::test]
+    async fn test_array_literal() {
         let tests = vec![
             ("[]", Value::Array(vec![])),
             (
@@ -418,11 +417,11 @@ mod tests {
                 Value::Array(vec![Value::Integer(3), Value::Integer(-1), Value::Integer(30)]),
             ),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_map_literal() {
+    #[tokio::test]
+    async fn test_map_literal() {
         let tests = vec![
             ("{}", Value::Map(HashMap::new())),
             (
@@ -440,11 +439,11 @@ mod tests {
                 ])),
             ),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_index_expr() {
+    #[tokio::test]
+    async fn test_index_expr() {
         let tests = vec![
             ("[1, 2, 3][1]", Value::Integer(2)),
             ("[1, 2, 3][0 + 2]", Value::Integer(3)),
@@ -457,17 +456,17 @@ mod tests {
             ("{1: 1}[0]", Value::Null),
             ("{}[0]", Value::Null),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_field_expr() {
+    #[tokio::test]
+    async fn test_field_expr() {
         let tests = vec![("{\"a\": 2}.a", Value::Integer(2))];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_let_expr() {
+    #[tokio::test]
+    async fn test_let_expr() {
         let tests = vec![
             ("let one = 1; one", Value::Integer(1)),
             ("let one = 1; let two = 2; one + two", Value::Integer(3)),
@@ -479,11 +478,11 @@ mod tests {
             ("let one = 1;let one = 2;one", Value::Integer(2)),
             ("let one = 1;let two = 2;let one = 3;one", Value::Integer(3)),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_if_expr() {
+    #[tokio::test]
+    async fn test_if_expr() {
         let tests = vec![
             ("if (true) { 10 }", Value::Integer(10)),
             ("if (true) { 10 } else { 20 }", Value::Integer(10)),
@@ -498,11 +497,11 @@ mod tests {
             ("if (true) {} else { 10 }", Value::Null),
             ("if (true) { 1; 2 } else { 3 }", Value::Integer(2)),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_call_native() {
+    #[tokio::test]
+    async fn test_call_native() {
         let tests = vec![
             ("length(\"\")", Value::Integer(0)),
             ("length(\"two\")", Value::Integer(3)),
@@ -510,42 +509,44 @@ mod tests {
             ("length([])", Value::Integer(0)),
             ("length([1, 2, 3])", Value::Integer(3)),
         ];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_request_literal() {
+    #[tokio::test]
+    async fn test_request_literal() {
+        crate::tests::start_server(30006).await;
         let tests = vec![(
             r#"
             request get`
-                GET http://{host}/get
-                Host: {host}
+                GET http://{host}:30006/get
+                Host: {{host}}
                 Connection: close
             `[];
-            let host = "httpbin.org";
+            let host = "127.0.0.1";
             let response = get();
             response.status
             "#,
             Value::Integer(200),
         )];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 
-    #[test]
-    fn test_request_asserts() {
+    #[tokio::test]
+    async fn test_request_asserts() {
+        crate::tests::start_server(30007).await;
         let tests = vec![(
             r#"
             request get`
-                GET http://{host}/get
+                GET http://{host}:30007/get
                 Host: {host}
                 Connection: close
             `[status == 200];
-            let host = "httpbin.org";
+            let host = "127.0.0.1";
             let response = get();
             response.status
             "#,
             Value::Integer(200),
         )];
-        run_eval_tests(tests);
+        run_eval_tests(tests).await;
     }
 }

@@ -55,10 +55,10 @@ impl Client {
 
 #[tokio::test]
 async fn test_send_message_get() {
+    crate::tests::start_server(30001).await;
     let message = r#"
-    GET https://www.baidu.com
-    Host: www.baidu.com
-    Connection: close"#;
+    GET http://127.0.0.1:30001/get
+    Host: 127.0.0.1"#;
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
     println!("error: {}", error);
@@ -71,11 +71,11 @@ async fn test_send_message_get() {
 
 #[tokio::test]
 async fn test_send_message_post() {
+    crate::tests::start_server(30002).await;
     let message = r#"
-    POST https://httpbin.org/post
-    Host: httpbin.org
-    Accept-Encoding: gzip, deflate
-    Connection: close"#;
+    POST http://127.0.0.1:30002/text
+    Host: 127.0.0.1
+    Accept-Encoding: gzip, deflate"#;
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
     println!("error: {}", error);
@@ -89,11 +89,11 @@ async fn test_send_message_post() {
 
 #[tokio::test]
 async fn test_send_message_post_form() {
+    crate::tests::start_server(30003).await;
     let message = r#"
-    POST https://httpbin.org/post
-    Host: httpbin.org
+    POST http://127.0.0.1:30003/form
+    Host: 127.0.0.1
     Content-Type: application/x-www-form-urlencoded
-    Connection: close
 
     a: b"#;
     let client = Client::default();
@@ -109,11 +109,11 @@ async fn test_send_message_post_form() {
 
 #[tokio::test]
 async fn test_send_message_post_multipart() {
+    crate::tests::start_server(30004).await;
     let message = r#"
-    POST https://httpbin.org/post
-    Host: httpbin.org
+    POST http://127.0.0.1:30004/multipart
+    Host: 127.0.0.1
     Content-Type: multipart/form-data
-    Connection: close
 
     a: b
     f: @src/lib.rs"#;
@@ -131,22 +131,22 @@ async fn test_send_message_post_multipart() {
 
 #[tokio::test]
 async fn test_send_message_post_json() {
+    crate::tests::start_server(30005).await;
     let message = r#"
-    POST https://httpbin.org/post
-    Host: httpbin.org
+    POST http://127.0.0.1:30005/json
+    Host: 127.0.0.1
     Content-Type: application/json
-    Connection: close
 
     {
-        "name": "John Doe",
-        "age": 43,
+        "name": "Gauss",
+        "age": 6,
         "address": {
-            "street": "10 Downing Street",
-            "city": "London"
+            "street": "19 Hear Sea Street",
+            "city": "DaLian"
         },
         "phones": [
-            "+44 1234567",
-            "+44 2345678"
+            "+86 13098767890",
+            "+86 15876567890"
         ]
     }
     "#;
