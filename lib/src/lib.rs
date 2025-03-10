@@ -37,6 +37,8 @@ pub mod tests {
     use serde_json::json;
     use serde_json::Value;
     use std::collections::HashMap;
+    use std::net::ToSocketAddrs;
+    use tokio::net::TcpListener;
 
     pub async fn start_server(port: u16) {
         let router = Router::new()
@@ -45,11 +47,14 @@ pub mod tests {
             .route("/json", post(handle_json))
             .route("/form", post(handle_form))
             .route("/multipart", post(handle_multipart));
-
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, router).await.unwrap();
-        });
+        let addrs = ("localhost", port).to_socket_addrs().unwrap();
+        for addr in addrs {
+            let listener = TcpListener::bind(addr).await.unwrap();
+            let router = router.to_owned();
+            tokio::spawn(async move {
+                axum::serve(listener, router).await.unwrap();
+            });
+        }
     }
 
     async fn handle_get(headers: HeaderMap, Query(params): Query<HashMap<String, String>>) -> Json<Value> {

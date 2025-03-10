@@ -121,8 +121,14 @@ impl AsyncWrite for Stream {
 async fn test_connect() {
     crate::tests::start_server(30000).await;
     let stream = Stream::connect(&Url::from("http://127.0.0.1:30000/get"), Duration::from_secs(2)).await;
+    if let Err(error) = stream.as_ref() {
+        println!("{:?}", error);
+    }
     assert!(stream.is_ok());
     let stream = Stream::connect(&Url::from("http://localhost:30000/get"), Duration::from_secs(2)).await;
+    if let Err(error) = stream.as_ref() {
+        println!("{:?}", error);
+    }
     assert!(stream.is_ok());
     let stream = Stream::connect(&Url::from("http://localhost:88/get"), Duration::from_secs(2)).await;
     assert!(stream.is_err());
