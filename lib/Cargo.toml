@@ -9,17 +9,17 @@ keywords = ["continuous", "test", "http"]
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.43.0", features = ["net", "io-util", "time", "fs"] }
-tokio-rustls = "0.26.1"
+tokio = { version = "1.44.0", features = ["net", "io-util", "time", "fs"] }
+tokio-rustls = { version = "0.26.2", default-features = false, features = ["tls12", "ring"]  }
 rustls-platform-verifier = "0.5.0"
 form_urlencoded = "1.2.1"
 mime_guess = "2.0.5"
 regex = "1.11.1"
-rand = "0.9.0"
+rand = { version = "0.9.0", default-features = false, features = ["thread_rng"]  }
 #uuid = { version = "1.13.1", default-features = false, features = ["v7"] }
 
 [dev-dependencies]
 apache-avro = "0.17.0"
-tokio = { version = "1.43.0", features = ["rt-multi-thread", "macros", "io-std"] }
+tokio = { version = "1.44.0", features = ["rt-multi-thread", "macros", "io-std"] }
 axum = { version = "0.8.1", features = ["multipart"] }
 serde_json = "1.0"
