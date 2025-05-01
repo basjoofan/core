@@ -7,11 +7,12 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Context {
     inner: HashMap<String, Value>,
-    requests: HashMap<String, (String, Vec<Expr>)>,
+    requests: Arc<HashMap<String, (String, Vec<Expr>)>>,
     records: Vec<Record>,
 }
 
@@ -19,7 +20,7 @@ impl Context {
     pub fn new() -> Self {
         Self {
             inner: HashMap::new(),
-            requests: HashMap::new(),
+            requests: Arc::new(HashMap::new()),
             records: Vec::new(),
         }
     }
@@ -27,13 +28,15 @@ impl Context {
     pub fn from(inner: HashMap<String, Value>) -> Self {
         Self {
             inner,
-            requests: HashMap::new(),
+            requests: Arc::new(HashMap::new()),
             records: Vec::new(),
         }
     }
 
     pub fn extend(&mut self, requests: HashMap<String, (String, Vec<Expr>)>) {
-        self.requests.extend(requests);
+        if let Some(inner) = Arc::get_mut(&mut self.requests) {
+            inner.extend(requests);
+        }
     }
 
     pub fn get(&self, key: &str) -> Option<&Value> {

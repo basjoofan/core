@@ -1,14 +1,9 @@
 use crate::lexer;
 use crate::Expr;
 use crate::Kind;
+use crate::Source;
 use crate::Token;
 use std::collections::HashMap;
-
-pub struct Source {
-    pub exprs: Vec<Expr>,
-    pub requests: HashMap<String, (String, Vec<Expr>)>,
-    pub tests: HashMap<String, Vec<Expr>>,
-}
 
 pub struct Parser {
     tokens: Vec<Token>,

@@ -357,7 +357,7 @@ fn test_segment() {
     assert_eq!(expect.len(), tokens.len());
     for (i, (kind, literal)) in expect.into_iter().enumerate() {
         let token = tokens.get(i).unwrap();
-        assert!(kind == token.kind);
+        assert_eq!(kind, token.kind);
         assert_eq!(literal, token.literal);
     }
 }

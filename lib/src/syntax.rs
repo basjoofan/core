@@ -111,3 +111,9 @@ impl Debug for Expr {
         }
     }
 }
+
+pub struct Source {
+    pub exprs: Vec<Expr>,
+    pub requests: HashMap<String, (String, Vec<Expr>)>,
+    pub tests: HashMap<String, Vec<Expr>>,
+}

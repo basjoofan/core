@@ -248,9 +248,9 @@ async fn eval_list(items: &[Expr], context: &mut Context) -> Result<Vec<Value>, 
 #[cfg(test)]
 mod tests {
     use super::eval_block;
-    use crate::parser::Parser;
-    use crate::parser::Source;
     use crate::Context;
+    use crate::Parser;
+    use crate::Source;
     use crate::Value;
     use std::collections::HashMap;
 

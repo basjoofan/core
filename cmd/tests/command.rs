@@ -35,11 +35,11 @@ async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
     let mut command = new_command();
     let output = command
         .arg("eval")
-        .arg(r#"println("{string}", "Hello Basjoofan!")"#)
+        .arg(r#"println("{string}", "🍀 Hello Basjoofan!")"#)
         .output()
         .await?;
     assert!(output.status.success());
-    assert_eq!(String::from_utf8(output.stdout)?, "Hello Basjoofan!\nnull\n");
+    assert_eq!(String::from_utf8(output.stdout)?, "🍀 Hello Basjoofan!\nnull\n");
     Ok(())
 }
 

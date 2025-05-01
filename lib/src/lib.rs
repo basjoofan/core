@@ -20,8 +20,8 @@ use value::Value;
 pub use context::Context;
 pub use evaluator::eval_block;
 pub use parser::Parser;
-pub use parser::Source;
 pub use stat::Stats;
+pub use syntax::Source;
 pub use writer::Writer;
 
 #[cfg(test)]
