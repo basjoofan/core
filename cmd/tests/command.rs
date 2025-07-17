@@ -72,8 +72,8 @@ async fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout)?;
     let stderr = String::from_utf8(output.stderr)?;
-    println!("stdout:{}", stdout);
-    println!("stderr:{}", stderr);
+    println!("stdout:{stdout}");
+    println!("stderr:{stderr}");
     assert!(stdout.contains("--- PASS  hello ("));
     // command test call
     let mut command = new_command();
@@ -100,7 +100,7 @@ fn cargo_bin<S: AsRef<str>>(name: S) -> PathBuf {
 }
 
 fn cargo_bin_str(name: &str) -> PathBuf {
-    let env_var = format!("CARGO_BIN_EXE_{}", name);
+    let env_var = format!("CARGO_BIN_EXE_{name}");
     std::env::var_os(env_var)
         .map(|p| p.into())
         .unwrap_or_else(|| target_dir().join(format!("{}{}", name, std::env::consts::EXE_SUFFIX)))

@@ -44,7 +44,7 @@ impl Parser {
                 Err(format!("token expect {:?} but found {:?}", kind, peek.kind))
             }
         } else {
-            Err(format!("token expect {:?} but found none", kind))
+            Err(format!("token expect {kind:?} but found none"))
         }
     }
 
@@ -155,7 +155,7 @@ impl Parser {
         let token = self.current_token();
         match token.literal.parse::<i64>() {
             Ok(integer) => Ok(Expr::Integer(integer)),
-            Err(_) => Err(format!("parse integer error: {}", token)),
+            Err(_) => Err(format!("parse integer error: {token}")),
         }
     }
 
@@ -163,7 +163,7 @@ impl Parser {
         let token = self.current_token();
         match token.literal.parse::<f64>() {
             Ok(float) => Ok(Expr::Float(float)),
-            Err(_) => Err(format!("parse float error: {}", token)),
+            Err(_) => Err(format!("parse float error: {token}")),
         }
     }
 
@@ -171,7 +171,7 @@ impl Parser {
         let token = self.current_token();
         match token.literal.parse::<bool>() {
             Ok(boolean) => Ok(Expr::Boolean(boolean)),
-            Err(_) => Err(format!("parse boolean error: {}", token)),
+            Err(_) => Err(format!("parse boolean error: {token}")),
         }
     }
 
@@ -236,7 +236,7 @@ impl Parser {
         if let Expr::Ident(function) = function {
             Ok(Expr::Call(function, arguments))
         } else {
-            Err(format!("parse call expr error: {}", function))
+            Err(format!("parse call expr error: {function}"))
         }
     }
 
@@ -336,13 +336,13 @@ fn test_parse_let_expr() {
         match Parser::new(text).parse() {
             Ok(Source { exprs, .. }) => {
                 println!("{}", exprs.len());
-                println!("{:?}", exprs);
+                println!("{exprs:?}");
                 assert!(exprs.len() == len);
                 if let Some(expr) = exprs.first() {
-                    println!("{}", expr);
+                    println!("{expr}");
                     if let Expr::Let(name, value) = expr {
-                        let parsed = format!("let {} {}", name, value);
-                        println!("{}={}", expected, parsed);
+                        let parsed = format!("let {name} {value}");
+                        println!("{expected}={parsed}");
                         assert!(expected == parsed);
                     } else {
                         unreachable!("let expr parse failed")
@@ -364,7 +364,7 @@ fn test_parse_ident_expr() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Ident(value) = expr {
                 assert!(value == "foobar");
             } else {
@@ -382,7 +382,7 @@ fn test_parse_integer_literal() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Integer(value) = *expr {
                 assert!(value == 5);
             } else {
@@ -400,9 +400,9 @@ fn test_parse_float_literal() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("expr:{}", expr);
+            println!("expr:{expr}");
             if let Expr::Float(value) = *expr {
-                println!("value:{}", value);
+                println!("value:{value}");
                 assert!(value == core::f64::consts::PI);
             } else {
                 unreachable!("float literal parse failed")
@@ -420,7 +420,7 @@ fn test_parse_boolean_literal() {
         if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
             assert!(exprs.len() == 1);
             if let Some(expr) = exprs.first() {
-                println!("{}", expr);
+                println!("{expr}");
                 if let Expr::Boolean(value) = *expr {
                     assert!(value == expected);
                 } else {
@@ -439,7 +439,7 @@ fn test_parse_string_literal() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::String(value) = expr {
                 assert!(value == "hello world");
             } else {
@@ -466,7 +466,7 @@ fn test_parse_unary_expr() {
         if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
             assert!(exprs.len() == 1);
             if let Some(expr) = exprs.first() {
-                println!("{}", expr);
+                println!("{expr}");
                 if let Expr::Unary(token, right) = expr {
                     assert!(expected_operator == token.to_string());
                     assert!(expected_right == right.to_string());
@@ -515,7 +515,7 @@ fn test_parse_binary_expr() {
             Ok(Source { exprs, .. }) => {
                 assert!(exprs.len() == 1);
                 if let Some(expr) = exprs.first() {
-                    println!("{}", expr);
+                    println!("{expr}");
                     if let Expr::Binary(token, left, right) = expr {
                         assert!(expected_left == left.to_string());
                         assert!(expected_operator == token.to_string());
@@ -585,7 +585,7 @@ fn test_parse_operator_precedence() {
                     let _ = write!(output, "{e:?}");
                     output
                 });
-                println!("{}=={}", actual, expected);
+                println!("{actual}=={expected}");
                 assert_eq!(actual, expected);
             }
             Err(error) => {
@@ -601,7 +601,7 @@ fn test_parse_if_expr() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::If(condition, consequence, alternative) = expr {
                 assert!(condition.to_string() == "x < y");
                 assert!(consequence[0].to_string() == "x");
@@ -621,7 +621,7 @@ fn test_parse_if_else_expr() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::If(condition, consequence, alternative) = expr {
                 assert!(condition.to_string() == "x < y");
                 assert!(consequence[0].to_string() == "z");
@@ -642,7 +642,7 @@ fn test_parse_call_expr() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Call(function, arguments) = expr {
                 assert!(function == "add");
                 assert!(arguments[0].to_string() == "1");
@@ -668,7 +668,7 @@ fn test_parse_call_expr_argument() {
         if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
             assert!(exprs.len() == 1);
             if let Some(expr) = exprs.first() {
-                println!("{}", expr);
+                println!("{expr}");
                 if let Expr::Call(function, arguments) = expr {
                     assert!(function == function_name);
                     assert!(arguments.iter().map(|a| a.to_string()).collect::<Vec<String>>() == expected);
@@ -688,7 +688,7 @@ fn test_parse_array_literal_empty() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Array(items) = expr {
                 assert!(items.is_empty());
             } else {
@@ -706,7 +706,7 @@ fn test_parse_array_literal() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Array(items) = expr {
                 assert!(items.len() == 3);
                 assert!(items[0].to_string() == "1");
@@ -727,7 +727,7 @@ fn test_parse_index_expr() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Index(left, index) = expr {
                 assert!(left.to_string() == "myArray");
                 assert!(index.to_string() == "1 + 1");
@@ -746,7 +746,7 @@ fn test_parse_field_expr() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Field(left, field) = expr {
                 assert!(left.to_string() == "left");
                 assert!(field == "field");
@@ -765,7 +765,7 @@ fn test_parse_map_literal_empty() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Map(pairs) = expr {
                 assert!(pairs.is_empty());
             } else {
@@ -783,7 +783,7 @@ fn test_parse_map_literal_one_element() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Map(pairs) = expr {
                 assert!(pairs.len() == 1);
                 assert!(
@@ -813,7 +813,7 @@ fn test_parse_map_literal_string_key() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Map(pairs) = expr {
                 assert!(
                     pairs
@@ -841,7 +841,7 @@ fn test_parse_map_literal_boolean_key() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Map(pairs) = expr {
                 assert!(
                     pairs
@@ -870,7 +870,7 @@ fn test_parse_map_literal_integer_key() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Map(pairs) = expr {
                 assert!(
                     pairs
@@ -899,7 +899,7 @@ fn test_parse_map_literal_with_expr() {
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
-            println!("{}", expr);
+            println!("{expr}");
             if let Expr::Map(pairs) = expr {
                 assert!(
                     pairs

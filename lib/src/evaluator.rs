@@ -80,7 +80,7 @@ async fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context) -> R
                 None => Ok(Value::Null),
             }
         }
-        (value, _) => Err(format!("index operator not support: {:?}", value)),
+        (value, _) => Err(format!("index operator not support: {value:?}")),
     }
 }
 
@@ -94,14 +94,14 @@ async fn eval_field_expr(map: &Expr, field: &String, context: &mut Context) -> R
                 None => Value::Null,
             })
         }
-        map => Err(format!("field operator not support: {:?}", map)),
+        map => Err(format!("field operator not support: {map:?}")),
     }
 }
 
 fn eval_ident_expr(ident: &String, context: &mut Context) -> Result<Value, String> {
     match context.get(ident) {
         Some(value) => Ok(value.to_owned()),
-        None => Err(format!("ident:{} not found", ident)),
+        None => Err(format!("ident: {ident} not found")),
     }
 }
 
@@ -119,7 +119,7 @@ async fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context) -> 
         (Kind::Not, _) => Ok(Value::Boolean(false)),
         (Kind::Sub, Value::Integer(integer)) => Ok(Value::Integer(-integer)),
         (Kind::Sub, Value::Float(float)) => Ok(Value::Float(-float)),
-        (_, right) => Err(format!("unknown operator: {}{:?}", token, right)),
+        (_, right) => Err(format!("unknown operator: {token}{right:?}")),
     }
 }
 
@@ -149,7 +149,7 @@ async fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mu
         Kind::Ge => Ok(Value::Boolean(eval_expr(left, context).await? >= eval_expr(right, context).await?)),
         Kind::Eq => Ok(Value::Boolean(eval_expr(left, context).await? == eval_expr(right, context).await?)),
         Kind::Ne => Ok(Value::Boolean(eval_expr(left, context).await? != eval_expr(right, context).await?)),
-        _ => Err(format!("not support operator: {} {} {}", left, token, right)),
+        _ => Err(format!("not support operator: {left} {token} {right}")),
     }
 }
 
@@ -186,7 +186,7 @@ async fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -
             let mut asserts = Vec::new();
             for assert in exprs {
                 if let Expr::Binary(token, left, right) = assert {
-                    let expr = format!("{} {} {}", left, token, right);
+                    let expr = format!("{left} {token} {right}");
                     let left = eval_expr(left, &mut local).await.unwrap_or(Value::Null);
                     let right = eval_expr(right, &mut local).await.unwrap_or(Value::Null);
                     if let Some(result) = match token.kind {
@@ -224,7 +224,7 @@ async fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -
             "format" => Ok(native::format(arguments)?),
             "length" => Ok(native::length(arguments)?),
             "append" => Ok(native::append(arguments)?),
-            _ => Err(format!("function {} not found", name)),
+            _ => Err(format!("function {name} not found")),
         },
     }
 }
@@ -261,10 +261,10 @@ mod tests {
             context.extend(requests);
             match eval_block(&exprs, &mut context).await {
                 Ok(value) => {
-                    println!("{:?} => {} = {}", exprs, value, expect);
+                    println!("{exprs:?} => {value} = {expect}");
                     assert_eq!(value, expect);
                 }
-                Err(message) => panic!("machine error: {}", message),
+                Err(message) => panic!("machine error: {message}"),
             }
         }
     }

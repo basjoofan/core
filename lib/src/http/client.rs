@@ -61,7 +61,7 @@ async fn test_send_message_get() {
     Host: 127.0.0.1"#;
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
-    println!("error: {}", error);
+    println!("error: {error}");
     assert_eq!("GET", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -78,8 +78,8 @@ async fn test_send_message_post() {
     Accept-Encoding: gzip, deflate"#;
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
-    println!("error: {}", error);
-    println!("request: {:?}", request);
+    println!("error: {error}");
+    println!("request: {request:?}");
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -98,8 +98,8 @@ async fn test_send_message_post_form() {
     a: b"#;
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
-    println!("error: {}", error);
-    println!("request: {:?}", request);
+    println!("error: {error}");
+    println!("request: {request:?}");
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -119,9 +119,9 @@ async fn test_send_message_post_multipart() {
     f: @src/lib.rs"#;
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
-    println!("error: {}", error);
-    println!("request: {:?}", request);
-    println!("response: {:?}", response);
+    println!("error: {error}");
+    println!("request: {request:?}");
+    println!("response: {response:?}");
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -152,7 +152,7 @@ async fn test_send_message_post_json() {
     "#;
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
-    println!("error: {}", error);
+    println!("error: {error}");
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);

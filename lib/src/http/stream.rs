@@ -1,6 +1,7 @@
 use super::Error;
 use super::Scheme;
 use super::Url;
+use rustls_platform_verifier::ConfigVerifierExt;
 use std::iter::from_fn;
 use std::iter::FusedIterator;
 use std::net::SocketAddr;
@@ -18,7 +19,8 @@ use tokio::net::TcpStream;
 use tokio::task::JoinSet;
 use tokio::time;
 use tokio_rustls::client::TlsStream;
-use tokio_rustls::rustls;
+use tokio_rustls::rustls::ClientConfig;
+use tokio_rustls::TlsConnector;
 
 pub enum Stream {
     Plain {
@@ -26,7 +28,7 @@ pub enum Stream {
         resolve: Duration,
     },
     Cipher {
-        stream: TlsStream<TcpStream>,
+        stream: Box<TlsStream<TcpStream>>,
         resolve: Duration,
     },
     #[cfg(test)]
@@ -63,12 +65,11 @@ impl Stream {
     }
 
     async fn connect_tls(host: &str, port: u16, tiomeout: Duration) -> Result<Self, Error> {
-        use rustls_platform_verifier::BuilderVerifierExt;
-        let config = rustls::ClientConfig::builder().with_platform_verifier().with_no_client_auth();
-        let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+        let config = ClientConfig::with_platform_verifier().map_err(|_e| Error::InvalidUrlHost)?;
+        let connector = TlsConnector::from(Arc::new(config));
         let domain = host.to_owned().try_into().map_err(|_e| Error::InvalidUrlHost)?;
         let (stream, resolve) = Self::connect_tcp(host, port, tiomeout).await?;
-        let stream = connector.connect(domain, stream).await.map_err(|_e| Error::TlsHandshakeFailed)?;
+        let stream = Box::new(connector.connect(domain, stream).await.map_err(|_e| Error::TlsHandshakeFailed)?);
         Ok(Stream::Cipher { stream, resolve })
     }
 
@@ -193,17 +194,17 @@ async fn test_connect() {
     crate::tests::start_server(30000).await;
     let stream = Stream::connect(&Url::from("http://127.0.0.1:30000/get"), Duration::from_secs(2)).await;
     if let Err(error) = stream.as_ref() {
-        println!("{:?}", error);
+        println!("{error:?}");
     }
     assert!(stream.is_ok());
     let stream = Stream::connect(&Url::from("http://localhost:30000/get"), Duration::from_secs(2)).await;
     if let Err(error) = stream.as_ref() {
-        println!("{:?}", error);
+        println!("{error:?}");
     }
     assert!(stream.is_ok());
     let stream = Stream::connect(&Url::from("http://localhost:88/get"), Duration::from_secs(2)).await;
     assert!(stream.is_err());
     if let Err(error) = stream {
-        println!("{:?}", error);
+        println!("{error:?}");
     }
 }

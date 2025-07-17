@@ -28,12 +28,12 @@ impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Value::Null => write!(f, "null"),
-            Value::Integer(integer) => write!(f, "{}", integer),
-            Value::Float(float) => write!(f, "{}", float),
-            Value::Boolean(boolean) => write!(f, "{}", boolean),
-            Value::String(string) => write!(f, "{}", string),
-            Value::Array(items) => write!(f, "{:?}", items),
-            Value::Map(pairs) => write!(f, "{:?}", pairs),
+            Value::Integer(integer) => write!(f, "{integer}"),
+            Value::Float(float) => write!(f, "{float}"),
+            Value::Boolean(boolean) => write!(f, "{boolean}"),
+            Value::String(string) => write!(f, "{string}"),
+            Value::Array(items) => write!(f, "{items:?}"),
+            Value::Map(pairs) => write!(f, "{pairs:?}"),
         }
     }
 }
@@ -47,7 +47,7 @@ impl Add for Value {
             (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 + right)),
             (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left + right as f64)),
             (Value::String(left), Value::String(right)) => Ok(Value::String(left + &right)),
-            (left, right) => Err(format!("type mismatch: {} + {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} + {right}")),
         }
     }
 }
@@ -60,7 +60,7 @@ impl Sub for Value {
             (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left - right)),
             (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 - right)),
             (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left - right as f64)),
-            (left, right) => Err(format!("type mismatch: {} - {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} - {right}")),
         }
     }
 }
@@ -73,7 +73,7 @@ impl Mul for Value {
             (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left * right)),
             (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 * right)),
             (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left * right as f64)),
-            (left, right) => Err(format!("type mismatch: {} * {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} * {right}")),
         }
     }
 }
@@ -86,7 +86,7 @@ impl Div for Value {
             (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left / right)),
             (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 / right)),
             (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left / right as f64)),
-            (left, right) => Err(format!("type mismatch: {} / {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} / {right}")),
         }
     }
 }
@@ -99,7 +99,7 @@ impl Rem for Value {
             (Value::Float(left), Value::Float(right)) => Ok(Value::Float(left % right)),
             (Value::Integer(left), Value::Float(right)) => Ok(Value::Float(left as f64 % right)),
             (Value::Float(left), Value::Integer(right)) => Ok(Value::Float(left % right as f64)),
-            (left, right) => Err(format!("type mismatch: {} % {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} % {right}")),
         }
     }
 }
@@ -109,7 +109,7 @@ impl BitXor for Value {
     fn bitxor(self, other: Self) -> Self::Output {
         match (self, other) {
             (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left ^ right)),
-            (left, right) => Err(format!("type mismatch: {} ^ {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} ^ {right}")),
         }
     }
 }
@@ -119,7 +119,7 @@ impl BitOr for Value {
     fn bitor(self, other: Self) -> Self::Output {
         match (self, other) {
             (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left | right)),
-            (left, right) => Err(format!("type mismatch: {} | {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} | {right}")),
         }
     }
 }
@@ -129,7 +129,7 @@ impl BitAnd for Value {
     fn bitand(self, other: Self) -> Self::Output {
         match (self, other) {
             (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left & right)),
-            (left, right) => Err(format!("type mismatch: {} & {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} & {right}")),
         }
     }
 }
@@ -139,7 +139,7 @@ impl Shl for Value {
     fn shl(self, other: Self) -> Self::Output {
         match (self, other) {
             (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left << right)),
-            (left, right) => Err(format!("type mismatch: {} << {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} << {right}")),
         }
     }
 }
@@ -149,7 +149,7 @@ impl Shr for Value {
     fn shr(self, other: Self) -> Self::Output {
         match (self, other) {
             (Value::Integer(left), Value::Integer(right)) => Ok(Value::Integer(left >> right)),
-            (left, right) => Err(format!("type mismatch: {} >> {}", left, right)),
+            (left, right) => Err(format!("type mismatch: {left} >> {right}")),
         }
     }
 }

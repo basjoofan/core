@@ -72,7 +72,7 @@ impl Stats {
 impl Display for Stats {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         for (name, stat) in self.stats.iter() {
-            writeln!(f, "{} {}", name, stat)?
+            writeln!(f, "{name} {stat}")?
         }
         Ok(())
     }

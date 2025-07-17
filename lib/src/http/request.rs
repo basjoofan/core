@@ -65,13 +65,13 @@ impl Request {
                     let mut boundary = String::from("FormDataBoundary");
                     let rng = rand::rng();
                     boundary.extend(rng.sample_iter(rand::distr::Alphanumeric).take(boundary.len()).map(char::from));
-                    headers.replace("content-type", format!("multipart/form-data; boundary={}", boundary));
+                    headers.replace("content-type", format!("multipart/form-data; boundary={boundary}"));
                     let mut parts = Vec::new();
                     for line in lines.by_ref() {
                         if let Some((name, value)) = line.trim().split_once(':') {
                             let (name, value) = (name.trim(), value.trim());
                             let mut bytes = Vec::new();
-                            bytes.append(&mut format!("--{}\r\n", boundary).into_bytes());
+                            bytes.append(&mut format!("--{boundary}\r\n").into_bytes());
                             if value.starts_with("@") {
                                 let path = Path::new(&value[1..value.len()]);
                                 let file = File::open(path).await?;
@@ -85,7 +85,7 @@ impl Request {
                                     .into_bytes(),
                                 );
                                 if let Some(mime) = mime_guess::from_path(path).first() {
-                                    bytes.append(&mut format!("Content-Type: {}\r\n\r\n", mime).into_bytes());
+                                    bytes.append(&mut format!("Content-Type: {mime}\r\n\r\n").into_bytes());
                                 };
                                 length += bytes.len() + metadata.len() as usize + 2;
                                 parts.push(Part::Bytes(bytes));
@@ -93,7 +93,7 @@ impl Request {
                                 parts.push(Part::Bytes(vec![b'\r', b'\n']));
                             } else {
                                 bytes.append(
-                                    &mut format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n{}\r\n", name, value).into_bytes(),
+                                    &mut format!("Content-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").into_bytes(),
                                 );
                                 length += bytes.len();
                                 parts.push(Part::Bytes(bytes));
@@ -101,7 +101,7 @@ impl Request {
                             body.push_str(line);
                         }
                     }
-                    let bytes = format!("--{}--\r\n", boundary).into_bytes();
+                    let bytes = format!("--{boundary}--\r\n").into_bytes();
                     length += bytes.len();
                     parts.push(Part::Bytes(bytes));
                     content = Content::Parts(parts)

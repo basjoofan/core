@@ -47,12 +47,12 @@ pub async fn eval(text: String, context: Option<Context>) -> Context {
             context.extend(requests);
             match eval_block(&exprs, &mut context).await {
                 Ok(value) => {
-                    println!("{}", value);
+                    println!("{value}");
                 }
-                Err(error) => println!("{}", error),
+                Err(error) => println!("{error}"),
             }
         }
-        Err(error) => println!("{}", error),
+        Err(error) => println!("{error}"),
     }
     context
 }
@@ -74,13 +74,13 @@ pub async fn test(
             match eval_block(&exprs, &mut context).await {
                 Ok(_) => tests,
                 Err(error) => {
-                    println!("{}", error);
+                    println!("{error}");
                     return;
                 }
             }
         }
         Err(error) => {
-            println!("{}", error);
+            println!("{error}");
             return;
         }
     };
@@ -107,12 +107,12 @@ pub async fn test(
                                 match eval_block(test.as_ref(), &mut context).await {
                                     Ok(_) => {}
                                     Err(error) => {
-                                        println!("{}", error);
+                                        println!("{error}");
                                         break;
                                     }
                                 }
                                 let records = context.records();
-                                records.iter().for_each(|record| println!("{}", record));
+                                records.iter().for_each(|record| println!("{record}"));
                                 if let Some(ref mut writer) = writer {
                                     writer.write(&records, &name, task, number).await;
                                 }
@@ -132,7 +132,7 @@ pub async fn test(
                     });
                 }
                 None => {
-                    println!("Test not found: {}", name)
+                    println!("Test not found: {name}")
                 }
             }
         }
@@ -144,11 +144,11 @@ pub async fn test(
                     match eval_block(test.as_ref(), &mut context).await {
                         Ok(_) => {}
                         Err(error) => {
-                            println!("{}", error);
+                            println!("{error}");
                         }
                     }
                     let records = context.records();
-                    records.iter().for_each(|record| println!("{}", record));
+                    records.iter().for_each(|record| println!("{record}"));
                     if let Some(ref mut writer) = writer {
                         writer.write(&records, &name, task as u32, u32::default()).await
                     }
@@ -164,13 +164,13 @@ pub async fn test(
                     stats.add(&record.name, record.time.total.as_millis());
                 }
             }
-            print!("{}", stats);
+            print!("{stats}");
         });
     });
     std::mem::drop(sender);
     while let Some(result) = set.join_next().await {
         if let Err(error) = result {
-            println!("Task error: {}", error);
+            println!("Task error: {error}");
         }
     }
 }
@@ -200,7 +200,7 @@ async fn writer(path: Option<&PathBuf>, task: u32) -> Option<Writer<File>> {
             let file = path.join(format!("{}{:06}", var("POD").unwrap_or_default(), task));
             let display = file.display();
             let file = match File::create(&file).await {
-                Err(error) => panic!("Create file {} error: {:?}", display, error),
+                Err(error) => panic!("Create file {display} error: {error:?}"),
                 Ok(file) => file,
             };
             Some(Writer::new(file).await)
@@ -211,7 +211,7 @@ async fn writer(path: Option<&PathBuf>, task: u32) -> Option<Writer<File>> {
 
 async fn register(continuous: Arc<AtomicBool>) {
     match signal::ctrl_c().await {
-        Err(error) => panic!("Failed to listen for interrupt: {:?}", error),
+        Err(error) => panic!("Failed to listen for interrupt: {error:?}"),
         Ok(result) => result,
     };
     continuous.store(false, Ordering::Relaxed);

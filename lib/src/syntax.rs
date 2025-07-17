@@ -69,23 +69,23 @@ macro_rules! join {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Expr::Integer(integer) => write!(f, "{}", integer),
-            Expr::Float(float) => write!(f, "{}", float),
-            Expr::Boolean(boolean) => write!(f, "{}", boolean),
-            Expr::String(string) => write!(f, "\"{}\"", string),
-            Expr::Ident(ident) => write!(f, "{}", ident),
+            Expr::Integer(integer) => write!(f, "{integer}"),
+            Expr::Float(float) => write!(f, "{float}"),
+            Expr::Boolean(boolean) => write!(f, "{boolean}"),
+            Expr::String(string) => write!(f, "\"{string}\""),
+            Expr::Ident(ident) => write!(f, "{ident}"),
             Expr::Array(items) => write!(f, "[{}]", join!(items, "{}", ", ")),
             Expr::Map(pairs) => write!(f, "{{{}}}", join!(pairs, "{}", ": ", ", ")),
-            Expr::Index(left, index) => write!(f, "{}[{}]", left, index),
-            Expr::Field(left, field) => write!(f, "{}.{}", left, field),
+            Expr::Index(left, index) => write!(f, "{left}[{index}]"),
+            Expr::Field(left, field) => write!(f, "{left}.{field}"),
             Expr::Let(name, value) => {
-                write!(f, "let {} = {}", name, value)
+                write!(f, "let {name} = {value}")
             }
-            Expr::Unary(token, right) => write!(f, "{}{}", token, right),
+            Expr::Unary(token, right) => write!(f, "{token}{right}"),
             Expr::Binary(token, left, right) => {
-                write!(f, "{} {} {}", left, token, right)
+                write!(f, "{left} {token} {right}")
             }
-            Expr::Paren(value) => write!(f, "({})", value),
+            Expr::Paren(value) => write!(f, "({value})"),
             Expr::If(condition, consequence, alternative) => {
                 write!(f, "if ({}) {{ {}", condition, join!(consequence, "{}", ";"))?;
                 if !alternative.is_empty() {
@@ -101,13 +101,13 @@ impl Display for Expr {
 impl Debug for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            Expr::Index(left, index) => write!(f, "({:?}[{:?}])", left, index),
-            Expr::Unary(token, right) => write!(f, "({}{:?})", token, right),
+            Expr::Index(left, index) => write!(f, "({left:?}[{index:?}])"),
+            Expr::Unary(token, right) => write!(f, "({token}{right:?})"),
             Expr::Binary(token, left, right) => {
-                write!(f, "({:?} {} {:?})", left, token, right)
+                write!(f, "({left:?} {token} {right:?})")
             }
             Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{:?}", ", ")),
-            _ => write!(f, "{}", self),
+            _ => write!(f, "{self}"),
         }
     }
 }

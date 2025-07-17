@@ -82,7 +82,7 @@ fn parse_duration(s: &str) -> Result<Duration, String> {
         Some('s') => Duration::from_secs(value),
         Some('m') => Duration::from_secs(value * 60),
         Some('h') => Duration::from_secs(value * 3600),
-        Some(c) => return Err(format!("Unknown time unit: {}, supported units: s, m, h", c)),
+        Some(c) => return Err(format!("Unknown time unit: {c}, supported units: s, m, h")),
         None => return Err("Time unit needed, for example 1s or 2m".to_string()),
     };
     Ok(duration)

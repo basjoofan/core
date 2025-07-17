@@ -187,7 +187,7 @@ fn test_encode_record() {
     encode_long(1, &mut buffer);
     encode_long(data.len() as i64, &mut buffer);
     buffer.extend_from_slice(&data);
-    println!("{:?}", buffer);
+    println!("{buffer:?}");
     assert_eq!(buffer, b"\x02\x0a\x36\x06\x66\x6f\x6f");
 }
 

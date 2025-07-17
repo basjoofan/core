@@ -108,11 +108,11 @@ http_type! {
 #[test]
 fn test_method_from_str() {
     let method = Method::from("GET");
-    println!("method:{}", method);
+    println!("method:{method}");
 }
 
 #[test]
 fn test_version_from_str() {
     let version = Version::from("HTTP/2.0");
-    println!("version:{}", version)
+    println!("version:{version}");
 }

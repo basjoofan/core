@@ -4,7 +4,7 @@ pub fn println(values: Vec<Value>) -> Result<Value, String> {
     match format(values) {
         error @ Err(_) => error,
         Ok(value) => {
-            println!("{}", value);
+            println!("{value}");
             Ok(Value::Null)
         }
     }
@@ -14,7 +14,7 @@ pub fn print(values: Vec<Value>) -> Result<Value, String> {
     match format(values) {
         error @ Err(_) => error,
         Ok(value) => {
-            print!("{}", value);
+            print!("{value}");
             Ok(Value::Null)
         }
     }
@@ -52,7 +52,7 @@ pub fn length(values: Vec<Value>) -> Result<Value, String> {
             Value::String(string) => Ok(Value::Integer(string.len() as i64)),
             Value::Array(items) => Ok(Value::Integer(items.len() as i64)),
             Value::Map(pairs) => Ok(Value::Integer(pairs.len() as i64)),
-            _ => Err(format!("function length not supported type {:?}", value)),
+            _ => Err(format!("function length not supported type {value:?}")),
         }
     } else {
         Err("function length need a parameter".to_string())
@@ -99,7 +99,7 @@ fn test_format() {
     for (test, expected) in tests {
         match format(test) {
             Ok(actual) => {
-                println!("{}=={}", actual, expected);
+                println!("{actual}=={expected}");
                 assert_eq!(actual, expected);
             }
             Err(error) => {
@@ -128,7 +128,7 @@ fn test_append() {
     for (test, expected) in tests {
         match append(test) {
             Ok(actual) => {
-                println!("{}=={}", actual, expected);
+                println!("{actual}=={expected}");
                 assert_eq!(actual, expected);
             }
             Err(error) => {
