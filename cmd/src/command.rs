@@ -1,4 +1,3 @@
-use lib::eval_block;
 use lib::Context;
 use lib::Parser;
 use lib::Source;
@@ -27,6 +26,7 @@ pub async fn repl() {
     let stdin = BufReader::new(stdin());
     let mut lines = stdin.lines();
     let mut context = Context::new();
+    let mut source = Source::new();
     loop {
         if let Ok(Some(text)) = lines.next_line().await {
             if text == "exit" {
@@ -35,22 +35,18 @@ pub async fn repl() {
             if text.trim().is_empty() {
                 continue;
             }
-            context = eval(text, Some(context)).await;
+            context = eval(text, &mut source, Some(context)).await;
         }
     }
 }
 
-pub async fn eval(text: String, context: Option<Context>) -> Context {
+pub async fn eval(text: String, source: &mut Source, context: Option<Context>) -> Context {
     let mut context = context.unwrap_or_default();
     match Parser::new(&text).parse() {
-        Ok(Source {
-            exprs,
-            functions,
-            requests,
-            ..
-        }) => {
-            context.extend(functions, requests);
-            match eval_block(&exprs, &mut context).await {
+        Ok(s) => {
+            let index = source.extend(s);
+            let exprs = &source.exprs[index..];
+            match source.eval_block(exprs, &mut context).await {
                 Ok(value) => {
                     println!("{value}");
                 }
@@ -73,35 +69,25 @@ pub async fn test(
 ) {
     let text = read_text(path.unwrap_or(current_dir().unwrap())).await;
     let mut context = Context::new();
-    let mut tests = match Parser::new(&text).parse() {
-        Ok(Source {
-            exprs,
-            functions,
-            requests,
-            tests,
-        }) => {
-            context.extend(functions, requests);
-            match eval_block(&exprs, &mut context).await {
-                Ok(_) => tests,
-                Err(error) => {
-                    println!("{error}");
-                    return;
-                }
+    let source = Arc::new(match Parser::new(&text).parse() {
+        Ok(source) => match source.eval_block(&source.exprs, &mut context).await {
+            Ok(_) => source,
+            Err(error) => {
+                println!("{error}");
+                return;
             }
-        }
+        },
         Err(error) => {
             println!("{error}");
             return;
         }
-    };
+    });
     let mut set = task::JoinSet::new();
     let (sender, mut receiver) = sync::mpsc::channel(tasks as usize);
     match name {
         Some(name) => {
-            match tests.remove(&name) {
+            match source.test(&name) {
                 Some(test) => {
-                    let name = Arc::new(name);
-                    let test = Arc::new(test);
                     let continuous = Arc::new(AtomicBool::new(true));
                     let maximun = number / tasks;
                     for task in 0..tasks {
@@ -111,10 +97,11 @@ pub async fn test(
                         let test = test.to_owned();
                         let mut writer = writer(record.as_ref(), task).await;
                         let mut context = context.to_owned();
+                        let source = source.to_owned();
                         set.spawn(async move {
                             let mut number = u32::default();
                             while continuous.load(Ordering::Relaxed) && number < maximun {
-                                match eval_block(test.as_ref(), &mut context).await {
+                                match source.eval_block(&test, &mut context).await {
                                     Ok(_) => {}
                                     Err(error) => {
                                         println!("{error}");
@@ -147,11 +134,12 @@ pub async fn test(
             }
         }
         None => {
-            for (task, (name, test)) in tests.into_iter().enumerate() {
+            for (task, (name, test)) in source.tests.clone().into_iter().enumerate() {
                 let mut writer = writer(record.as_ref(), task as u32).await;
                 let mut context = context.to_owned();
+                let source = source.to_owned();
                 set.spawn(async move {
-                    match eval_block(test.as_ref(), &mut context).await {
+                    match &source.eval_block(test.as_ref(), &mut context).await {
                         Ok(_) => {}
                         Err(error) => {
                             println!("{error}");

@@ -18,7 +18,6 @@ use token::Token;
 use value::Value;
 
 pub use context::Context;
-pub use evaluator::eval_block;
 pub use parser::Parser;
 pub use stat::Stats;
 pub use syntax::Source;

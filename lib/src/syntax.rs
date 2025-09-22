@@ -114,9 +114,42 @@ impl Debug for Expr {
     }
 }
 
+#[derive(Default)]
 pub struct Source {
     pub exprs: Vec<Expr>,
     pub functions: HashMap<String, (Vec<String>, Vec<Expr>)>,
     pub requests: HashMap<String, (String, Vec<Expr>)>,
     pub tests: HashMap<String, Vec<Expr>>,
+}
+
+impl Source {
+    pub fn new() -> Self {
+        Self {
+            exprs: Vec::new(),
+            functions: HashMap::new(),
+            requests: HashMap::new(),
+            tests: HashMap::new(),
+        }
+    }
+
+    pub fn extend(&mut self, source: Self) -> usize {
+        let length = self.exprs.len();
+        self.exprs.extend(source.exprs);
+        self.functions.extend(source.functions);
+        self.requests.extend(source.requests);
+        self.tests.extend(source.tests);
+        length
+    }
+
+    pub fn function(&self, name: &str) -> Option<&(Vec<String>, Vec<Expr>)> {
+        self.functions.get(name)
+    }
+
+    pub fn request(&self, name: &str) -> Option<&(String, Vec<Expr>)> {
+        self.requests.get(name)
+    }
+
+    pub fn test(&self, name: &str) -> Option<&Vec<Expr>> {
+        self.tests.get(name)
+    }
 }

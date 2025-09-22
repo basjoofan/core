@@ -1,5 +1,6 @@
 mod command;
 use clap::{Parser, Subcommand};
+use lib::Source;
 use std::{path::PathBuf, time::Duration};
 
 #[derive(Parser)]
@@ -48,7 +49,7 @@ async fn main() {
     let interface = Interface::parse();
     match interface.command {
         Some(Commands::Eval { text }) => {
-            command::eval(text, None).await;
+            command::eval(text, &mut Source::new(), None).await;
         }
         Some(Commands::Test {
             name,

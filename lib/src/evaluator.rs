@@ -5,282 +5,298 @@ use crate::Context;
 use crate::Expr;
 use crate::Kind;
 use crate::Record;
+use crate::Source;
 use crate::Token;
 use crate::Value;
 use std::collections::HashMap;
 
-async fn eval_expr(expr: &Expr, context: &mut Context) -> Result<Value, String> {
-    match expr {
-        Expr::Integer(integer) => eval_integer_literal(integer),
-        Expr::Float(float) => eval_float_literal(float),
-        Expr::Boolean(boolean) => eval_boolean_literal(boolean),
-        Expr::String(string) => eval_string_literal(string),
-        Expr::Array(items) => Box::pin(eval_array_literal(items, context)).await,
-        Expr::Map(pairs) => Box::pin(eval_map_literal(pairs, context)).await,
-        Expr::Index(value, index) => Box::pin(eval_index_expr(value, index, context)).await,
-        Expr::Field(map, field) => Box::pin(eval_field_expr(map, field, context)).await,
-        Expr::Ident(ident) => eval_ident_expr(ident, context),
-        Expr::Let(name, expr) => Box::pin(eval_let_expr(name, expr, context)).await,
-        Expr::Unary(token, right) => Box::pin(eval_unary_expr(token, right, context)).await,
-        Expr::Binary(token, left, right) => Box::pin(eval_binary_expr(token, left, right, context)).await,
-        Expr::Paren(expr) => Box::pin(eval_expr(expr, context)).await,
-        Expr::If(condition, consequence, alternative) => Box::pin(eval_if_expr(condition, consequence, alternative, context)).await,
-        Expr::Call(name, arguments) => Box::pin(eval_call_expr(name, arguments, context)).await,
-        Expr::Send(name) => Box::pin(eval_send_expr(name, context)).await,
-    }
-}
-
-fn eval_integer_literal(integer: &i64) -> Result<Value, String> {
-    Ok(Value::Integer(*integer))
-}
-
-fn eval_float_literal(float: &f64) -> Result<Value, String> {
-    Ok(Value::Float(*float))
-}
-
-fn eval_boolean_literal(boolean: &bool) -> Result<Value, String> {
-    Ok(Value::Boolean(*boolean))
-}
-
-fn eval_string_literal(string: &String) -> Result<Value, String> {
-    Ok(Value::String(string.to_owned()))
-}
-
-async fn eval_array_literal(items: &[Expr], context: &mut Context) -> Result<Value, String> {
-    Ok(Value::Array(eval_list(items, context).await?))
-}
-
-async fn eval_map_literal(pairs: &Vec<(Expr, Expr)>, context: &mut Context) -> Result<Value, String> {
-    let mut map = HashMap::new();
-    for (key, value) in pairs {
-        let key = eval_expr(key, context).await?;
-        let value = eval_expr(value, context).await?;
-        map.insert(key.to_string(), value);
-    }
-    Ok(Value::Map(map))
-}
-
-async fn eval_index_expr(value: &Expr, index: &Expr, context: &mut Context) -> Result<Value, String> {
-    // TODO enhance indent expr get variable use reference
-    let value = eval_expr(value, context).await?;
-    let index = eval_expr(index, context).await?;
-    match (value, index) {
-        (Value::Array(mut items), Value::Integer(index)) => {
-            let index = index as usize;
-            if index < items.len() {
-                let item = items.remove(index);
-                Ok(item)
-            } else {
-                Ok(Value::Null)
+impl Source {
+    async fn eval_expr(&self, expr: &Expr, context: &mut Context) -> Result<Value, String> {
+        match expr {
+            Expr::Integer(integer) => self.eval_integer_literal(integer),
+            Expr::Float(float) => self.eval_float_literal(float),
+            Expr::Boolean(boolean) => self.eval_boolean_literal(boolean),
+            Expr::String(string) => self.eval_string_literal(string),
+            Expr::Array(items) => Box::pin(self.eval_array_literal(items, context)).await,
+            Expr::Map(pairs) => Box::pin(self.eval_map_literal(pairs, context)).await,
+            Expr::Index(value, index) => Box::pin(self.eval_index_expr(value, index, context)).await,
+            Expr::Field(map, field) => Box::pin(self.eval_field_expr(map, field, context)).await,
+            Expr::Ident(ident) => self.eval_ident_expr(ident, context),
+            Expr::Let(name, expr) => Box::pin(self.eval_let_expr(name, expr, context)).await,
+            Expr::Unary(token, right) => Box::pin(self.eval_unary_expr(token, right, context)).await,
+            Expr::Binary(token, left, right) => Box::pin(self.eval_binary_expr(token, left, right, context)).await,
+            Expr::Paren(expr) => Box::pin(self.eval_expr(expr, context)).await,
+            Expr::If(condition, consequence, alternative) => {
+                Box::pin(self.eval_if_expr(condition, consequence, alternative, context)).await
             }
+            Expr::Call(name, arguments) => Box::pin(self.eval_call_expr(name, arguments, context)).await,
+            Expr::Send(name) => Box::pin(self.eval_send_expr(name, context)).await,
         }
-        (Value::Map(mut pairs), key) => {
-            let element = pairs.remove(&key.to_string());
-            match element {
-                Some(element) => Ok(element),
-                None => Ok(Value::Null),
-            }
+    }
+
+    fn eval_integer_literal(&self, integer: &i64) -> Result<Value, String> {
+        Ok(Value::Integer(*integer))
+    }
+
+    fn eval_float_literal(&self, float: &f64) -> Result<Value, String> {
+        Ok(Value::Float(*float))
+    }
+
+    fn eval_boolean_literal(&self, boolean: &bool) -> Result<Value, String> {
+        Ok(Value::Boolean(*boolean))
+    }
+
+    fn eval_string_literal(&self, string: &String) -> Result<Value, String> {
+        Ok(Value::String(string.to_owned()))
+    }
+
+    async fn eval_array_literal(&self, items: &[Expr], context: &mut Context) -> Result<Value, String> {
+        Ok(Value::Array(self.eval_list(items, context).await?))
+    }
+
+    async fn eval_map_literal(&self, pairs: &Vec<(Expr, Expr)>, context: &mut Context) -> Result<Value, String> {
+        let mut map = HashMap::new();
+        for (key, value) in pairs {
+            let key = self.eval_expr(key, context).await?;
+            let value = self.eval_expr(value, context).await?;
+            map.insert(key.to_string(), value);
         }
-        (value, _) => Err(format!("index operator not support: {value:?}")),
+        Ok(Value::Map(map))
     }
-}
 
-async fn eval_field_expr(map: &Expr, field: &String, context: &mut Context) -> Result<Value, String> {
-    // TODO enhance indent expr get variable use reference
-    match eval_expr(map, context).await? {
-        Value::Map(mut pairs) => {
-            let value = pairs.remove(field);
-            Ok(match value {
-                Some(value) => value,
-                None => Value::Null,
-            })
-        }
-        map => Err(format!("field operator not support: {map:?}")),
-    }
-}
-
-fn eval_ident_expr(ident: &String, context: &mut Context) -> Result<Value, String> {
-    match context.get(ident) {
-        Some(value) => Ok(value.to_owned()),
-        None => Err(format!("ident: {ident} not found")),
-    }
-}
-
-async fn eval_let_expr(name: &String, expr: &Expr, context: &mut Context) -> Result<Value, String> {
-    let value = eval_expr(expr, context).await?;
-    context.set(name.to_owned(), value.to_owned());
-    Ok(value)
-}
-
-async fn eval_unary_expr(token: &Token, right: &Expr, context: &mut Context) -> Result<Value, String> {
-    let right = eval_expr(right, context).await?;
-    match (token.kind, right) {
-        (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => Ok(Value::Boolean(true)),
-        (Kind::Not, Value::Integer(integer)) => Ok(Value::Integer(!integer)),
-        (Kind::Not, _) => Ok(Value::Boolean(false)),
-        (Kind::Sub, Value::Integer(integer)) => Ok(Value::Integer(-integer)),
-        (Kind::Sub, Value::Float(float)) => Ok(Value::Float(-float)),
-        (_, right) => Err(format!("unknown operator: {token}{right:?}")),
-    }
-}
-
-async fn eval_binary_expr(token: &Token, left: &Expr, right: &Expr, context: &mut Context) -> Result<Value, String> {
-    match token.kind {
-        Kind::Add => eval_expr(left, context).await? + eval_expr(right, context).await?,
-        Kind::Sub => eval_expr(left, context).await? - eval_expr(right, context).await?,
-        Kind::Mul => eval_expr(left, context).await? * eval_expr(right, context).await?,
-        Kind::Div => eval_expr(left, context).await? / eval_expr(right, context).await?,
-        Kind::Rem => eval_expr(left, context).await? % eval_expr(right, context).await?,
-        Kind::Bx => eval_expr(left, context).await? ^ eval_expr(right, context).await?,
-        Kind::Bo => eval_expr(left, context).await? | eval_expr(right, context).await?,
-        Kind::Ba => eval_expr(left, context).await? & eval_expr(right, context).await?,
-        Kind::Sl => eval_expr(left, context).await? << eval_expr(right, context).await?,
-        Kind::Sr => eval_expr(left, context).await? >> eval_expr(right, context).await?,
-        Kind::Lo => match eval_expr(left, context).await? {
-            Value::Boolean(false) | Value::Null => eval_expr(right, context).await,
-            left => Ok(left),
-        },
-        Kind::La => match eval_expr(left, context).await? {
-            left @ (Value::Boolean(false) | Value::Null) => Ok(left),
-            _ => eval_expr(right, context).await,
-        },
-        Kind::Lt => Ok(Value::Boolean(eval_expr(left, context).await? < eval_expr(right, context).await?)),
-        Kind::Gt => Ok(Value::Boolean(eval_expr(left, context).await? > eval_expr(right, context).await?)),
-        Kind::Le => Ok(Value::Boolean(eval_expr(left, context).await? <= eval_expr(right, context).await?)),
-        Kind::Ge => Ok(Value::Boolean(eval_expr(left, context).await? >= eval_expr(right, context).await?)),
-        Kind::Eq => Ok(Value::Boolean(eval_expr(left, context).await? == eval_expr(right, context).await?)),
-        Kind::Ne => Ok(Value::Boolean(eval_expr(left, context).await? != eval_expr(right, context).await?)),
-        _ => Err(format!("not support operator: {left} {token} {right}")),
-    }
-}
-
-async fn eval_if_expr(condition: &Expr, consequence: &[Expr], alternative: &[Expr], context: &mut Context) -> Result<Value, String> {
-    let condition = eval_expr(condition, context).await?;
-    match condition {
-        Value::Boolean(false) | Value::Null => eval_block(alternative, context).await,
-        _ => eval_block(consequence, context).await,
-    }
-}
-
-async fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Result<Value, String> {
-    let arguments = eval_list(arguments, context).await?;
-    match context.function(name) {
-        Some((params, body)) => {
-            // TODO check params length
-            // TODO fix inner clone
-            let mut local = context.clone();
-            for (param, argument) in params.iter().zip(arguments.into_iter()) {
-                local.set(param.to_owned(), argument);
-            }
-            eval_block(body, &mut local).await
-        }
-        None => match name {
-            "println" => Ok(native::println(arguments)?),
-            "print" => Ok(native::print(arguments)?),
-            "format" => Ok(native::format(arguments)?),
-            "length" => Ok(native::length(arguments)?),
-            "append" => Ok(native::append(arguments)?),
-            _ => Err(format!("function {name} not found")),
-        },
-    }
-}
-
-async fn eval_send_expr(name: &str, context: &mut Context) -> Result<Value, String> {
-    match context.request(name) {
-        Some((message, exprs)) => {
-            let name = name.to_string();
-            let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
-            let matches = regex.find_iter(message);
-            let mut ranges = Vec::new();
-            matches.for_each(|m| ranges.push((m.as_str()[1..m.as_str().len() - 1].trim(), m.range())));
-            ranges.reverse();
-            let mut message = message.to_string();
-            for (variable, range) in ranges.into_iter() {
-                let variable = match context.get(variable) {
-                    Some(variable) => variable.to_string(),
-                    None => Value::Null.to_string(),
-                };
-                message.replace_range(range, variable.as_str());
-            }
-            let client = http::Client::default();
-            let (request, response, time, error) = client.send(message.as_str()).await;
-            let map = response.to_map();
-            let mut local = Context::from(map);
-            let mut asserts = Vec::new();
-            for assert in exprs {
-                if let Expr::Binary(token, left, right) = assert {
-                    let expr = format!("{left} {token} {right}");
-                    let left = eval_expr(left, &mut local).await.unwrap_or(Value::Null);
-                    let right = eval_expr(right, &mut local).await.unwrap_or(Value::Null);
-                    if let Some(result) = match token.kind {
-                        Kind::Lt => Some(left < right),
-                        Kind::Gt => Some(left > right),
-                        Kind::Le => Some(left <= right),
-                        Kind::Ge => Some(left >= right),
-                        Kind::Eq => Some(left == right),
-                        Kind::Ne => Some(left != right),
-                        _ => None,
-                    } {
-                        asserts.push(Assert {
-                            expr,
-                            left: left.to_string(),
-                            compare: token.to_string(),
-                            right: right.to_string(),
-                            result,
-                        });
-                    };
+    async fn eval_index_expr(&self, value: &Expr, index: &Expr, context: &mut Context) -> Result<Value, String> {
+        // TODO enhance indent expr get variable use reference
+        let value = self.eval_expr(value, context).await?;
+        let index = self.eval_expr(index, context).await?;
+        match (value, index) {
+            (Value::Array(mut items), Value::Integer(index)) => {
+                let index = index as usize;
+                if index < items.len() {
+                    let item = items.remove(index);
+                    Ok(item)
+                } else {
+                    Ok(Value::Null)
                 }
             }
-            context.push(Record {
-                name,
-                request,
-                response,
-                time,
-                error,
-                asserts,
-            });
-            Ok(Value::Map(local.into_map()))
+            (Value::Map(mut pairs), key) => {
+                let element = pairs.remove(&key.to_string());
+                match element {
+                    Some(element) => Ok(element),
+                    None => Ok(Value::Null),
+                }
+            }
+            (value, _) => Err(format!("index operator not support: {value:?}")),
         }
-        None => Err(format!("request {name} not found")),
     }
-}
 
-pub async fn eval_block(exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
-    let mut result = Value::Null;
-    for expr in exprs {
-        result = eval_expr(expr, context).await?;
+    async fn eval_field_expr(&self, map: &Expr, field: &String, context: &mut Context) -> Result<Value, String> {
+        // TODO enhance indent expr get variable use reference
+        match self.eval_expr(map, context).await? {
+            Value::Map(mut pairs) => {
+                let value = pairs.remove(field);
+                Ok(match value {
+                    Some(value) => value,
+                    None => Value::Null,
+                })
+            }
+            map => Err(format!("field operator not support: {map:?}")),
+        }
     }
-    Ok(result)
-}
 
-async fn eval_list(items: &[Expr], context: &mut Context) -> Result<Vec<Value>, String> {
-    let mut values = Vec::with_capacity(items.len());
-    for item in items {
-        values.push(eval_expr(item, context).await?);
+    fn eval_ident_expr(&self, ident: &String, context: &mut Context) -> Result<Value, String> {
+        match context.get(ident) {
+            Some(value) => Ok(value.to_owned()),
+            None => Err(format!("ident: {ident} not found")),
+        }
     }
-    Ok(values)
+
+    async fn eval_let_expr(&self, name: &String, expr: &Expr, context: &mut Context) -> Result<Value, String> {
+        let value = self.eval_expr(expr, context).await?;
+        context.set(name.to_owned(), value.to_owned());
+        Ok(value)
+    }
+
+    async fn eval_unary_expr(&self, token: &Token, right: &Expr, context: &mut Context) -> Result<Value, String> {
+        let right = self.eval_expr(right, context).await?;
+        match (token.kind, right) {
+            (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => Ok(Value::Boolean(true)),
+            (Kind::Not, Value::Integer(integer)) => Ok(Value::Integer(!integer)),
+            (Kind::Not, _) => Ok(Value::Boolean(false)),
+            (Kind::Sub, Value::Integer(integer)) => Ok(Value::Integer(-integer)),
+            (Kind::Sub, Value::Float(float)) => Ok(Value::Float(-float)),
+            (_, right) => Err(format!("unknown operator: {token}{right:?}")),
+        }
+    }
+
+    async fn eval_binary_expr(&self, token: &Token, left: &Expr, right: &Expr, context: &mut Context) -> Result<Value, String> {
+        match token.kind {
+            Kind::Add => self.eval_expr(left, context).await? + self.eval_expr(right, context).await?,
+            Kind::Sub => self.eval_expr(left, context).await? - self.eval_expr(right, context).await?,
+            Kind::Mul => self.eval_expr(left, context).await? * self.eval_expr(right, context).await?,
+            Kind::Div => self.eval_expr(left, context).await? / self.eval_expr(right, context).await?,
+            Kind::Rem => self.eval_expr(left, context).await? % self.eval_expr(right, context).await?,
+            Kind::Bx => self.eval_expr(left, context).await? ^ self.eval_expr(right, context).await?,
+            Kind::Bo => self.eval_expr(left, context).await? | self.eval_expr(right, context).await?,
+            Kind::Ba => self.eval_expr(left, context).await? & self.eval_expr(right, context).await?,
+            Kind::Sl => self.eval_expr(left, context).await? << self.eval_expr(right, context).await?,
+            Kind::Sr => self.eval_expr(left, context).await? >> self.eval_expr(right, context).await?,
+            Kind::Lo => match self.eval_expr(left, context).await? {
+                Value::Boolean(false) | Value::Null => self.eval_expr(right, context).await,
+                left => Ok(left),
+            },
+            Kind::La => match self.eval_expr(left, context).await? {
+                left @ (Value::Boolean(false) | Value::Null) => Ok(left),
+                _ => self.eval_expr(right, context).await,
+            },
+            Kind::Lt => Ok(Value::Boolean(
+                self.eval_expr(left, context).await? < self.eval_expr(right, context).await?,
+            )),
+            Kind::Gt => Ok(Value::Boolean(
+                self.eval_expr(left, context).await? > self.eval_expr(right, context).await?,
+            )),
+            Kind::Le => Ok(Value::Boolean(
+                self.eval_expr(left, context).await? <= self.eval_expr(right, context).await?,
+            )),
+            Kind::Ge => Ok(Value::Boolean(
+                self.eval_expr(left, context).await? >= self.eval_expr(right, context).await?,
+            )),
+            Kind::Eq => Ok(Value::Boolean(
+                self.eval_expr(left, context).await? == self.eval_expr(right, context).await?,
+            )),
+            Kind::Ne => Ok(Value::Boolean(
+                self.eval_expr(left, context).await? != self.eval_expr(right, context).await?,
+            )),
+            _ => Err(format!("not support operator: {left} {token} {right}")),
+        }
+    }
+
+    async fn eval_if_expr(
+        &self,
+        condition: &Expr,
+        consequence: &[Expr],
+        alternative: &[Expr],
+        context: &mut Context,
+    ) -> Result<Value, String> {
+        let condition = self.eval_expr(condition, context).await?;
+        match condition {
+            Value::Boolean(false) | Value::Null => self.eval_block(alternative, context).await,
+            _ => self.eval_block(consequence, context).await,
+        }
+    }
+
+    async fn eval_call_expr(&self, name: &str, arguments: &[Expr], context: &mut Context) -> Result<Value, String> {
+        let arguments = self.eval_list(arguments, context).await?;
+        match self.function(name) {
+            Some((params, body)) => {
+                // TODO check params length
+                // TODO fix inner clone
+                let mut local = context.clone();
+                for (param, argument) in params.iter().zip(arguments.into_iter()) {
+                    local.set(param.to_owned(), argument);
+                }
+                self.eval_block(body, &mut local).await
+            }
+            None => match name {
+                "println" => Ok(native::println(arguments)?),
+                "print" => Ok(native::print(arguments)?),
+                "format" => Ok(native::format(arguments)?),
+                "length" => Ok(native::length(arguments)?),
+                "append" => Ok(native::append(arguments)?),
+                _ => Err(format!("function {name} not found")),
+            },
+        }
+    }
+
+    async fn eval_send_expr(&self, name: &str, context: &mut Context) -> Result<Value, String> {
+        match self.request(name) {
+            Some((message, exprs)) => {
+                let name = name.to_string();
+                let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
+                let matches = regex.find_iter(message);
+                let mut ranges = Vec::new();
+                matches.for_each(|m| ranges.push((m.as_str()[1..m.as_str().len() - 1].trim(), m.range())));
+                ranges.reverse();
+                let mut message = message.to_string();
+                for (variable, range) in ranges.into_iter() {
+                    let variable = match context.get(variable) {
+                        Some(variable) => variable.to_string(),
+                        None => Value::Null.to_string(),
+                    };
+                    message.replace_range(range, variable.as_str());
+                }
+                let client = http::Client::default();
+                let (request, response, time, error) = client.send(message.as_str()).await;
+                let map = response.to_map();
+                let mut local = Context::from(map);
+                let mut asserts = Vec::new();
+                for assert in exprs {
+                    if let Expr::Binary(token, left, right) = assert {
+                        let expr = format!("{left} {token} {right}");
+                        let left = self.eval_expr(left, &mut local).await.unwrap_or(Value::Null);
+                        let right = self.eval_expr(right, &mut local).await.unwrap_or(Value::Null);
+                        if let Some(result) = match token.kind {
+                            Kind::Lt => Some(left < right),
+                            Kind::Gt => Some(left > right),
+                            Kind::Le => Some(left <= right),
+                            Kind::Ge => Some(left >= right),
+                            Kind::Eq => Some(left == right),
+                            Kind::Ne => Some(left != right),
+                            _ => None,
+                        } {
+                            asserts.push(Assert {
+                                expr,
+                                left: left.to_string(),
+                                compare: token.to_string(),
+                                right: right.to_string(),
+                                result,
+                            });
+                        };
+                    }
+                }
+                context.push(Record {
+                    name,
+                    request,
+                    response,
+                    time,
+                    error,
+                    asserts,
+                });
+                Ok(Value::Map(local.into_map()))
+            }
+            None => Err(format!("request {name} not found")),
+        }
+    }
+
+    pub async fn eval_block(&self, exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
+        let mut result = Value::Null;
+        for expr in exprs {
+            result = self.eval_expr(expr, context).await?;
+        }
+        Ok(result)
+    }
+
+    async fn eval_list(&self, items: &[Expr], context: &mut Context) -> Result<Vec<Value>, String> {
+        let mut values = Vec::with_capacity(items.len());
+        for item in items {
+            values.push(self.eval_expr(item, context).await?);
+        }
+        Ok(values)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::eval_block;
     use crate::Context;
     use crate::Parser;
-    use crate::Source;
     use crate::Value;
     use std::collections::HashMap;
 
     async fn run_eval_tests(tests: Vec<(&str, Value)>) {
         for (text, expect) in tests {
-            let Source {
-                exprs,
-                functions,
-                requests,
-                ..
-            } = Parser::new(text).parse().unwrap();
+            let source = Parser::new(text).parse().unwrap();
             let mut context = Context::new();
-            context.extend(functions, requests);
-            match eval_block(&exprs, &mut context).await {
+            let exprs = &source.exprs;
+            match source.eval_block(exprs, &mut context).await {
                 Ok(value) => {
                     println!("{exprs:?} => {value} = {expect}");
                     assert_eq!(value, expect);
