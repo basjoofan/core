@@ -29,7 +29,11 @@ async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
     assert!(output.status.success());
     assert_eq!(String::from_utf8(output.stdout)?, "2null\n");
     let mut command = new_command();
-    let output = command.arg("eval").arg(r#"let x = 1 + 1; print("{integer}", x);"#).output().await?;
+    let output = command
+        .arg("eval")
+        .arg(r#"fn add(x, y) { x + y; }; print("{integer}", add(1, 1));"#)
+        .output()
+        .await?;
     assert!(output.status.success());
     assert_eq!(String::from_utf8(output.stdout)?, "2null\n");
     let mut command = new_command();
@@ -54,13 +58,13 @@ async fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let file = temp.child("request.fan");
     let text = r#"
     let host = "localhost:8888";
-    request hello`
+    rq hello`
         GET http://{host}/hello
         Host: {host}
     `[status == 200];
 
     test call {
-        let response = hello();
+        let response = hello->;
         response.status
     }
     "#;

@@ -26,7 +26,15 @@ pub fn segment(text: &str) -> Vec<Token> {
                     }
                 }
                 '+' => (Kind::Add, String::from(char)),
-                '-' => (Kind::Sub, String::from(char)),
+                '-' => {
+                    if let Some(peek @ '>') = chars.peek() {
+                        let literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        (Kind::Arrow, literal)
+                    } else {
+                        (Kind::Sub, String::from(char))
+                    }
+                }
                 '*' => (Kind::Mul, String::from(char)),
                 '/' => (Kind::Div, String::from(char)),
                 '%' => (Kind::Rem, String::from(char)),
@@ -144,7 +152,8 @@ pub fn segment(text: &str) -> Vec<Token> {
                     match string.as_str() {
                         "true" => (Kind::True, string),
                         "false" => (Kind::False, string),
-                        "request" => (Kind::Request, string),
+                        "rq" => (Kind::Request, string),
+                        "fn" => (Kind::Function, string),
                         "let" => (Kind::Let, string),
                         "if" => (Kind::If, string),
                         "else" => (Kind::Else, string),
@@ -189,7 +198,7 @@ fn test_segment() {
             [1, 2];
             {"foo": "bar"};
             _a2
-            request get()`
+            rq request`
               GET http://example.com
               Host: example.com
             `[
@@ -198,7 +207,7 @@ fn test_segment() {
             ]
             left.field
             test expectStatusOk {
-                let response = get();
+                let response = request->;
                 response.status
             }
             1&0
@@ -225,7 +234,7 @@ fn test_segment() {
         (Kind::Let, "let"),
         (Kind::Ident, "add"),
         (Kind::Assign, "="),
-        (Kind::Ident, "fn"),
+        (Kind::Function, "fn"),
         (Kind::Lp, "("),
         (Kind::Ident, "x"),
         (Kind::Comma, ","),
@@ -300,10 +309,8 @@ fn test_segment() {
         (Kind::Rb, "}"),
         (Kind::Semi, ";"),
         (Kind::Ident, "_a2"),
-        (Kind::Request, "request"),
-        (Kind::Ident, "get"),
-        (Kind::Lp, "("),
-        (Kind::Rp, ")"),
+        (Kind::Request, "rq"),
+        (Kind::Ident, "request"),
         (
             Kind::Template,
             "\n              GET http://example.com\n              Host: example.com\n            ",
@@ -331,9 +338,8 @@ fn test_segment() {
         (Kind::Let, "let"),
         (Kind::Ident, "response"),
         (Kind::Assign, "="),
-        (Kind::Ident, "get"),
-        (Kind::Lp, "("),
-        (Kind::Rp, ")"),
+        (Kind::Ident, "request"),
+        (Kind::Arrow, "->"),
         (Kind::Semi, ";"),
         (Kind::Ident, "response"),
         (Kind::Dot, "."),

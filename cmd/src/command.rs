@@ -43,8 +43,13 @@ pub async fn repl() {
 pub async fn eval(text: String, context: Option<Context>) -> Context {
     let mut context = context.unwrap_or_default();
     match Parser::new(&text).parse() {
-        Ok(Source { exprs, requests, .. }) => {
-            context.extend(requests);
+        Ok(Source {
+            exprs,
+            functions,
+            requests,
+            ..
+        }) => {
+            context.extend(functions, requests);
             match eval_block(&exprs, &mut context).await {
                 Ok(value) => {
                     println!("{value}");
@@ -69,8 +74,13 @@ pub async fn test(
     let text = read_text(path.unwrap_or(current_dir().unwrap())).await;
     let mut context = Context::new();
     let mut tests = match Parser::new(&text).parse() {
-        Ok(Source { exprs, requests, tests }) => {
-            context.extend(requests);
+        Ok(Source {
+            exprs,
+            functions,
+            requests,
+            tests,
+        }) => {
+            context.extend(functions, requests);
             match eval_block(&exprs, &mut context).await {
                 Ok(_) => tests,
                 Err(error) => {

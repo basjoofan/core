@@ -12,6 +12,7 @@ use std::sync::Arc;
 #[derive(Default)]
 pub struct Context {
     inner: HashMap<String, Value>,
+    functions: Arc<HashMap<String, (Vec<String>, Vec<Expr>)>>,
     requests: Arc<HashMap<String, (String, Vec<Expr>)>>,
     records: Vec<Record>,
 }
@@ -20,6 +21,7 @@ impl Context {
     pub fn new() -> Self {
         Self {
             inner: HashMap::new(),
+            functions: Arc::new(HashMap::new()),
             requests: Arc::new(HashMap::new()),
             records: Vec::new(),
         }
@@ -28,14 +30,18 @@ impl Context {
     pub fn from(inner: HashMap<String, Value>) -> Self {
         Self {
             inner,
+            functions: Arc::new(HashMap::new()),
             requests: Arc::new(HashMap::new()),
             records: Vec::new(),
         }
     }
 
-    pub fn extend(&mut self, requests: HashMap<String, (String, Vec<Expr>)>) {
+    pub fn extend(&mut self, functions: HashMap<String, (Vec<String>, Vec<Expr>)>, requests: HashMap<String, (String, Vec<Expr>)>) {
         if let Some(inner) = Arc::get_mut(&mut self.requests) {
             inner.extend(requests);
+        }
+        if let Some(inner) = Arc::get_mut(&mut self.functions) {
+            inner.extend(functions);
         }
     }
 
@@ -45,6 +51,10 @@ impl Context {
 
     pub fn set(&mut self, key: String, value: Value) {
         self.inner.insert(key, value);
+    }
+
+    pub fn function(&self, name: &str) -> Option<&(Vec<String>, Vec<Expr>)> {
+        self.functions.get(name)
     }
 
     pub fn request(&self, name: &str) -> Option<&(String, Vec<Expr>)> {
@@ -68,6 +78,7 @@ impl Clone for Context {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            functions: self.functions.clone(),
             requests: self.requests.clone(),
             records: Vec::new(),
         }

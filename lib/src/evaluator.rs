@@ -26,6 +26,7 @@ async fn eval_expr(expr: &Expr, context: &mut Context) -> Result<Value, String> 
         Expr::Paren(expr) => Box::pin(eval_expr(expr, context)).await,
         Expr::If(condition, consequence, alternative) => Box::pin(eval_if_expr(condition, consequence, alternative, context)).await,
         Expr::Call(name, arguments) => Box::pin(eval_call_expr(name, arguments, context)).await,
+        Expr::Send(name) => Box::pin(eval_send_expr(name, context)).await,
     }
 }
 
@@ -163,6 +164,28 @@ async fn eval_if_expr(condition: &Expr, consequence: &[Expr], alternative: &[Exp
 
 async fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -> Result<Value, String> {
     let arguments = eval_list(arguments, context).await?;
+    match context.function(name) {
+        Some((params, body)) => {
+            // TODO check params length
+            // TODO fix inner clone
+            let mut local = context.clone();
+            for (param, argument) in params.iter().zip(arguments.into_iter()) {
+                local.set(param.to_owned(), argument);
+            }
+            eval_block(body, &mut local).await
+        }
+        None => match name {
+            "println" => Ok(native::println(arguments)?),
+            "print" => Ok(native::print(arguments)?),
+            "format" => Ok(native::format(arguments)?),
+            "length" => Ok(native::length(arguments)?),
+            "append" => Ok(native::append(arguments)?),
+            _ => Err(format!("function {name} not found")),
+        },
+    }
+}
+
+async fn eval_send_expr(name: &str, context: &mut Context) -> Result<Value, String> {
     match context.request(name) {
         Some((message, exprs)) => {
             let name = name.to_string();
@@ -218,14 +241,7 @@ async fn eval_call_expr(name: &str, arguments: &[Expr], context: &mut Context) -
             });
             Ok(Value::Map(local.into_map()))
         }
-        None => match name {
-            "println" => Ok(native::println(arguments)?),
-            "print" => Ok(native::print(arguments)?),
-            "format" => Ok(native::format(arguments)?),
-            "length" => Ok(native::length(arguments)?),
-            "append" => Ok(native::append(arguments)?),
-            _ => Err(format!("function {name} not found")),
-        },
+        None => Err(format!("request {name} not found")),
     }
 }
 
@@ -256,9 +272,14 @@ mod tests {
 
     async fn run_eval_tests(tests: Vec<(&str, Value)>) {
         for (text, expect) in tests {
-            let Source { exprs, requests, .. } = Parser::new(text).parse().unwrap();
+            let Source {
+                exprs,
+                functions,
+                requests,
+                ..
+            } = Parser::new(text).parse().unwrap();
             let mut context = Context::new();
-            context.extend(requests);
+            context.extend(functions, requests);
             match eval_block(&exprs, &mut context).await {
                 Ok(value) => {
                     println!("{exprs:?} => {value} = {expect}");
@@ -513,17 +534,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_call_function() {
+        let tests = vec![
+            ("fn identity(x) { x; }; identity(5);", Value::Integer(5)),
+            // ("fn identity(x) { return x; }; identity(5);", Value::Integer(5)),
+            ("fn double(x) { x * 2; }; double(5);", Value::Integer(10)),
+            ("fn add(x, y) { x + y; }; add(5, 5);", Value::Integer(10)),
+            ("fn add(x, y) { x + y; }; add(5 + 5, add(5, 5));", Value::Integer(20)),
+            ("fn one(x) { x + 1; } fn two(x) { one(one(x)); }; two(0);", Value::Integer(2)),
+            ("fn x(x) { x; }; x(5)", Value::Integer(5)),
+            ("fn len(x) { x; }; len(10)", Value::Integer(10)),
+        ];
+        run_eval_tests(tests).await;
+    }
+
+    #[tokio::test]
+    async fn test_call_fibonacci() {
+        let tests = vec![(
+            r#"
+    fn fibonacci(x) {
+        if (x == 0) {
+          0
+        } else {
+          if (x == 1) {
+            1
+          } else {
+            fibonacci(x - 1) + fibonacci(x -2)
+          }
+        }
+      };  
+    fibonacci(22);
+    "#,
+            Value::Integer(17711),
+        )];
+        run_eval_tests(tests).await;
+    }
+
+    #[test]
+    fn test_fibonacci() {
+        fn fibonacci(x: i64) -> i64 {
+            match x {
+                0 => 0,
+                1 => 1,
+                _ => fibonacci(x - 1) + fibonacci(x - 2),
+            }
+        }
+        println!("fibonacci(22):{}", fibonacci(22));
+    }
+
+    #[tokio::test]
     async fn test_request_literal() {
         crate::tests::start_server(30006).await;
         let tests = vec![(
             r#"
-            request get`
+            rq get`
                 GET http://{host}:30006/get
                 Host: {{host}}
                 Connection: close
             `[];
             let host = "127.0.0.1";
-            let response = get();
+            let response = get->;
             response.status
             "#,
             Value::Integer(200),
@@ -536,13 +606,13 @@ mod tests {
         crate::tests::start_server(30007).await;
         let tests = vec![(
             r#"
-            request get`
+            rq get`
                 GET http://{host}:30007/get
                 Host: {host}
                 Connection: close
             `[status == 200];
             let host = "127.0.0.1";
-            let response = get();
+            let response = get->;
             response.status
             "#,
             Value::Integer(200),

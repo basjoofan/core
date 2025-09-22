@@ -24,6 +24,7 @@ pub enum Expr {
     Paren(Box<Expr>),
     If(Box<Expr>, Vec<Expr>, Vec<Expr>),
     Call(String, Vec<Expr>),
+    Send(String),
     // TODO Break A break, with an optional label to break and an optional expr.
     // TODO For A for loop: for pat in expr { ... }.
     // TODO Range A range expr: 1..2, 1.., ..2, 1..=2, ..=2.
@@ -94,6 +95,7 @@ impl Display for Expr {
                 write!(f, " }}")
             }
             Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{}", ", ")),
+            Expr::Send(request) => write!(f, "{request}->"),
         }
     }
 }
@@ -114,6 +116,7 @@ impl Debug for Expr {
 
 pub struct Source {
     pub exprs: Vec<Expr>,
+    pub functions: HashMap<String, (Vec<String>, Vec<Expr>)>,
     pub requests: HashMap<String, (String, Vec<Expr>)>,
     pub tests: HashMap<String, Vec<Expr>>,
 }

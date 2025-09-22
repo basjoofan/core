@@ -43,6 +43,7 @@ pub enum Kind {
     Semi,   // ;
     Colon,  // :
     Dot,    // .
+    Arrow,  // ->
 
     // couple
     Lp, // (
@@ -53,11 +54,12 @@ pub enum Kind {
     Rs, // ]
 
     // keyword
-    Request, // request
-    Let,     // let
-    If,      // if
-    Else,    // else
-    Test,    // test
+    Request,  // rq
+    Function, // fn
+    Let,      // let
+    If,       // if
+    Else,     // else
+    Test,     // test
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,10 +94,10 @@ impl Token {
             Kind::Div => 10, // a / b
             Kind::Rem => 10, // a / b
             // Kind::Sub => 11,  -x unary minus + 2
-            Kind::Not => 11, // !x
-            Kind::Lp => 12,  // function()
-            Kind::Ls => 13,  // array[index]
-            Kind::Dot => 13, // left.field
+            Kind::Not => 11,              // !x
+            Kind::Lp | Kind::Arrow => 12, // function() request->
+            Kind::Ls => 13,               // array[index]
+            Kind::Dot => 13,              // left.field
             _ => 0,
         }
     }
