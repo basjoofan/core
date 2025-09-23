@@ -13,7 +13,7 @@ async fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
     command.stdin(Stdio::piped());
     let mut child = command.spawn().expect("Failed to spawn child process");
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all("let x = 1 + 1; println(\"{x}\", x);\n".as_bytes()).await?;
+        stdin.write_all("let x = 1 + 1; println(\"{x}\");\n".as_bytes()).await?;
         stdin.write_all("exit".as_bytes()).await?;
     }
     let output = child.wait_with_output().await?;
@@ -25,13 +25,9 @@ async fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::test]
 async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
     let mut command = new_command();
-    let output = command.arg("eval").arg(r#"print("{integer}", 1 + 1 )"#).output().await?;
-    assert!(output.status.success());
-    assert_eq!(String::from_utf8(output.stdout)?, "2null\n");
-    let mut command = new_command();
     let output = command
         .arg("eval")
-        .arg(r#"fn add(x, y) { x + y; }; print("{integer}", add(1, 1));"#)
+        .arg(r#"let integer = 1 + 1; print("{integer}")"#)
         .output()
         .await?;
     assert!(output.status.success());
@@ -39,11 +35,15 @@ async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
     let mut command = new_command();
     let output = command
         .arg("eval")
-        .arg(r#"println("{string}", "🍀 Hello Basjoofan!")"#)
+        .arg(r#"fn add(x, y) { x + y; }; let integer = add(1, 1); print("{integer}");"#)
         .output()
         .await?;
     assert!(output.status.success());
-    assert_eq!(String::from_utf8(output.stdout)?, "🍀 Hello Basjoofan!\nnull\n");
+    assert_eq!(String::from_utf8(output.stdout)?, "2null\n");
+    let mut command = new_command();
+    let output = command.arg("eval").arg(r#""🍀 Hello Basjoofan!""#).output().await?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8(output.stdout)?, "🍀 Hello Basjoofan!\n");
     Ok(())
 }
 

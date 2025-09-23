@@ -197,9 +197,9 @@ impl Source {
                 self.eval_block(body, &mut local).await
             }
             None => match name {
-                "println" => Ok(native::println(arguments)?),
-                "print" => Ok(native::print(arguments)?),
-                "format" => Ok(native::format(arguments)?),
+                "println" => Ok(native::println(arguments, context)?),
+                "print" => Ok(native::print(arguments, context)?),
+                "format" => Ok(native::format(arguments, context)?),
                 "length" => Ok(native::length(arguments)?),
                 "append" => Ok(native::append(arguments)?),
                 _ => Err(format!("function {name} not found")),
@@ -211,19 +211,7 @@ impl Source {
         match self.request(name) {
             Some((message, exprs)) => {
                 let name = name.to_string();
-                let regex = regex::Regex::new(r"\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}").unwrap();
-                let matches = regex.find_iter(message);
-                let mut ranges = Vec::new();
-                matches.for_each(|m| ranges.push((m.as_str()[1..m.as_str().len() - 1].trim(), m.range())));
-                ranges.reverse();
-                let mut message = message.to_string();
-                for (variable, range) in ranges.into_iter() {
-                    let variable = match context.get(variable) {
-                        Some(variable) => variable.to_string(),
-                        None => Value::Null.to_string(),
-                    };
-                    message.replace_range(range, variable.as_str());
-                }
+                let message = native::format_template(message, context);
                 let client = http::Client::default();
                 let (request, response, time, error) = client.send(message.as_str()).await;
                 let variables = response.to();
