@@ -162,7 +162,7 @@ impl Parser {
     }
 
     fn parse_current_string(&self) -> String {
-        self.current_token().literal.clone()
+        self.current_token().literal.to_owned()
     }
 
     fn parse_integer_literal(&self) -> Result<Expr, String> {
@@ -206,7 +206,7 @@ impl Parser {
     }
 
     fn parse_unary_expr(&mut self) -> Result<Expr, String> {
-        let token = self.current_token().clone();
+        let token = self.current_token().to_owned();
         let mut precedence = self.current_precedence();
         (token.kind == Kind::Sub).then(|| {
             precedence += 2;
@@ -217,7 +217,7 @@ impl Parser {
     }
 
     fn parse_binary_expr(&mut self, left: Expr) -> Result<Expr, String> {
-        let token = self.current_token().clone();
+        let token = self.current_token().to_owned();
         let precedence = self.current_precedence();
         self.next_token();
         let right = self.parse_expr(precedence)?;

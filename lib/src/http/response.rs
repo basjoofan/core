@@ -75,7 +75,7 @@ impl Response {
         })
     }
 
-    pub fn to_map(&self) -> HashMap<String, Value> {
+    pub fn to(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert(String::from("version"), Value::String(self.version.to_string()));
         map.insert(String::from("status"), Value::Integer(self.status as i64));
@@ -133,7 +133,7 @@ Access-Control-Allow-Credentials: true
             String::from("origin"),
             Value::String(String::from("122.9.3.166"))
         )]))),
-        response.to_map().get("json")
+        response.to().get("json")
     )
 }
 
@@ -163,6 +163,6 @@ Access-Control-Allow-Credentials: true
             String::from("origin"),
             Value::String(String::from("122.9.3.166"))
         )]))),
-        response.to_map().get("json")
+        response.to().get("json")
     )
 }

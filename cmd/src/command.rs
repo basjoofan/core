@@ -91,13 +91,13 @@ pub async fn test(
                     let continuous = Arc::new(AtomicBool::new(true));
                     let maximun = number / tasks;
                     for task in 0..tasks {
-                        let sender = sender.to_owned();
                         let continuous = continuous.to_owned();
+                        let sender = sender.to_owned();
+                        let mut writer = writer(record.as_ref(), task).await;
                         let name = name.to_owned();
                         let test = test.to_owned();
-                        let mut writer = writer(record.as_ref(), task).await;
-                        let mut context = context.to_owned();
                         let source = source.to_owned();
+                        let mut context = context.to_owned();
                         set.spawn(async move {
                             let mut number = u32::default();
                             while continuous.load(Ordering::Relaxed) && number < maximun {
@@ -121,7 +121,7 @@ pub async fn test(
                         });
                     }
                     // handle interrupt signal
-                    task::spawn(register(continuous.clone()));
+                    task::spawn(register(continuous.to_owned()));
                     // completed after task sleep duration
                     task::spawn(async move {
                         time::sleep(duration).await;
@@ -134,10 +134,12 @@ pub async fn test(
             }
         }
         None => {
-            for (task, (name, test)) in source.tests.clone().into_iter().enumerate() {
+            for (task, (name, test)) in source.tests.iter().enumerate() {
                 let mut writer = writer(record.as_ref(), task as u32).await;
-                let mut context = context.to_owned();
+                let name = name.to_owned();
+                let test = test.to_owned();
                 let source = source.to_owned();
+                let mut context = context.to_owned();
                 set.spawn(async move {
                     match &source.eval_block(test.as_ref(), &mut context).await {
                         Ok(_) => {}

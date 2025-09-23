@@ -37,7 +37,7 @@ impl Expr {
             Expr::Integer(integer) => Value::Integer(*integer),
             Expr::Float(float) => Value::Float(*float),
             Expr::Boolean(boolean) => Value::Boolean(*boolean),
-            Expr::String(string) => Value::String(string.clone()),
+            Expr::String(string) => Value::String(string.to_owned()),
             Expr::Array(items) => Value::Array(items.iter().map(|e| e.eval()).collect::<Vec<Value>>()),
             Expr::Map(pairs) => Value::Map(
                 pairs

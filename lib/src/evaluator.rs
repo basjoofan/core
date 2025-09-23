@@ -188,12 +188,12 @@ impl Source {
         let arguments = self.eval_list(arguments, context).await?;
         match self.function(name) {
             Some((params, body)) => {
-                // TODO check params length
-                // TODO fix inner clone
-                let mut local = context.clone();
-                for (param, argument) in params.iter().zip(arguments.into_iter()) {
-                    local.set(param.to_owned(), argument);
-                }
+                let variables = params
+                    .iter()
+                    .zip(arguments.into_iter())
+                    .map(|(p, a)| (p.to_owned(), a))
+                    .collect::<HashMap<String, Value>>();
+                let mut local = Context::from(variables);
                 self.eval_block(body, &mut local).await
             }
             None => match name {
@@ -226,8 +226,8 @@ impl Source {
                 }
                 let client = http::Client::default();
                 let (request, response, time, error) = client.send(message.as_str()).await;
-                let map = response.to_map();
-                let mut local = Context::from(map);
+                let variables = response.to();
+                let mut local = Context::from(variables);
                 let mut asserts = Vec::new();
                 for assert in exprs {
                     if let Expr::Binary(token, left, right) = assert {

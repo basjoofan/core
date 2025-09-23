@@ -1,64 +1,39 @@
 use crate::http::Request;
 use crate::http::Response;
 use crate::http::Time;
-use crate::Expr;
 use crate::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
-use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Context {
-    inner: HashMap<String, Value>,
-    functions: Arc<HashMap<String, (Vec<String>, Vec<Expr>)>>,
-    requests: Arc<HashMap<String, (String, Vec<Expr>)>>,
+    variables: HashMap<String, Value>,
     records: Vec<Record>,
 }
 
 impl Context {
     pub fn new() -> Self {
         Self {
-            inner: HashMap::new(),
-            functions: Arc::new(HashMap::new()),
-            requests: Arc::new(HashMap::new()),
+            variables: HashMap::new(),
             records: Vec::new(),
         }
     }
 
-    pub fn from(inner: HashMap<String, Value>) -> Self {
+    pub fn from(variables: HashMap<String, Value>) -> Self {
         Self {
-            inner,
-            functions: Arc::new(HashMap::new()),
-            requests: Arc::new(HashMap::new()),
+            variables,
             records: Vec::new(),
-        }
-    }
-
-    pub fn extend(&mut self, functions: HashMap<String, (Vec<String>, Vec<Expr>)>, requests: HashMap<String, (String, Vec<Expr>)>) {
-        if let Some(inner) = Arc::get_mut(&mut self.requests) {
-            inner.extend(requests);
-        }
-        if let Some(inner) = Arc::get_mut(&mut self.functions) {
-            inner.extend(functions);
         }
     }
 
     pub fn get(&self, key: &str) -> Option<&Value> {
-        self.inner.get(key)
+        self.variables.get(key)
     }
 
     pub fn set(&mut self, key: String, value: Value) {
-        self.inner.insert(key, value);
-    }
-
-    pub fn function(&self, name: &str) -> Option<&(Vec<String>, Vec<Expr>)> {
-        self.functions.get(name)
-    }
-
-    pub fn request(&self, name: &str) -> Option<&(String, Vec<Expr>)> {
-        self.requests.get(name)
+        self.variables.insert(key, value);
     }
 
     pub fn push(&mut self, record: Record) {
@@ -66,7 +41,7 @@ impl Context {
     }
 
     pub fn into_map(self) -> HashMap<String, Value> {
-        self.inner
+        self.variables
     }
 
     pub fn records(&mut self) -> Vec<Record> {
@@ -77,9 +52,7 @@ impl Context {
 impl Clone for Context {
     fn clone(&self) -> Self {
         Self {
-            inner: self.inner.clone(),
-            functions: self.functions.clone(),
-            requests: self.requests.clone(),
+            variables: self.variables.to_owned(),
             records: Vec::new(),
         }
     }
