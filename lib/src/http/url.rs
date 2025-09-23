@@ -61,7 +61,10 @@ impl Default for Url {
 
 impl std::fmt::Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}://{}{}", self.scheme, self.host, self.path)
+        match (&self.scheme, &self.port) {
+            (Scheme::Http, 80) | (Scheme::Https, 443) => write!(f, "{}://{}{}", self.scheme, self.host, self.path),
+            _ => write!(f, "{}://{}:{}{}", self.scheme, self.host, self.port, self.path),
+        }
     }
 }
 

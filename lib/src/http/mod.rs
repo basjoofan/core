@@ -11,14 +11,14 @@ mod url;
 use content::Content;
 use content::Part;
 use error::Error;
-use header::Headers;
 use stream::Stream;
-use url::Url;
 
 pub use client::Client;
+pub use header::Headers;
 pub use request::Request;
 pub use response::Response;
 pub use time::Time;
+pub use url::Url;
 
 macro_rules! http_type {
     ($type: ident $(,$name: ident => $value: literal)+) => {

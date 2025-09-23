@@ -1,199 +1,85 @@
 use crate::Record;
+use std::fmt::Write;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
-
-const META: [(&str, &str); 2] = [
-    (
-        "avro.schema",
-        r#"
-{
-    "name": "record",
-    "type": "record",
-    "fields": [
-        {"name": "name", "type": "string"},
-        {"name": "task", "type": "long"},
-        {"name": "number", "type": "long"},
-        {"name": "order", "type": "long"},
-        {"name": "time_start", "type": "long"},
-        {"name": "time_end", "type": "long"},
-        {"name": "time_total", "type": "long"},
-        {"name": "time_resolve", "type": "long"},
-        {"name": "time_connect", "type": "long"},
-        {"name": "time_write", "type": "long"},
-        {"name": "time_delay", "type": "long"},
-        {"name": "time_read", "type": "long"},
-        {"name": "request_name", "type": "string"},
-        {"name": "request_method", "type": "string"},
-        {"name": "request_url", "type": "string"},
-        {"name": "request_version", "type": "string"},
-        {"name": "request_headers", "type": {"type": "array", "items": {"type": "array", "items": "string"}}},
-        {"name": "request_body", "type": "string"},
-        {"name": "response_version", "type": "string"},
-        {"name": "response_status", "type": "int"},
-        {"name": "response_reason", "type": "string"},
-        {"name": "response_headers", "type": {"type": "array", "items": {"type": "array", "items": "string"}}},
-        {"name": "response_body", "type": "string"},
-        {"name": "asserts", "type":
-            {
-                "type": "array",
-                "items": {
-                    "name": "assert",
-                    "type": "record",
-                    "fields": [
-                        {"name": "expr", "type": "string"},
-                        {"name": "left", "type": "string"},
-                        {"name": "compare", "type": "string"},
-                        {"name": "right", "type": "string"},
-                        {"name": "result", "type": "boolean"}
-                    ]
-                }
-            }
-        },
-        {"name": "error", "type": "string"}
-    ]
-    }
-"#,
-    ),
-    ("avro.codec", "null"),
-];
-const MAGIC: &[u8; 4] = b"Obj\x01";
-const MARKER: &[u8; 16] = b"afilesyncmarker\x02";
 
 pub struct Writer<W> {
     w: W,
 }
 
 impl<W: AsyncWrite + Unpin> Writer<W> {
-    pub async fn new(mut w: W) -> Self {
-        let _ = w.write(&header()).await;
+    pub fn new(w: W) -> Self {
         Writer { w }
     }
 
     pub async fn write(&mut self, records: &[Record], name: &str, task: u32, number: u32) {
-        let mut data = Vec::new();
+        let mut buffer = String::new();
         for (order, record) in records.iter().enumerate() {
-            encode_bytes(name.as_bytes(), &mut data);
-            encode_long(task as i64, &mut data);
-            encode_long(number as i64, &mut data);
-            encode_long(order as i64, &mut data);
-            encode_long(record.time.start.as_nanos() as i64, &mut data);
-            encode_long(record.time.end.as_nanos() as i64, &mut data);
-            encode_long(record.time.total.as_nanos() as i64, &mut data);
-            encode_long(record.time.resolve.as_nanos() as i64, &mut data);
-            encode_long(record.time.connect.as_nanos() as i64, &mut data);
-            encode_long(record.time.write.as_nanos() as i64, &mut data);
-            encode_long(record.time.delay.as_nanos() as i64, &mut data);
-            encode_long(record.time.read.as_nanos() as i64, &mut data);
-            encode_bytes(record.name.as_bytes(), &mut data);
-            encode_bytes(record.request.method.as_ref(), &mut data);
-            encode_bytes(record.request.url.to_string().as_bytes(), &mut data);
-            encode_bytes(record.request.version.as_ref(), &mut data);
-            encode_long(record.request.headers.len() as i64, &mut data);
-            for header in record.request.headers.iter() {
-                encode_long(2, &mut data);
-                encode_bytes(header.name.as_bytes(), &mut data);
-                encode_bytes(header.value.as_bytes(), &mut data);
+            let _ = write!(buffer, r#"{{"#);
+            let _ = write!(buffer, r#""name": "{}", "#, name);
+            let _ = write!(buffer, r#""task": {}, "#, task);
+            let _ = write!(buffer, r#""number": {}, "#, number);
+            let _ = write!(buffer, r#""order": {}, "#, order);
+            let _ = write!(buffer, r#""time_start": {}, "#, record.time.start.as_nanos());
+            let _ = write!(buffer, r#""time_end": {}, "#, record.time.end.as_nanos());
+            let _ = write!(buffer, r#""time_total": {}, "#, record.time.total.as_nanos());
+            let _ = write!(buffer, r#""time_resolve": {}, "#, record.time.resolve.as_nanos());
+            let _ = write!(buffer, r#""time_connect": {}, "#, record.time.connect.as_nanos());
+            let _ = write!(buffer, r#""time_write": {}, "#, record.time.write.as_nanos());
+            let _ = write!(buffer, r#""time_delay": {}, "#, record.time.delay.as_nanos());
+            let _ = write!(buffer, r#""time_read": {}, "#, record.time.read.as_nanos());
+            let _ = write!(buffer, r#""request_name": "{}", "#, record.name);
+            let _ = write!(buffer, r#""request_method": "{}", "#, record.request.method);
+            let _ = write!(buffer, r#""request_url": "{}", "#, record.request.url);
+            let _ = write!(buffer, r#""request_version": "{}", "#, record.request.version);
+            let _ = write!(buffer, r#""request_headers": ["#);
+            let mut headers = record.request.headers.iter().peekable();
+            while let Some(header) = headers.next() {
+                let _ = write!(buffer, r#"["{}", "{}"]"#, header.name, header.value);
+                if headers.peek().is_some() {
+                    let _ = write!(buffer, r#", "#);
+                }
             }
-            encode_bytes(record.request.body.as_bytes(), &mut data);
-            encode_bytes(record.response.version.as_bytes(), &mut data);
-            encode_long(record.response.status as i64, &mut data);
-            encode_bytes(record.response.reason.as_bytes(), &mut data);
-            encode_long(record.response.headers.len() as i64, &mut data);
-            for header in record.response.headers.iter() {
-                encode_long(2, &mut data);
-                encode_bytes(header.name.as_bytes(), &mut data);
-                encode_bytes(header.value.as_bytes(), &mut data);
+            let _ = write!(buffer, r#"], "#);
+            let _ = write!(buffer, r#""request_body": "{}", "#, record.request.body);
+            let _ = write!(buffer, r#""response_version": "{}", "#, record.response.version);
+            let _ = write!(buffer, r#""response_status": {}, "#, record.response.status);
+            let _ = write!(buffer, r#""response_reason": "{}", "#, record.response.reason);
+            let _ = write!(buffer, r#""response_headers": ["#);
+            let mut headers = record.response.headers.iter().peekable();
+            while let Some(header) = headers.next() {
+                let _ = write!(buffer, r#"["{}", "{}"]"#, header.name, header.value);
+                if headers.peek().is_some() {
+                    let _ = write!(buffer, r#", "#);
+                }
             }
-            encode_bytes(record.response.body.as_bytes(), &mut data);
-            encode_long(record.asserts.len() as i64, &mut data);
-            for assert in record.asserts.iter() {
-                encode_bytes(assert.expr.as_bytes(), &mut data);
-                encode_bytes(assert.left.as_bytes(), &mut data);
-                encode_bytes(assert.compare.as_bytes(), &mut data);
-                encode_bytes(assert.right.as_bytes(), &mut data);
-                encode_bool(assert.result, &mut data);
+            let _ = write!(buffer, r#"], "#);
+            let _ = write!(buffer, r#""response_body": "{}", "#, record.response.body);
+            let _ = write!(buffer, r#""asserts": ["#);
+            let mut asserts = record.asserts.iter().peekable();
+            while let Some(assert) = asserts.next() {
+                let _ = write!(buffer, r#"{{"#);
+                let _ = write!(buffer, r#""expr": "{}", "#, assert.expr);
+                let _ = write!(buffer, r#""left": "{}", "#, assert.left);
+                let _ = write!(buffer, r#""compare": "{}", "#, assert.compare);
+                let _ = write!(buffer, r#""right": "{}", "#, assert.right);
+                let _ = write!(buffer, r#""result": {}"#, assert.result);
+                let _ = write!(buffer, r#"}},"#);
+                if asserts.peek().is_some() {
+                    let _ = write!(buffer, r#", "#);
+                }
             }
-            encode_bytes(record.error.as_bytes(), &mut data);
+            let _ = write!(buffer, r#"], "#);
+            let _ = writeln!(buffer, r#""error": "{}"}}"#, record.error);
         }
-        let mut buffer = Vec::new();
-        encode_long(records.len() as i64, &mut buffer);
-        encode_long(data.len() as i64, &mut buffer);
-        buffer.extend_from_slice(&data);
-        buffer.extend_from_slice(MARKER);
-        let _ = self.w.write(&buffer).await;
+        let _ = self.w.write(buffer.as_bytes()).await;
         let _ = self.w.flush().await;
     }
 }
 
-fn header() -> Vec<u8> {
-    let mut header = Vec::new();
-    header.extend_from_slice(MAGIC);
-    encode_long(META.len() as i64, &mut header);
-    for (key, value) in META {
-        encode_bytes(key, &mut header);
-        encode_bytes(value, &mut header);
-    }
-    header.push(0u8);
-    header.extend_from_slice(MARKER);
-    header
-}
-
-fn encode_bool(b: bool, buffer: &mut Vec<u8>) {
-    buffer.push(u8::from(b));
-}
-
-fn encode_bytes<B: AsRef<[u8]> + ?Sized>(s: &B, buffer: &mut Vec<u8>) {
-    let bytes = s.as_ref();
-    encode_long(bytes.len() as i64, buffer);
-    buffer.extend_from_slice(bytes);
-}
-
-fn encode_long(i: i64, buffer: &mut Vec<u8>) {
-    encode_variable(((i << 1) ^ (i >> 63)) as u64, buffer)
-}
-
-fn encode_variable(mut z: u64, buffer: &mut Vec<u8>) {
-    loop {
-        if z <= 0x7F {
-            buffer.push((z & 0x7F) as u8);
-            break;
-        } else {
-            buffer.push((0x80 | (z & 0x7F)) as u8);
-            z >>= 7;
-        }
-    }
-}
-
-#[test]
-fn test_encode_long() {
-    let mut buffer = Vec::new();
-    encode_long(27, &mut buffer);
-    assert_eq!(buffer, b"\x36");
-}
-
-#[test]
-fn test_encode_bytes() {
-    let mut buffer = Vec::new();
-    encode_bytes("foo", &mut buffer);
-    assert_eq!(buffer, b"\x06\x66\x6f\x6f");
-}
-
-#[test]
-fn test_encode_record() {
-    let mut data = Vec::new();
-    encode_long(27, &mut data);
-    encode_bytes("foo", &mut data);
-    let mut buffer = Vec::new();
-    encode_long(1, &mut buffer);
-    encode_long(data.len() as i64, &mut buffer);
-    buffer.extend_from_slice(&data);
-    println!("{buffer:?}");
-    assert_eq!(buffer, b"\x02\x0a\x36\x06\x66\x6f\x6f");
-}
-
 #[tokio::test]
 async fn test_writer() {
-    let mut writer = Writer::new(Vec::new()).await;
+    let mut writer = Writer::new(Vec::new());
     let record = Record {
         name: "test".to_string(),
         time: crate::http::Time::default(),
@@ -204,9 +90,56 @@ async fn test_writer() {
     };
     writer.write(&vec![record], "test", 0, 0).await;
     let encoded = writer.w;
-    let reader = apache_avro::Reader::new(std::io::Cursor::new(encoded)).unwrap();
-    println!("schema:{:?}", reader.reader_schema());
-    for value in reader {
-        println!("{:?}", value.unwrap());
-    }
+    print!("{}", String::from_utf8_lossy(&encoded));
+    let record = serde_json::from_slice::<serde_json::Value>(&encoded).unwrap();
+    println!("{:?}", record);
+    assert_eq!(record["name"].as_str(), Some("test"));
+    assert_eq!(record["request_headers"].as_array().unwrap().len(), 0);
+
+    let mut writer = Writer::new(Vec::new());
+    let mut request_headers = crate::http::Headers::default();
+    request_headers.insert(String::from("a"), String::from("b"));
+    request_headers.insert(String::from("a"), String::from("c"));
+    let mut response_headers = crate::http::Headers::default();
+    response_headers.insert(String::from("d"), String::from("e"));
+    response_headers.insert(String::from("d"), String::from("f"));
+    response_headers.insert(String::from("g"), String::from("h"));
+    let record = Record {
+        name: "test".to_string(),
+        time: crate::http::Time::default(),
+        request: crate::http::Request {
+            method: crate::http::Method::Get,
+            url: crate::http::Url::from("http://localhost:8080"),
+            version: crate::http::Version::Http11,
+            headers: request_headers,
+            body: String::default(),
+        },
+        response: crate::http::Response {
+            version: String::from("HTTP/1.1"),
+            status: 200,
+            reason: String::from("OK"),
+            headers: response_headers,
+            body: String::default(),
+        },
+        asserts: Vec::new(),
+        error: String::default(),
+    };
+    writer.write(&vec![record], "test", 0, 0).await;
+    let encoded = writer.w;
+    print!("{}", String::from_utf8_lossy(&encoded));
+    let record = serde_json::from_slice::<serde_json::Value>(&encoded).unwrap();
+    println!("{:?}", record);
+    assert_eq!(record["name"].as_str(), Some("test"));
+    assert_eq!(record["request_headers"].as_array().unwrap().len(), 2);
+    assert_eq!(record["request_headers"][0][0].as_str(), Some("a"));
+    assert_eq!(record["request_headers"][0][1].as_str(), Some("b"));
+    assert_eq!(record["request_headers"][1][0].as_str(), Some("a"));
+    assert_eq!(record["request_headers"][1][1].as_str(), Some("c"));
+    assert_eq!(record["response_headers"].as_array().unwrap().len(), 3);
+    assert_eq!(record["response_headers"][0][0].as_str(), Some("d"));
+    assert_eq!(record["response_headers"][0][1].as_str(), Some("e"));
+    assert_eq!(record["response_headers"][1][0].as_str(), Some("d"));
+    assert_eq!(record["response_headers"][1][1].as_str(), Some("f"));
+    assert_eq!(record["response_headers"][2][0].as_str(), Some("g"));
+    assert_eq!(record["response_headers"][2][1].as_str(), Some("h"));
 }

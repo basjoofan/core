@@ -203,7 +203,7 @@ async fn writer(path: Option<&PathBuf>, task: u32) -> Option<Writer<File>> {
                 Err(error) => panic!("Create file {display} error: {error:?}"),
                 Ok(file) => file,
             };
-            Some(Writer::new(file).await)
+            Some(Writer::new(file))
         }
         None => None,
     }

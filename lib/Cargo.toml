@@ -19,7 +19,6 @@ rand = { version = "0.9.2", default-features = false, features = ["thread_rng"] 
 #uuid = { version = "1.18.1", default-features = false, features = ["v7"] }
 
 [dev-dependencies]
-apache-avro = "0.20.0"
 tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "io-std"] }
 axum = { version = "0.8.4", features = ["multipart"] }
 serde_json = "1.0"
