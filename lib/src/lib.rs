@@ -8,7 +8,6 @@ mod stat;
 mod syntax;
 mod token;
 mod value;
-mod writer;
 
 use context::Assert;
 use context::Record;
@@ -21,8 +20,13 @@ pub use context::Context;
 pub use parser::Parser;
 pub use stat::Stats;
 pub use syntax::Source;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod writer;
+#[cfg(not(target_arch = "wasm32"))]
 pub use writer::Writer;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 pub mod tests {
     use axum::extract::Form;

@@ -1,28 +1,15 @@
+use super::super::Headers;
+use super::super::Method;
+use super::super::Request;
+use super::super::Url;
+use super::super::Version;
 use super::Content;
-use super::Headers;
-use super::Method;
 use super::Part;
-use super::Url;
-use super::Version;
 use rand::Rng;
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
-
-#[derive(Default, Debug)]
-pub struct Request {
-    /// The request's method
-    pub method: Method,
-    /// The request's url
-    pub url: Url,
-    /// The request's version
-    pub version: Version,
-    /// The request's headers
-    pub headers: Headers,
-    /// The request's body
-    pub body: String,
-}
 
 impl Request {
     /// Converts a message to an http request.

@@ -1,27 +1,10 @@
-use super::Headers;
+use super::super::Headers;
+use super::super::Response;
 use super::Stream;
-use crate::Parser;
-use crate::Source;
-use crate::Value;
-use std::collections::HashMap;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncReadExt;
 use tokio::io::BufReader;
 use tokio::io::ReadHalf;
-
-#[derive(Default, Debug)]
-pub struct Response {
-    /// The response's version
-    pub version: String,
-    /// The response's status
-    pub status: u16,
-    /// The response's reason
-    pub reason: String,
-    /// The response's headers
-    pub headers: Headers,
-    /// The response's body
-    pub body: String,
-}
 
 impl Response {
     /// Converts a stream to an http response.
@@ -74,30 +57,6 @@ impl Response {
             body,
         })
     }
-
-    pub fn to(&self) -> HashMap<String, Value> {
-        let mut map = HashMap::new();
-        map.insert(String::from("version"), Value::String(self.version.to_string()));
-        map.insert(String::from("status"), Value::Integer(self.status as i64));
-        map.insert(String::from("reason"), Value::String(self.reason.to_string()));
-        let mut headers: HashMap<String, Value> = HashMap::new();
-        for header in self.headers.iter() {
-            match headers.get_mut(&header.name) {
-                Some(Value::Array(array)) => array.push(Value::String(header.value.to_string())),
-                _ => {
-                    headers.insert(header.name.to_string(), Value::Array(vec![Value::String(header.value.to_string())]));
-                }
-            }
-        }
-        map.insert(String::from("headers"), Value::Map(headers));
-        map.insert(String::from("body"), Value::String(self.body.to_string()));
-        if let Ok(Source { exprs, .. }) = Parser::new(&self.body).parse() {
-            if let Some(expr) = exprs.first() {
-                map.insert(String::from("json"), expr.eval());
-            }
-        }
-        map
-    }
 }
 
 fn parse<T: std::str::FromStr + std::default::Default>(str: Option<&str>) -> T {
@@ -129,11 +88,11 @@ Access-Control-Allow-Credentials: true
     assert_eq!(7, response.headers.len());
     assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
     assert_eq!(
-        Some(&Value::Map(HashMap::from_iter(vec![(
+        Some(&crate::Value::Map(std::collections::HashMap::from_iter(vec![(
             String::from("origin"),
-            Value::String(String::from("122.9.3.166"))
+            crate::Value::String(String::from("122.9.3.166"))
         )]))),
-        response.to().get("json")
+        response.to_map().get("json")
     )
 }
 
@@ -159,10 +118,10 @@ Access-Control-Allow-Credentials: true
     assert_eq!(7, response.headers.len());
     assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
     assert_eq!(
-        Some(&Value::Map(HashMap::from_iter(vec![(
+        Some(&crate::Value::Map(std::collections::HashMap::from_iter(vec![(
             String::from("origin"),
-            Value::String(String::from("122.9.3.166"))
+            crate::Value::String(String::from("122.9.3.166"))
         )]))),
-        response.to().get("json")
+        response.to_map().get("json")
     )
 }

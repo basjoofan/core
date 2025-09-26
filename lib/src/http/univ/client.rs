@@ -1,24 +1,12 @@
-use super::Request;
-use super::Response;
-use super::Stream;
+use super::super::Client;
+use super::super::Request;
+use super::super::Response;
 use super::Time;
-use std::time::Duration;
+use super::Stream;
 use std::time::Instant;
 use std::time::SystemTime;
 use tokio::io::split;
 
-pub struct Client {
-    connect_tiomeout: Duration,
-    // TODO read_tiomeout: Option<Duration>,
-}
-
-impl Default for Client {
-    fn default() -> Self {
-        Self {
-            connect_tiomeout: Duration::from_secs(120),
-        }
-    }
-}
 
 impl Client {
     /// Send this request and wait for the record.
@@ -61,12 +49,12 @@ async fn test_send_message_get() {
     Host: 127.0.0.1"#;
     let client = Client::default();
     let (request, response, time, error) = client.send(message).await;
-    println!("error: {error}");
     assert_eq!("GET", request.method.as_ref());
     assert_eq!(200, response.status);
     assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
-    println!("{:?}", time.total);
-    println!("{:?}", response.body);
+    println!("error: {error}");
+    println!("time.total: {:?}", time.total);
+    println!("response.body:{:?}", response.body);
 }
 
 #[tokio::test]

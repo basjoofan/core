@@ -214,7 +214,7 @@ impl Source {
                 let message = native::format_template(message, context);
                 let client = http::Client::default();
                 let (request, response, time, error) = client.send(message.as_str()).await;
-                let variables = response.to();
+                let variables = response.to_map();
                 let mut local = Context::from(variables);
                 let mut asserts = Vec::new();
                 for assert in exprs {
@@ -272,6 +272,7 @@ impl Source {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use crate::Context;
