@@ -272,7 +272,7 @@ impl Source {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "univ")]
 #[cfg(test)]
 mod tests {
     use crate::Context;

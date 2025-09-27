@@ -21,12 +21,12 @@ pub use parser::Parser;
 pub use stat::Stats;
 pub use syntax::Source;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "univ")]
 mod writer;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "univ")]
 pub use writer::Writer;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "univ")]
 #[cfg(test)]
 pub mod tests {
     use axum::extract::Form;

@@ -84,7 +84,7 @@ mod tests {
     use wasm_bindgen_test::*;
     use web_sys::console;
 
-    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+    // wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
     async fn default_headers() {

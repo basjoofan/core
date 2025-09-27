@@ -1,6 +1,6 @@
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "univ")]
 mod univ;
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 mod wasm;
 
 mod error;
@@ -11,9 +11,9 @@ use error::Error;
 pub use header::Headers;
 pub use url::Url;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "univ")]
 pub use univ::Time;
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "wasm")]
 pub use wasm::Time;
 
 use crate::Parser;

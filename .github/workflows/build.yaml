@@ -47,8 +47,10 @@ jobs:
           rustup update stable
           rustup component add rustfmt rust-src clippy
           rustup target add ${{ matrix.target }}
-      - name: Run Tests
-        run: cargo test
+      - name: Run Tests (univ)
+        run: cargo test --features univ
+      - name: Run Tests (wasm)
+        run: wasm-pack test --node ./lib --features wasm
       - name: Clippy Check
         run: cargo clippy --all-targets
       - name: Format Check
