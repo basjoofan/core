@@ -9,7 +9,9 @@ use js_sys::Promise;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::Request as WebRequest;
+use web_sys::RequestCache;
 use web_sys::RequestInit;
+use web_sys::RequestMode;
 use web_sys::Response as WebResponse;
 
 impl Client {
@@ -34,12 +36,14 @@ extern "C" {
 }
 
 async fn fetch(request: &Request, content: Option<JsValue>) -> Result<(Response, Time), JsValue> {
-    let opts = RequestInit::new();
-    opts.set_method(request.method.as_ref());
+    let init = RequestInit::new();
+    init.set_mode(RequestMode::Cors);
+    init.set_cache(RequestCache::NoStore);
+    init.set_method(request.method.as_ref());
     if let Some(content) = content {
-        opts.set_body(&content);
+        init.set_body(&content);
     }
-    let web_request = WebRequest::new_with_str_and_init(request.url.to_string().as_str(), &opts)?;
+    let web_request = WebRequest::new_with_str_and_init(request.url.to_string().as_str(), &init)?;
     for header in request.headers.iter() {
         web_request.headers().set(&header.name, &header.value)?;
     }
