@@ -12,6 +12,7 @@ use web_sys::Request as WebRequest;
 use web_sys::RequestCache;
 use web_sys::RequestInit;
 use web_sys::RequestMode;
+use web_sys::RequestRedirect;
 use web_sys::Response as WebResponse;
 
 impl Client {
@@ -39,6 +40,7 @@ async fn fetch(request: &Request, content: Option<JsValue>) -> Result<(Response,
     let init = RequestInit::new();
     init.set_mode(RequestMode::Cors);
     init.set_cache(RequestCache::NoStore);
+    init.set_redirect(RequestRedirect::Error);
     init.set_method(request.method.as_ref());
     if let Some(content) = content {
         init.set_body(&content);
