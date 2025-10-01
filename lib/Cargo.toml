@@ -1,6 +1,6 @@
 [package]
 name = "lib"
-version = "0.0.1"
+version = "0.1.0"
 description = "basjoofan library"
 repository = "https://github.com/basjoofan/lib"
 license = "MIT OR Apache-2.0"
@@ -9,8 +9,8 @@ keywords = ["continuous", "test", "http"]
 edition = "2021"
 
 [features]
-default = []
-univ = ["tokio", "tokio-rustls", "rustls-platform-verifier", "rand", "form_urlencoded"]
+default = ["form_urlencoded"]
+univ = ["tokio", "tokio-rustls", "rustls-platform-verifier", "rand"]
 wasm = ["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys"]
 
 [dependencies]
@@ -33,6 +33,9 @@ web-sys = { version = "0.3.81", optional = true, features = [
     "RequestMode",
     "RequestCache",
     "RequestRedirect",
+    "Blob",
+    "BlobPropertyBag",
+    "FormData",
     "Response"
 ] }
 

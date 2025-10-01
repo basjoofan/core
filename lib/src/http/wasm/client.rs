@@ -6,7 +6,9 @@ use super::Time;
 use js_sys::Array;
 use js_sys::Date;
 use js_sys::Promise;
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::JsCast;
+use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::Request as WebRequest;
 use web_sys::RequestCache;
@@ -18,9 +20,16 @@ use web_sys::Response as WebResponse;
 impl Client {
     /// Send this request and wait for the record.
     pub async fn send(&self, message: &str) -> (Request, Response, Time, String) {
-        let (request, content) = match Request::from(message) {
+        let (request, content) = match Request::from(message).await {
             Ok((request, content)) => (request, content),
-            Err(error) => return (Request::default(), Response::default(), Time::default(), error.to_string()),
+            Err(error) => {
+                return (
+                    Request::default(),
+                    Response::default(),
+                    Time::default(),
+                    error.as_string().unwrap_or_default(),
+                )
+            }
         };
         let (response, time) = match fetch(&request, content).await {
             Ok(response) => response,
@@ -72,7 +81,7 @@ async fn fetch(request: &Request, content: Option<JsValue>) -> Result<(Response,
     time.total = end - start;
     Ok((
         Response {
-            version: String::from("HTTP"),
+            version: String::from("HTTP/1.1"),
             status: web_response.status(),
             reason: web_response.status_text(),
             headers,
@@ -92,18 +101,121 @@ mod tests {
 
     // wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
+    fn setup() {
+        let _ = js_sys::eval(
+            r#"
+        globalThis.readFileContent = async function(filePath) {
+            console.log(`Mock reading file in test: ${filePath}`);
+            return new TextEncoder().encode(`Test content for ${filePath}`);
+        };
+        "#,
+        );
+        let _ = js_sys::eval(
+            r#"
+        window.readFileContent = async function(filePath) {
+            console.log(`Mock reading file in test: ${filePath}`);
+            return new TextEncoder().encode(`Test content for ${filePath}`);
+        };
+        "#,
+        );
+    }
+
     #[wasm_bindgen_test]
-    async fn default_headers() {
+    async fn test_send_message_get() {
         let message = r#"
-        GET https://httpbin.org/get
-        Host: httpbin.org"#;
+        GET https://httpbingo.org/get
+        Host: httpbingo.org"#;
         let client = Client::default();
         let (request, response, time, error) = client.send(message).await;
-        assert_eq!("GET", request.method.as_ref());
-        assert_eq!(200, response.status);
-        // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
         console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
         console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        assert_eq!("GET", request.method.as_ref());
+        assert_eq!(200, response.status);
+        // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_send_message_post() {
+        let message = r#"
+        POST https://httpbingo.org/post
+        Host: httpbingo.org
+        Accept-Encoding: gzip, deflate"#;
+        let client = Client::default();
+        let (request, response, time, error) = client.send(message).await;
+        console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
+        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        assert_eq!("POST", request.method.as_ref());
+        assert_eq!(200, response.status);
+        // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_send_message_post_form() {
+        let message = r#"
+        POST https://httpbingo.org/post
+        Host: httpbingo.org
+        Content-Type: application/x-www-form-urlencoded
+
+        a: b"#;
+        let client = Client::default();
+        let (request, response, time, error) = client.send(message).await;
+        console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
+        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        assert_eq!("POST", request.method.as_ref());
+        assert_eq!(200, response.status);
+        // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_send_message_post_multipart() {
+        setup();
+        let message = r#"
+        POST https://httpbingo.org/post
+        Host: httpbingo.org
+        Content-Type: multipart/form-data
+
+        a: b
+        f: @src/text.txt"#;
+        let client = Client::default();
+        let (request, response, time, error) = client.send(message).await;
+        console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
+        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        assert_eq!("POST", request.method.as_ref());
+        assert_eq!(200, response.status);
+        // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_send_message_post_json() {
+        let message = r#"
+        POST https://httpbingo.org/post
+        Host: httpbingo.org
+        Content-Type: application/json
+
+        {
+            "name": "Gauss",
+            "age": 6,
+            "address": {
+                "street": "19 Hear Sea Street",
+                "city": "DaLian"
+            },
+            "phones": [
+                "+86 13098767890",
+                "+86 15876567890"
+            ]
+        }
+        "#;
+        let client = Client::default();
+        let (request, response, time, error) = client.send(message).await;
+        console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
+        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        assert_eq!("POST", request.method.as_ref());
+        assert_eq!(200, response.status);
+        // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
     }
 }

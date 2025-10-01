@@ -1,6 +1,6 @@
 [package]
 name = "cmd"
-version = "0.0.1"
+version = "0.1.0"
 description = "basjoofan command"
 repository = "https://github.com/basjoofan/lib"
 license = "MIT OR Apache-2.0"

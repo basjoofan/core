@@ -1,4 +1,4 @@
-let host = "httpbin.org";
+let host = "httpbingo.org";
 rq get`
     GET https://{host}/get
     Host: {host}

@@ -1,12 +1,11 @@
 use super::super::Client;
 use super::super::Request;
 use super::super::Response;
-use super::Time;
 use super::Stream;
+use super::Time;
 use std::time::Instant;
 use std::time::SystemTime;
 use tokio::io::split;
-
 
 impl Client {
     /// Send this request and wait for the record.
