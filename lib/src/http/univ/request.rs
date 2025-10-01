@@ -1,3 +1,4 @@
+use super::super::mime;
 use super::super::Headers;
 use super::super::Method;
 use super::super::Request;
@@ -71,7 +72,7 @@ impl Request {
                                     )
                                     .into_bytes(),
                                 );
-                                if let Some(mime) = mime_guess::from_path(path).first() {
+                                if let Some(mime) = mime::from_path(path) {
                                     bytes.append(&mut format!("Content-Type: {mime}\r\n\r\n").into_bytes());
                                 };
                                 length += bytes.len() + metadata.len() as usize + 2;

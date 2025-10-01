@@ -5,6 +5,7 @@ mod wasm;
 
 mod error;
 mod header;
+mod mime;
 mod url;
 
 use error::Error;
