@@ -10,6 +10,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
+use web_sys::AbortSignal;
 use web_sys::Request as WebRequest;
 use web_sys::RequestCache;
 use web_sys::RequestInit;
@@ -31,7 +32,7 @@ impl Client {
                 )
             }
         };
-        let (response, time) = match fetch(&request, content).await {
+        let (response, time) = match fetch(&request, content, self.fetch_timeout).await {
             Ok(response) => response,
             Err(error) => return (request, Response::default(), Time::default(), error.as_string().unwrap_or_default()),
         };
@@ -45,7 +46,7 @@ extern "C" {
     fn fetch_with_request(request: &WebRequest) -> Promise;
 }
 
-async fn fetch(request: &Request, content: Option<JsValue>) -> Result<(Response, Time), JsValue> {
+async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Result<(Response, Time), JsValue> {
     let init = RequestInit::new();
     init.set_mode(RequestMode::Cors);
     init.set_cache(RequestCache::NoStore);
@@ -54,6 +55,7 @@ async fn fetch(request: &Request, content: Option<JsValue>) -> Result<(Response,
     if let Some(content) = content {
         init.set_body(&content);
     }
+    init.set_signal(Some(&AbortSignal::timeout_with_u32(timeout)));
     let web_request = WebRequest::new_with_str_and_init(request.url.to_string().as_str(), &init)?;
     for header in request.headers.iter() {
         web_request.headers().set(&header.name, &header.value)?;

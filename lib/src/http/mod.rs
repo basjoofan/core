@@ -3,11 +3,13 @@ mod univ;
 #[cfg(feature = "wasm")]
 mod wasm;
 
+#[cfg(feature = "univ")]
 mod error;
 mod header;
 mod mime;
 mod url;
 
+#[cfg(feature = "univ")]
 use error::Error;
 pub use header::Headers;
 pub use url::Url;
@@ -21,17 +23,22 @@ use crate::Parser;
 use crate::Source;
 use crate::Value;
 use std::collections::HashMap;
-use std::time::Duration;
 
 pub struct Client {
-    connect_tiomeout: Duration,
-    // TODO read_tiomeout: Option<Duration>,
+    #[cfg(feature = "univ")]
+    connect_tiomeout: std::time::Duration,
+    // TODO read_tiomeout: Option<std::time::Duration>,
+    #[cfg(feature = "wasm")]
+    fetch_timeout: u32,
 }
 
 impl Default for Client {
     fn default() -> Self {
         Self {
-            connect_tiomeout: Duration::from_secs(120),
+            #[cfg(feature = "univ")]
+            connect_tiomeout: std::time::Duration::from_secs(120),
+            #[cfg(feature = "wasm")]
+            fetch_timeout: 300_000,
         }
     }
 }
