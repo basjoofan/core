@@ -7,17 +7,14 @@ mod wasm;
 mod error;
 mod header;
 mod mime;
+mod time;
 mod url;
 
 #[cfg(feature = "univ")]
 use error::Error;
 pub use header::Headers;
+pub use time::Time;
 pub use url::Url;
-
-#[cfg(feature = "univ")]
-pub use univ::Time;
-#[cfg(feature = "wasm")]
-pub use wasm::Time;
 
 use crate::Parser;
 use crate::Source;

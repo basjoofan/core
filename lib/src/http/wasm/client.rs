@@ -2,10 +2,11 @@ use super::super::Client;
 use super::super::Headers;
 use super::super::Request;
 use super::super::Response;
-use super::Time;
+use super::super::Time;
 use js_sys::Array;
 use js_sys::Date;
 use js_sys::Promise;
+use std::time::Duration;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -62,7 +63,6 @@ async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Res
     }
     let mut time = Time::default();
     let start = Date::now();
-    time.start = start;
     let resp_value = JsFuture::from(Promise::resolve(&fetch_with_request(&web_request))).await?;
     let web_response: WebResponse = resp_value.dyn_into()?;
     let body = JsFuture::from(web_response.text()?).await?.as_string().unwrap_or_default();
@@ -79,11 +79,12 @@ async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Res
         }
     }
     let end = Date::now();
-    time.end = end;
-    time.total = end - start;
+    time.end = Duration::from_millis(end as u64);
+    time.start = Duration::from_millis(start as u64);
+    time.total = time.end - time.start;
     Ok((
         Response {
-            version: String::from("HTTP/1.1"),
+            version: String::from("HTTP/?"),
             status: web_response.status(),
             reason: web_response.status_text(),
             headers,
@@ -96,7 +97,7 @@ async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Res
 #[cfg(test)]
 mod tests {
     use crate::http::Client;
-    use js_sys::Number;
+    use js_sys::BigInt;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
     use web_sys::console;
@@ -130,7 +131,10 @@ mod tests {
         let client = Client::default();
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
-        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(
+            &JsValue::from_str("time.total: "),
+            &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
+        );
         console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
         assert_eq!("GET", request.method.as_ref());
         assert_eq!(200, response.status);
@@ -146,7 +150,10 @@ mod tests {
         let client = Client::default();
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
-        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(
+            &JsValue::from_str("time.total: "),
+            &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
+        );
         console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);
@@ -164,7 +171,10 @@ mod tests {
         let client = Client::default();
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
-        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(
+            &JsValue::from_str("time.total: "),
+            &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
+        );
         console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);
@@ -184,7 +194,10 @@ mod tests {
         let client = Client::default();
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
-        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(
+            &JsValue::from_str("time.total: "),
+            &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
+        );
         console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);
@@ -214,7 +227,10 @@ mod tests {
         let client = Client::default();
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
-        console::log_2(&JsValue::from_str("time.total: "), &JsValue::from(&Number::from(time.total)));
+        console::log_2(
+            &JsValue::from_str("time.total: "),
+            &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
+        );
         console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);

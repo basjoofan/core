@@ -1,8 +1,8 @@
 use super::super::Client;
 use super::super::Request;
 use super::super::Response;
+use super::super::Time;
 use super::Stream;
-use super::Time;
 use std::time::Instant;
 use std::time::SystemTime;
 use tokio::io::split;
@@ -10,11 +10,12 @@ use tokio::io::split;
 impl Client {
     /// Send this request and wait for the record.
     pub async fn send(&self, message: &str) -> (Request, Response, Time, String) {
+        let mut time = Time::default();
         let (mut request, content) = match Request::from(message).await {
             Ok((request, content)) => (request, content),
-            Err(error) => return (Request::default(), Response::default(), Time::default(), error.to_string()),
+            Err(error) => return (Request::default(), Response::default(), time, error.to_string()),
         };
-        let mut time = Time::default();
+        time.start = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
         let start = Instant::now();
         let stream = match Stream::connect(&request.url, self.connect_tiomeout).await {
             Ok(stream) => stream,
@@ -31,10 +32,9 @@ impl Client {
             Ok(response) => response,
             Err(error) => return (request, Response::default(), time, error.to_string()),
         };
-        time.read = read.elapsed() - time.delay;
-        let end = Instant::now();
-        time.total = end - start;
         time.end = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+        time.read = read.elapsed() - time.delay;
+        time.total = time.end - time.start;
         time.write = time.total - time.resolve - time.connect - time.read - time.delay;
         (request, response, time, String::default())
     }
