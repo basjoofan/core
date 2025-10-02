@@ -212,7 +212,10 @@ impl Source {
             Some((message, exprs)) => {
                 let name = name.to_string();
                 let message = native::format_template(message, context);
-                let client = http::Client::default();
+                #[cfg(feature = "univ")]
+                let client = http::Client::new();
+                #[cfg(feature = "wasm")]
+                let client = http::Client::new(&self.base);
                 let (request, response, time, error) = client.send(message.as_str()).await;
                 let variables = response.to_map();
                 let mut local = Context::from(variables);

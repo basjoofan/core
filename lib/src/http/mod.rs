@@ -27,15 +27,23 @@ pub struct Client {
     // TODO read_tiomeout: Option<std::time::Duration>,
     #[cfg(feature = "wasm")]
     fetch_timeout: u32,
+    #[cfg(feature = "wasm")]
+    base: String,
 }
 
-impl Default for Client {
-    fn default() -> Self {
+impl Client {
+    #[cfg(feature = "univ")]
+    pub fn new() -> Self {
         Self {
-            #[cfg(feature = "univ")]
             connect_tiomeout: std::time::Duration::from_secs(120),
-            #[cfg(feature = "wasm")]
+        }
+    }
+
+    #[cfg(feature = "wasm")]
+    pub fn new(base: &str) -> Self {
+        Self {
             fetch_timeout: 300_000,
+            base: base.to_owned(),
         }
     }
 }

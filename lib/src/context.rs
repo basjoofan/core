@@ -97,6 +97,10 @@ impl Display for Record {
                 assert.expr, assert.left, assert.compare, assert.right, assert.result
             )?
         }
+        if !self.error.trim().is_empty() {
+            writeln!(f, "ERROR: {}", self.error)?;
+            return Ok(());
+        }
         write!(
             f,
             "--- {}  {} ({:?})",

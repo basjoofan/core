@@ -23,7 +23,7 @@ extern "C" {
 
 impl Request {
     /// Converts a message to an http request.
-    pub async fn from(message: &str) -> Result<(Request, Option<JsValue>), JsValue> {
+    pub async fn from(message: &str, base: &str) -> Result<(Request, Option<JsValue>), JsValue> {
         let mut lines = message.trim().lines();
         if let Some(line) = lines.next() {
             let mut splits = line.split_whitespace();
@@ -66,14 +66,14 @@ impl Request {
                         if let Some((name, value)) = line.trim().split_once(':') {
                             let (name, value) = (name.trim(), value.trim());
                             if value.starts_with("@") {
-                                let path = Path::new(&value[1..value.len()]);
-                                let uint8_array = match path.as_os_str().to_str() {
+                                let path = Path::new(base).join(&value[1..value.len()]);
+                                let uint8_array = match &path.as_os_str().to_str() {
                                     Some(path) => JsFuture::from(Promise::resolve(&read_file_content(path))).await?,
                                     None => return Err(JsValue::from_str("file path is not valid")),
                                 };
                                 let array = Array::new();
                                 array.push(&JsValue::from(uint8_array));
-                                let blob = match mime::from_path(path) {
+                                let blob = match mime::from_path(&path) {
                                     Some(mime) => {
                                         let properties = BlobPropertyBag::new();
                                         properties.set_type(mime.as_ref());

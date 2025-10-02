@@ -22,20 +22,13 @@ use web_sys::Response as WebResponse;
 impl Client {
     /// Send this request and wait for the record.
     pub async fn send(&self, message: &str) -> (Request, Response, Time, String) {
-        let (request, content) = match Request::from(message).await {
+        let (request, content) = match Request::from(message, self.base.as_str()).await {
             Ok((request, content)) => (request, content),
-            Err(error) => {
-                return (
-                    Request::default(),
-                    Response::default(),
-                    Time::default(),
-                    error.as_string().unwrap_or_default(),
-                )
-            }
+            Err(error) => return (Request::default(), Response::default(), Time::default(), format!("{:?}", error)),
         };
         let (response, time) = match fetch(&request, content, self.fetch_timeout).await {
             Ok(response) => response,
-            Err(error) => return (request, Response::default(), Time::default(), error.as_string().unwrap_or_default()),
+            Err(error) => return (request, Response::default(), Time::default(), format!("{:?}", error)),
         };
         (request, response, time, String::default())
     }
@@ -128,7 +121,7 @@ mod tests {
         let message = r#"
         GET https://httpbingo.org/get
         Host: httpbingo.org"#;
-        let client = Client::default();
+        let client = Client::new("./");
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
         console::log_2(
@@ -147,7 +140,7 @@ mod tests {
         POST https://httpbingo.org/post
         Host: httpbingo.org
         Accept-Encoding: gzip, deflate"#;
-        let client = Client::default();
+        let client = Client::new("./");
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
         console::log_2(
@@ -168,7 +161,7 @@ mod tests {
         Content-Type: application/x-www-form-urlencoded
 
         a: b"#;
-        let client = Client::default();
+        let client = Client::new("./");
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
         console::log_2(
@@ -191,7 +184,7 @@ mod tests {
 
         a: b
         f: @src/text.txt"#;
-        let client = Client::default();
+        let client = Client::new("./");
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
         console::log_2(
@@ -224,7 +217,7 @@ mod tests {
             ]
         }
         "#;
-        let client = Client::default();
+        let client = Client::new("./");
         let (request, response, time, error) = client.send(message).await;
         console::log_2(&JsValue::from_str("error: "), &JsValue::from_str(&error));
         console::log_2(

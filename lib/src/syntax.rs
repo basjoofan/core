@@ -116,6 +116,7 @@ impl Debug for Expr {
 
 #[derive(Default)]
 pub struct Source {
+    pub base: String,
     pub exprs: Vec<Expr>,
     pub functions: HashMap<String, (Vec<String>, Vec<Expr>)>,
     pub requests: HashMap<String, (String, Vec<Expr>)>,
@@ -125,6 +126,7 @@ pub struct Source {
 impl Source {
     pub fn new() -> Self {
         Self {
+            base: String::from("./"),
             exprs: Vec::new(),
             functions: HashMap::new(),
             requests: HashMap::new(),

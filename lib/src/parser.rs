@@ -61,6 +61,10 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<Source, String> {
+        self.parse_with_base("./")
+    }
+
+    pub fn parse_with_base(&mut self, base: &str) -> Result<Source, String> {
         let mut exprs = Vec::new();
         let mut functions = HashMap::new();
         let mut requests = HashMap::new();
@@ -87,6 +91,7 @@ impl Parser {
             self.next_token();
         }
         Ok(Source {
+            base: base.to_owned(),
             exprs,
             functions,
             requests,

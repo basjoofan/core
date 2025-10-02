@@ -46,7 +46,7 @@ async fn test_send_message_get() {
     let message = r#"
     GET http://127.0.0.1:30001/get
     Host: 127.0.0.1"#;
-    let client = Client::default();
+    let client = Client::new();
     let (request, response, time, error) = client.send(message).await;
     assert_eq!("GET", request.method.as_ref());
     assert_eq!(200, response.status);
@@ -63,7 +63,7 @@ async fn test_send_message_post() {
     POST http://127.0.0.1:30002/text
     Host: 127.0.0.1
     Accept-Encoding: gzip, deflate"#;
-    let client = Client::default();
+    let client = Client::new();
     let (request, response, time, error) = client.send(message).await;
     println!("error: {error}");
     println!("request: {request:?}");
@@ -83,7 +83,7 @@ async fn test_send_message_post_form() {
     Content-Type: application/x-www-form-urlencoded
 
     a: b"#;
-    let client = Client::default();
+    let client = Client::new();
     let (request, response, time, error) = client.send(message).await;
     println!("error: {error}");
     println!("request: {request:?}");
@@ -104,7 +104,7 @@ async fn test_send_message_post_multipart() {
 
     a: b
     f: @src/lib.rs"#;
-    let client = Client::default();
+    let client = Client::new();
     let (request, response, time, error) = client.send(message).await;
     println!("error: {error}");
     println!("request: {request:?}");
@@ -137,7 +137,7 @@ async fn test_send_message_post_json() {
         ]
     }
     "#;
-    let client = Client::default();
+    let client = Client::new();
     let (request, response, time, error) = client.send(message).await;
     println!("error: {error}");
     assert_eq!("POST", request.method.as_ref());
