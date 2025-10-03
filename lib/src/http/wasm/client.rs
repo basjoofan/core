@@ -90,6 +90,7 @@ async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Res
 #[cfg(test)]
 mod tests {
     use crate::http::Client;
+    use js_sys::eval;
     use js_sys::BigInt;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
@@ -98,19 +99,19 @@ mod tests {
     // wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
     fn setup() {
-        let _ = js_sys::eval(
+        let _ = eval(
             r#"
-        globalThis.readFileContent = async function(filePath) {
+        global.readFileContent = async function(filePath) {
             console.log(`Mock reading file in test: ${filePath}`);
-            return new TextEncoder().encode(`Test content for ${filePath}`);
+            return new TextEncoder().encode(`Mock content for ${filePath}`);
         };
         "#,
         );
-        let _ = js_sys::eval(
+        let _ = eval(
             r#"
         window.readFileContent = async function(filePath) {
             console.log(`Mock reading file in test: ${filePath}`);
-            return new TextEncoder().encode(`Test content for ${filePath}`);
+            return new TextEncoder().encode(`Mock content for ${filePath}`);
         };
         "#,
         );

@@ -1,22 +1,67 @@
 use crate::Context;
 use crate::Value;
 
-pub fn println(values: Vec<Value>, context: &Context) -> Result<Value, String> {
-    match format(values, context) {
-        error @ Err(_) => error,
-        Ok(value) => {
-            println!("{value}");
-            Ok(Value::Null)
+#[cfg(feature = "univ")]
+pub use univ::*;
+#[cfg(feature = "univ")]
+mod univ {
+    use super::format;
+    use crate::Context;
+    use crate::Value;
+
+    pub fn println(values: Vec<Value>, context: &Context) -> Result<Value, String> {
+        match format(values, context) {
+            error @ Err(_) => error,
+            Ok(value) => {
+                println!("{value}");
+                Ok(Value::Null)
+            }
+        }
+    }
+
+    pub fn print(values: Vec<Value>, context: &Context) -> Result<Value, String> {
+        match format(values, context) {
+            error @ Err(_) => error,
+            Ok(value) => {
+                print!("{value}");
+                Ok(Value::Null)
+            }
         }
     }
 }
 
-pub fn print(values: Vec<Value>, context: &Context) -> Result<Value, String> {
-    match format(values, context) {
-        error @ Err(_) => error,
-        Ok(value) => {
-            print!("{value}");
-            Ok(Value::Null)
+#[cfg(feature = "wasm")]
+pub use wasm::*;
+#[cfg(feature = "wasm")]
+mod wasm {
+    use super::format;
+    use crate::Context;
+    use crate::Value;
+    use wasm_bindgen::prelude::wasm_bindgen;
+
+    #[wasm_bindgen]
+    extern "C" {
+        #[wasm_bindgen(js_name = appendOutput)]
+        fn append_output(output: &str);
+    }
+
+    pub fn println(values: Vec<Value>, context: &Context) -> Result<Value, String> {
+        match format(values, context) {
+            error @ Err(_) => error,
+            Ok(value) => {
+                append_output(format!("{value}\r\n").as_str());
+                Ok(Value::Null)
+            }
+        }
+    }
+
+    pub fn print(values: Vec<Value>, context: &Context) -> Result<Value, String> {
+        match format(values, context) {
+            error @ Err(_) => error,
+            Ok(value) => {
+                append_output(format!("{value}").as_str());
+                Ok(Value::Null)
+            }
         }
     }
 }

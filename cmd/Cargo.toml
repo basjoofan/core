@@ -1,7 +1,7 @@
 [package]
 name = "cmd"
 version = "0.1.0"
-description = "basjoofan command"
+description = "continuous test"
 repository = "https://github.com/basjoofan/lib"
 license = "MIT OR Apache-2.0"
 authors = ["Lamb <lamb@basjoofan.com>"]

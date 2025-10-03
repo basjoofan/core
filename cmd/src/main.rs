@@ -4,7 +4,7 @@ use lib::Source;
 use std::{path::PathBuf, time::Duration};
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(name = env!("CARGO_BIN_NAME"), version, about, long_about = None)]
 struct Interface {
     #[command(subcommand)]
     command: Option<Commands>,
