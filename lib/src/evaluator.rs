@@ -19,17 +19,25 @@ impl Source {
             Expr::String(string) => self.eval_string_literal(string),
             Expr::Array(items) => Box::pin(self.eval_array_literal(items, context)).await,
             Expr::Map(pairs) => Box::pin(self.eval_map_literal(pairs, context)).await,
-            Expr::Index(value, index) => Box::pin(self.eval_index_expr(value, index, context)).await,
+            Expr::Index(value, index) => {
+                Box::pin(self.eval_index_expr(value, index, context)).await
+            }
             Expr::Field(map, field) => Box::pin(self.eval_field_expr(map, field, context)).await,
             Expr::Ident(ident) => self.eval_ident_expr(ident, context),
             Expr::Let(name, expr) => Box::pin(self.eval_let_expr(name, expr, context)).await,
-            Expr::Unary(token, right) => Box::pin(self.eval_unary_expr(token, right, context)).await,
-            Expr::Binary(token, left, right) => Box::pin(self.eval_binary_expr(token, left, right, context)).await,
+            Expr::Unary(token, right) => {
+                Box::pin(self.eval_unary_expr(token, right, context)).await
+            }
+            Expr::Binary(token, left, right) => {
+                Box::pin(self.eval_binary_expr(token, left, right, context)).await
+            }
             Expr::Paren(expr) => Box::pin(self.eval_expr(expr, context)).await,
             Expr::If(condition, consequence, alternative) => {
                 Box::pin(self.eval_if_expr(condition, consequence, alternative, context)).await
             }
-            Expr::Call(name, arguments) => Box::pin(self.eval_call_expr(name, arguments, context)).await,
+            Expr::Call(name, arguments) => {
+                Box::pin(self.eval_call_expr(name, arguments, context)).await
+            }
             Expr::Send(name) => Box::pin(self.eval_send_expr(name, context)).await,
         }
     }
@@ -50,11 +58,19 @@ impl Source {
         Ok(Value::String(string.to_owned()))
     }
 
-    async fn eval_array_literal(&self, items: &[Expr], context: &mut Context) -> Result<Value, String> {
+    async fn eval_array_literal(
+        &self,
+        items: &[Expr],
+        context: &mut Context,
+    ) -> Result<Value, String> {
         Ok(Value::Array(self.eval_list(items, context).await?))
     }
 
-    async fn eval_map_literal(&self, pairs: &Vec<(Expr, Expr)>, context: &mut Context) -> Result<Value, String> {
+    async fn eval_map_literal(
+        &self,
+        pairs: &Vec<(Expr, Expr)>,
+        context: &mut Context,
+    ) -> Result<Value, String> {
         let mut map = HashMap::new();
         for (key, value) in pairs {
             let key = self.eval_expr(key, context).await?;
@@ -64,7 +80,12 @@ impl Source {
         Ok(Value::Map(map))
     }
 
-    async fn eval_index_expr(&self, value: &Expr, index: &Expr, context: &mut Context) -> Result<Value, String> {
+    async fn eval_index_expr(
+        &self,
+        value: &Expr,
+        index: &Expr,
+        context: &mut Context,
+    ) -> Result<Value, String> {
         // TODO enhance indent expr get variable use reference
         let value = self.eval_expr(value, context).await?;
         let index = self.eval_expr(index, context).await?;
@@ -89,7 +110,12 @@ impl Source {
         }
     }
 
-    async fn eval_field_expr(&self, map: &Expr, field: &String, context: &mut Context) -> Result<Value, String> {
+    async fn eval_field_expr(
+        &self,
+        map: &Expr,
+        field: &String,
+        context: &mut Context,
+    ) -> Result<Value, String> {
         // TODO enhance indent expr get variable use reference
         match self.eval_expr(map, context).await? {
             Value::Map(mut pairs) => {
@@ -110,16 +136,28 @@ impl Source {
         }
     }
 
-    async fn eval_let_expr(&self, name: &String, expr: &Expr, context: &mut Context) -> Result<Value, String> {
+    async fn eval_let_expr(
+        &self,
+        name: &String,
+        expr: &Expr,
+        context: &mut Context,
+    ) -> Result<Value, String> {
         let value = self.eval_expr(expr, context).await?;
         context.set(name.to_owned(), value.to_owned());
         Ok(value)
     }
 
-    async fn eval_unary_expr(&self, token: &Token, right: &Expr, context: &mut Context) -> Result<Value, String> {
+    async fn eval_unary_expr(
+        &self,
+        token: &Token,
+        right: &Expr,
+        context: &mut Context,
+    ) -> Result<Value, String> {
         let right = self.eval_expr(right, context).await?;
         match (token.kind, right) {
-            (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => Ok(Value::Boolean(true)),
+            (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => {
+                Ok(Value::Boolean(true))
+            }
             (Kind::Not, Value::Integer(integer)) => Ok(Value::Integer(!integer)),
             (Kind::Not, _) => Ok(Value::Boolean(false)),
             (Kind::Sub, Value::Integer(integer)) => Ok(Value::Integer(-integer)),
@@ -128,18 +166,44 @@ impl Source {
         }
     }
 
-    async fn eval_binary_expr(&self, token: &Token, left: &Expr, right: &Expr, context: &mut Context) -> Result<Value, String> {
+    async fn eval_binary_expr(
+        &self,
+        token: &Token,
+        left: &Expr,
+        right: &Expr,
+        context: &mut Context,
+    ) -> Result<Value, String> {
         match token.kind {
-            Kind::Add => self.eval_expr(left, context).await? + self.eval_expr(right, context).await?,
-            Kind::Sub => self.eval_expr(left, context).await? - self.eval_expr(right, context).await?,
-            Kind::Mul => self.eval_expr(left, context).await? * self.eval_expr(right, context).await?,
-            Kind::Div => self.eval_expr(left, context).await? / self.eval_expr(right, context).await?,
-            Kind::Rem => self.eval_expr(left, context).await? % self.eval_expr(right, context).await?,
-            Kind::Bx => self.eval_expr(left, context).await? ^ self.eval_expr(right, context).await?,
-            Kind::Bo => self.eval_expr(left, context).await? | self.eval_expr(right, context).await?,
-            Kind::Ba => self.eval_expr(left, context).await? & self.eval_expr(right, context).await?,
-            Kind::Sl => self.eval_expr(left, context).await? << self.eval_expr(right, context).await?,
-            Kind::Sr => self.eval_expr(left, context).await? >> self.eval_expr(right, context).await?,
+            Kind::Add => {
+                self.eval_expr(left, context).await? + self.eval_expr(right, context).await?
+            }
+            Kind::Sub => {
+                self.eval_expr(left, context).await? - self.eval_expr(right, context).await?
+            }
+            Kind::Mul => {
+                self.eval_expr(left, context).await? * self.eval_expr(right, context).await?
+            }
+            Kind::Div => {
+                self.eval_expr(left, context).await? / self.eval_expr(right, context).await?
+            }
+            Kind::Rem => {
+                self.eval_expr(left, context).await? % self.eval_expr(right, context).await?
+            }
+            Kind::Bx => {
+                self.eval_expr(left, context).await? ^ self.eval_expr(right, context).await?
+            }
+            Kind::Bo => {
+                self.eval_expr(left, context).await? | self.eval_expr(right, context).await?
+            }
+            Kind::Ba => {
+                self.eval_expr(left, context).await? & self.eval_expr(right, context).await?
+            }
+            Kind::Sl => {
+                self.eval_expr(left, context).await? << self.eval_expr(right, context).await?
+            }
+            Kind::Sr => {
+                self.eval_expr(left, context).await? >> self.eval_expr(right, context).await?
+            }
             Kind::Lo => match self.eval_expr(left, context).await? {
                 Value::Boolean(false) | Value::Null => self.eval_expr(right, context).await,
                 left => Ok(left),
@@ -184,7 +248,12 @@ impl Source {
         }
     }
 
-    async fn eval_call_expr(&self, name: &str, arguments: &[Expr], context: &mut Context) -> Result<Value, String> {
+    async fn eval_call_expr(
+        &self,
+        name: &str,
+        arguments: &[Expr],
+        context: &mut Context,
+    ) -> Result<Value, String> {
         let arguments = self.eval_list(arguments, context).await?;
         match self.function(name) {
             Some((params, body)) => {
@@ -223,8 +292,14 @@ impl Source {
                 for assert in exprs {
                     if let Expr::Binary(token, left, right) = assert {
                         let expr = format!("{left} {token} {right}");
-                        let left = self.eval_expr(left, &mut local).await.unwrap_or(Value::Null);
-                        let right = self.eval_expr(right, &mut local).await.unwrap_or(Value::Null);
+                        let left = self
+                            .eval_expr(left, &mut local)
+                            .await
+                            .unwrap_or(Value::Null);
+                        let right = self
+                            .eval_expr(right, &mut local)
+                            .await
+                            .unwrap_or(Value::Null);
                         if let Some(result) = match token.kind {
                             Kind::Lt => Some(left < right),
                             Kind::Gt => Some(left > right),
@@ -345,14 +420,20 @@ mod tests {
             ("5.0 / 2.0 * 2.0 + 1.0 - 0.5", Value::Float(5.5)),
             ("5.0 * (0.2 + 1.0)", Value::Float(6.0)),
             ("0.5 + 0.5 + 0.5 + 0.5 - 1.0", Value::Float(1.0)),
-            ("0.2 * 0.2 * 0.2 * 0.2 * 0.2", Value::Float(0.00032000000000000013)),
+            (
+                "0.2 * 0.2 * 0.2 * 0.2 * 0.2",
+                Value::Float(0.00032000000000000013),
+            ),
             ("0.5 * 2.2 + 1.1", Value::Float(2.2)),
             ("0.5 + 0.2 * 10.0", Value::Float(2.5)),
             ("0.5 * (2.0 + 10.0)", Value::Float(6.0)),
             ("-0.5", Value::Float(-0.5)),
             ("-1.0", Value::Float(-1.0)),
             ("-5.0 + 10.0 + -5.0", Value::Float(0.0)),
-            ("(0.5 + 1.5 * 0.2 + 1.5 / 3.0) * 2.0 + -1.0", Value::Float(1.6)),
+            (
+                "(0.5 + 1.5 * 0.2 + 1.5 / 3.0) * 2.0 + -1.0",
+                Value::Float(1.6),
+            ),
         ];
         run_eval_tests(tests).await;
     }
@@ -395,9 +476,18 @@ mod tests {
     #[tokio::test]
     async fn test_string_literal() {
         let tests = vec![
-            (r#""hello world""#, Value::String(String::from("hello world"))),
-            (r#""hello" + " world""#, Value::String(String::from("hello world"))),
-            (r#""hello"+" world"+"!""#, Value::String(String::from("hello world!"))),
+            (
+                r#""hello world""#,
+                Value::String(String::from("hello world")),
+            ),
+            (
+                r#""hello" + " world""#,
+                Value::String(String::from("hello world")),
+            ),
+            (
+                r#""hello"+" world"+"!""#,
+                Value::String(String::from("hello world!")),
+            ),
         ];
         run_eval_tests(tests).await;
     }
@@ -439,11 +529,19 @@ mod tests {
             ("[]", Value::Array(vec![])),
             (
                 "[1, 2, 3]",
-                Value::Array(vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)]),
+                Value::Array(vec![
+                    Value::Integer(1),
+                    Value::Integer(2),
+                    Value::Integer(3),
+                ]),
             ),
             (
                 "[1 + 2, 3 - 4, 5 * 6]",
-                Value::Array(vec![Value::Integer(3), Value::Integer(-1), Value::Integer(30)]),
+                Value::Array(vec![
+                    Value::Integer(3),
+                    Value::Integer(-1),
+                    Value::Integer(30),
+                ]),
             ),
         ];
         run_eval_tests(tests).await;
@@ -499,10 +597,16 @@ mod tests {
         let tests = vec![
             ("let one = 1; one", Value::Integer(1)),
             ("let one = 1; let two = 2; one + two", Value::Integer(3)),
-            ("let one = 1; let two = one + one; one + two", Value::Integer(3)),
+            (
+                "let one = 1; let two = one + one; one + two",
+                Value::Integer(3),
+            ),
             ("let one = 1; one;", Value::Integer(1)),
             ("let one = 1; let two = 2; one + two;", Value::Integer(3)),
-            ("let one = 1; let two = one + one; one + two;", Value::Integer(3)),
+            (
+                "let one = 1; let two = one + one; one + two;",
+                Value::Integer(3),
+            ),
             ("let one = 1;let one = 2;", Value::Integer(2)),
             ("let one = 1;let one = 2;one", Value::Integer(2)),
             ("let one = 1;let two = 2;let one = 3;one", Value::Integer(3)),
@@ -522,7 +626,10 @@ mod tests {
             ("if (1 > 2) { 10 } else { 20 }", Value::Integer(20)),
             ("if (1 > 2) { 10 }", Value::Null),
             ("if (false) { 10 }", Value::Null),
-            ("if ((if (false) { 10 })) { 10 } else { 20 }", Value::Integer(20)),
+            (
+                "if ((if (false) { 10 })) { 10 } else { 20 }",
+                Value::Integer(20),
+            ),
             ("if (true) {} else { 10 }", Value::Null),
             ("if (true) { 1; 2 } else { 3 }", Value::Integer(2)),
         ];
@@ -548,8 +655,14 @@ mod tests {
             // ("fn identity(x) { return x; }; identity(5);", Value::Integer(5)),
             ("fn double(x) { x * 2; }; double(5);", Value::Integer(10)),
             ("fn add(x, y) { x + y; }; add(5, 5);", Value::Integer(10)),
-            ("fn add(x, y) { x + y; }; add(5 + 5, add(5, 5));", Value::Integer(20)),
-            ("fn one(x) { x + 1; } fn two(x) { one(one(x)); }; two(0);", Value::Integer(2)),
+            (
+                "fn add(x, y) { x + y; }; add(5 + 5, add(5, 5));",
+                Value::Integer(20),
+            ),
+            (
+                "fn one(x) { x + 1; } fn two(x) { one(one(x)); }; two(0);",
+                Value::Integer(2),
+            ),
             ("fn x(x) { x; }; x(5)", Value::Integer(5)),
             ("fn len(x) { x; }; len(10)", Value::Integer(10)),
         ];

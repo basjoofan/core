@@ -49,7 +49,11 @@ impl Stream {
         }
     }
 
-    async fn connect_tcp(host: &str, port: u16, tiomeout: Duration) -> Result<(TcpStream, Duration), Error> {
+    async fn connect_tcp(
+        host: &str,
+        port: u16,
+        tiomeout: Duration,
+    ) -> Result<(TcpStream, Duration), Error> {
         let resolve = Instant::now();
         let addrs = match (host, port).to_socket_addrs() {
             Ok(addrs) => Ok(addrs.collect::<Vec<SocketAddr>>()),
@@ -67,9 +71,17 @@ impl Stream {
     async fn connect_tls(host: &str, port: u16, tiomeout: Duration) -> Result<Self, Error> {
         let config = ClientConfig::with_platform_verifier().map_err(|_e| Error::InvalidUrlHost)?;
         let connector = TlsConnector::from(Arc::new(config));
-        let domain = host.to_owned().try_into().map_err(|_e| Error::InvalidUrlHost)?;
+        let domain = host
+            .to_owned()
+            .try_into()
+            .map_err(|_e| Error::InvalidUrlHost)?;
         let (stream, resolve) = Self::connect_tcp(host, port, tiomeout).await?;
-        let stream = Box::new(connector.connect(domain, stream).await.map_err(|_e| Error::TlsHandshakeFailed)?);
+        let stream = Box::new(
+            connector
+                .connect(domain, stream)
+                .await
+                .map_err(|_e| Error::TlsHandshakeFailed)?,
+        );
         Ok(Stream::Cipher { stream, resolve })
     }
 
@@ -79,7 +91,8 @@ impl Stream {
             return Some(TcpStream::connect(addr).await);
         }
         // Happy Eyeballs (also called Fast Fallback)
-        let (a, b): (Vec<SocketAddr>, Vec<SocketAddr>) = addrs.into_iter().partition(|a| a.is_ipv6());
+        let (a, b): (Vec<SocketAddr>, Vec<SocketAddr>) =
+            addrs.into_iter().partition(|a| a.is_ipv6());
         let mut error = None;
         // This loop will race each connection attempt against others,
         // returning early if a connection attempt is successful.
@@ -108,13 +121,23 @@ impl Stream {
 }
 
 impl AsyncRead for Stream {
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<std::io::Result<()>> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
             Stream::Plain { stream, .. } => Pin::new(stream).poll_read(cx, buf),
             Stream::Cipher { stream, .. } => match Pin::new(&mut *stream).poll_read(cx, buf) {
                 Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-                Poll::Ready(Err(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof => Poll::Ready(Ok(())),
-                Poll::Ready(Err(error)) if error.kind() == std::io::ErrorKind::ConnectionAborted => Pin::new(stream).poll_shutdown(cx),
+                Poll::Ready(Err(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    Poll::Ready(Ok(()))
+                }
+                Poll::Ready(Err(error))
+                    if error.kind() == std::io::ErrorKind::ConnectionAborted =>
+                {
+                    Pin::new(stream).poll_shutdown(cx)
+                }
                 Poll::Ready(Err(error)) => Poll::Ready(Err(error)),
                 Poll::Pending => Poll::Pending,
             },
@@ -125,7 +148,11 @@ impl AsyncRead for Stream {
 }
 
 impl AsyncWrite for Stream {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, std::io::Error>> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, std::io::Error>> {
         match self.get_mut() {
             Stream::Plain { stream, .. } => Pin::new(stream).poll_write(cx, buf),
             Stream::Cipher { stream, .. } => Pin::new(stream).poll_write(cx, buf),
@@ -143,7 +170,10 @@ impl AsyncWrite for Stream {
         }
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), std::io::Error>> {
         match self.get_mut() {
             Stream::Plain { stream, .. } => Pin::new(stream).poll_shutdown(cx),
             Stream::Cipher { stream, .. } => Pin::new(stream).poll_shutdown(cx),
@@ -153,7 +183,10 @@ impl AsyncWrite for Stream {
     }
 }
 
-fn rotate<T, A: FusedIterator<Item = T>, B: FusedIterator<Item = T>>(mut a: A, mut b: B) -> impl Iterator<Item = T> {
+fn rotate<T, A: FusedIterator<Item = T>, B: FusedIterator<Item = T>>(
+    mut a: A,
+    mut b: B,
+) -> impl Iterator<Item = T> {
     let mut c = None;
     from_fn(move || {
         if let Some(b) = c.take() {
@@ -179,30 +212,50 @@ fn test_rotate_even() {
 
 #[test]
 fn test_rotate_left() {
-    let x: Vec<u32> = rotate(vec![1, 2, 3, 100, 101].into_iter(), vec![4, 5, 6].into_iter()).collect();
+    let x: Vec<u32> = rotate(
+        vec![1, 2, 3, 100, 101].into_iter(),
+        vec![4, 5, 6].into_iter(),
+    )
+    .collect();
     assert_eq!(&x[..], &[1, 4, 2, 5, 3, 6, 100, 101][..]);
 }
 
 #[test]
 fn test_rotate_right() {
-    let x: Vec<u32> = rotate(vec![1, 2, 3].into_iter(), vec![4, 5, 6, 100, 101].into_iter()).collect();
+    let x: Vec<u32> = rotate(
+        vec![1, 2, 3].into_iter(),
+        vec![4, 5, 6, 100, 101].into_iter(),
+    )
+    .collect();
     assert_eq!(&x[..], &[1, 4, 2, 5, 3, 6, 100, 101][..]);
 }
 
 #[tokio::test]
 async fn test_connect() {
     crate::tests::start_server(30000).await;
-    let stream = Stream::connect(&Url::from("http://127.0.0.1:30000/get"), Duration::from_secs(2)).await;
+    let stream = Stream::connect(
+        &Url::from("http://127.0.0.1:30000/get"),
+        Duration::from_secs(2),
+    )
+    .await;
     if let Err(error) = stream.as_ref() {
         println!("{error:?}");
     }
     assert!(stream.is_ok());
-    let stream = Stream::connect(&Url::from("http://localhost:30000/get"), Duration::from_secs(2)).await;
+    let stream = Stream::connect(
+        &Url::from("http://localhost:30000/get"),
+        Duration::from_secs(2),
+    )
+    .await;
     if let Err(error) = stream.as_ref() {
         println!("{error:?}");
     }
     assert!(stream.is_ok());
-    let stream = Stream::connect(&Url::from("http://localhost:88/get"), Duration::from_secs(2)).await;
+    let stream = Stream::connect(
+        &Url::from("http://localhost:88/get"),
+        Duration::from_secs(2),
+    )
+    .await;
     assert!(stream.is_err());
     if let Err(error) = stream {
         println!("{error:?}");

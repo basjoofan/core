@@ -91,7 +91,10 @@ pub fn format_template(str: &str, context: &Context) -> String {
 
 pub fn length(values: Vec<Value>) -> Result<Value, String> {
     if values.len() != 1 {
-        Err(format!("wrong number of arguments. got={}, want=1", values.len()))
+        Err(format!(
+            "wrong number of arguments. got={}, want=1",
+            values.len()
+        ))
     } else if let Some(value) = values.first() {
         match value {
             Value::String(string) => Ok(Value::Integer(string.len() as i64)),
@@ -127,12 +130,16 @@ fn test_format() {
             Value::String(String::from("Hello, World!")),
         ),
         (
-            vec![Value::String(String::from(r#"{ "name": "{name}" , age: 2 }"#))],
+            vec![Value::String(String::from(
+                r#"{ "name": "{name}" , age: 2 }"#,
+            ))],
             vec![(String::from("name"), Value::String(String::from("Bob")))],
             Value::String(String::from(r#"{ "name": "Bob" , age: 2 }"#)),
         ),
         (
-            vec![Value::String(String::from(r#"{ "name": "{name}" , age: {age} }"#))],
+            vec![Value::String(String::from(
+                r#"{ "name": "{name}" , age: {age} }"#,
+            ))],
             vec![
                 (String::from("name"), Value::String(String::from("Bob"))),
                 (String::from("age"), Value::Integer(2)),
@@ -140,7 +147,9 @@ fn test_format() {
             Value::String(String::from(r#"{ "name": "Bob" , age: 2 }"#)),
         ),
         (
-            vec![Value::String(String::from(r#"{ "name": "{name}" , age: {age} }"#))],
+            vec![Value::String(String::from(
+                r#"{ "name": "{name}" , age: {age} }"#,
+            ))],
             vec![(String::from("name"), Value::String(String::from("Bob")))],
             Value::String(String::from(r#"{ "name": "Bob" , age: {age} }"#)),
         ),
@@ -167,8 +176,14 @@ fn test_append() {
             Value::Array(vec![Value::Integer(1), Value::Integer(2)]),
         ),
         (
-            vec![Value::Array(vec![Value::Integer(1)]), Value::String(String::from("string"))],
-            Value::Array(vec![Value::Integer(1), Value::String(String::from("string"))]),
+            vec![
+                Value::Array(vec![Value::Integer(1)]),
+                Value::String(String::from("string")),
+            ],
+            Value::Array(vec![
+                Value::Integer(1),
+                Value::String(String::from("string")),
+            ]),
         ),
         (
             vec![Value::Array(vec![Value::Integer(1)]), Value::Boolean(true)],

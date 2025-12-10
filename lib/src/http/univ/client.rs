@@ -13,9 +13,18 @@ impl Client {
         let mut time = Time::default();
         let (mut request, content) = match Request::from(message).await {
             Ok((request, content)) => (request, content),
-            Err(error) => return (Request::default(), Response::default(), time, error.to_string()),
+            Err(error) => {
+                return (
+                    Request::default(),
+                    Response::default(),
+                    time,
+                    error.to_string(),
+                );
+            }
         };
-        time.start = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+        time.start = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
         let start = Instant::now();
         let stream = match Stream::connect(&request.url, self.connect_tiomeout).await {
             Ok(stream) => stream,
@@ -28,11 +37,14 @@ impl Client {
             return (request, Response::default(), time, error.to_string());
         };
         let read = Instant::now();
-        let response = match Response::from(&mut reader, Some(|| time.delay = read.elapsed())).await {
+        let response = match Response::from(&mut reader, Some(|| time.delay = read.elapsed())).await
+        {
             Ok(response) => response,
             Err(error) => return (request, Response::default(), time, error.to_string()),
         };
-        time.end = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+        time.end = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
         time.read = read.elapsed() - time.delay;
         time.total = time.end - time.start;
         time.write = time.total - time.resolve - time.connect - time.read - time.delay;
@@ -50,7 +62,10 @@ async fn test_send_message_get() {
     let (request, response, time, error) = client.send(message).await;
     assert_eq!("GET", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    assert_eq!(
+        time.total,
+        time.resolve + time.connect + time.write + time.delay + time.read
+    );
     println!("error: {error}");
     println!("time.total: {:?}", time.total);
     println!("response.body:{:?}", response.body);
@@ -69,7 +84,10 @@ async fn test_send_message_post() {
     println!("request: {request:?}");
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    assert_eq!(
+        time.total,
+        time.resolve + time.connect + time.write + time.delay + time.read
+    );
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
@@ -89,7 +107,10 @@ async fn test_send_message_post_form() {
     println!("request: {request:?}");
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    assert_eq!(
+        time.total,
+        time.resolve + time.connect + time.write + time.delay + time.read
+    );
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
@@ -111,7 +132,10 @@ async fn test_send_message_post_multipart() {
     println!("response: {response:?}");
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    assert_eq!(
+        time.total,
+        time.resolve + time.connect + time.write + time.delay + time.read
+    );
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }
@@ -142,7 +166,10 @@ async fn test_send_message_post_json() {
     println!("error: {error}");
     assert_eq!("POST", request.method.as_ref());
     assert_eq!(200, response.status);
-    assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
+    assert_eq!(
+        time.total,
+        time.resolve + time.connect + time.write + time.delay + time.read
+    );
     println!("{:?}", time.total);
     println!("{:?}", response.body);
 }

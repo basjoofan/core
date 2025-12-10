@@ -20,18 +20,46 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
             let _ = write!(buffer, r#""task": {}, "#, task);
             let _ = write!(buffer, r#""number": {}, "#, number);
             let _ = write!(buffer, r#""order": {}, "#, order);
-            let _ = write!(buffer, r#""time_start": {}, "#, record.time.start.as_millis());
+            let _ = write!(
+                buffer,
+                r#""time_start": {}, "#,
+                record.time.start.as_millis()
+            );
             let _ = write!(buffer, r#""time_end": {}, "#, record.time.end.as_millis());
-            let _ = write!(buffer, r#""time_total": {}, "#, record.time.total.as_millis());
-            let _ = write!(buffer, r#""time_resolve": {}, "#, record.time.resolve.as_millis());
-            let _ = write!(buffer, r#""time_connect": {}, "#, record.time.connect.as_millis());
-            let _ = write!(buffer, r#""time_write": {}, "#, record.time.write.as_millis());
-            let _ = write!(buffer, r#""time_delay": {}, "#, record.time.delay.as_millis());
+            let _ = write!(
+                buffer,
+                r#""time_total": {}, "#,
+                record.time.total.as_millis()
+            );
+            let _ = write!(
+                buffer,
+                r#""time_resolve": {}, "#,
+                record.time.resolve.as_millis()
+            );
+            let _ = write!(
+                buffer,
+                r#""time_connect": {}, "#,
+                record.time.connect.as_millis()
+            );
+            let _ = write!(
+                buffer,
+                r#""time_write": {}, "#,
+                record.time.write.as_millis()
+            );
+            let _ = write!(
+                buffer,
+                r#""time_delay": {}, "#,
+                record.time.delay.as_millis()
+            );
             let _ = write!(buffer, r#""time_read": {}, "#, record.time.read.as_millis());
             let _ = write!(buffer, r#""request_name": "{}", "#, record.name);
             let _ = write!(buffer, r#""request_method": "{}", "#, record.request.method);
             let _ = write!(buffer, r#""request_url": "{}", "#, record.request.url);
-            let _ = write!(buffer, r#""request_version": "{}", "#, record.request.version);
+            let _ = write!(
+                buffer,
+                r#""request_version": "{}", "#,
+                record.request.version
+            );
             let _ = write!(buffer, r#""request_headers": ["#);
             let mut headers = record.request.headers.iter().peekable();
             while let Some(header) = headers.next() {
@@ -42,9 +70,17 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
             }
             let _ = write!(buffer, r#"], "#);
             let _ = write!(buffer, r#""request_body": "{}", "#, record.request.body);
-            let _ = write!(buffer, r#""response_version": "{}", "#, record.response.version);
+            let _ = write!(
+                buffer,
+                r#""response_version": "{}", "#,
+                record.response.version
+            );
             let _ = write!(buffer, r#""response_status": {}, "#, record.response.status);
-            let _ = write!(buffer, r#""response_reason": "{}", "#, record.response.reason);
+            let _ = write!(
+                buffer,
+                r#""response_reason": "{}", "#,
+                record.response.reason
+            );
             let _ = write!(buffer, r#""response_headers": ["#);
             let mut headers = record.response.headers.iter().peekable();
             while let Some(header) = headers.next() {
@@ -88,7 +124,7 @@ async fn test_writer() {
         asserts: Vec::new(),
         error: String::default(),
     };
-    writer.write(&vec![record], "test", 0, 0).await;
+    writer.write(&[record], "test", 0, 0).await;
     let encoded = writer.w;
     print!("{}", String::from_utf8_lossy(&encoded));
     let record = serde_json::from_slice::<serde_json::Value>(&encoded).unwrap();
@@ -124,7 +160,7 @@ async fn test_writer() {
         asserts: Vec::new(),
         error: String::default(),
     };
-    writer.write(&vec![record], "test", 0, 0).await;
+    writer.write(&[record], "test", 0, 0).await;
     let encoded = writer.w;
     print!("{}", String::from_utf8_lossy(&encoded));
     let record = serde_json::from_slice::<serde_json::Value>(&encoded).unwrap();

@@ -15,17 +15,19 @@ pub struct Header {
 
 impl Headers {
     pub fn insert(&mut self, name: String, value: String) {
-        self.indices.entry(name.to_lowercase()).or_default().push(self.entries.len());
+        self.indices
+            .entry(name.to_lowercase())
+            .or_default()
+            .push(self.entries.len());
         self.entries.push(Header { name, value });
     }
 
     pub fn replace(&mut self, name: &str, value: String) {
-        if let Some(indices) = self.indices.get(name.to_lowercase().as_str()) {
-            if let Some(index) = indices.first() {
-                if let Some(header) = self.entries.get_mut(*index) {
-                    header.value = value;
-                }
-            }
+        if let Some(indices) = self.indices.get(name.to_lowercase().as_str())
+            && let Some(index) = indices.first()
+            && let Some(header) = self.entries.get_mut(*index)
+        {
+            header.value = value;
         }
     }
 

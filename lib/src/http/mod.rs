@@ -80,24 +80,33 @@ pub struct Response {
 impl Response {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert(String::from("version"), Value::String(self.version.to_string()));
+        map.insert(
+            String::from("version"),
+            Value::String(self.version.to_string()),
+        );
         map.insert(String::from("status"), Value::Integer(self.status as i64));
-        map.insert(String::from("reason"), Value::String(self.reason.to_string()));
+        map.insert(
+            String::from("reason"),
+            Value::String(self.reason.to_string()),
+        );
         let mut headers: HashMap<String, Value> = HashMap::new();
         for header in self.headers.iter() {
             match headers.get_mut(&header.name) {
                 Some(Value::Array(array)) => array.push(Value::String(header.value.to_string())),
                 _ => {
-                    headers.insert(header.name.to_string(), Value::Array(vec![Value::String(header.value.to_string())]));
+                    headers.insert(
+                        header.name.to_string(),
+                        Value::Array(vec![Value::String(header.value.to_string())]),
+                    );
                 }
             }
         }
         map.insert(String::from("headers"), Value::Map(headers));
         map.insert(String::from("body"), Value::String(self.body.to_string()));
-        if let Ok(Source { exprs, .. }) = Parser::new(&self.body).parse() {
-            if let Some(expr) = exprs.first() {
-                map.insert(String::from("json"), expr.eval());
-            }
+        if let Ok(Source { exprs, .. }) = Parser::new(&self.body).parse()
+            && let Some(expr) = exprs.first()
+        {
+            map.insert(String::from("json"), expr.eval());
         }
         map
     }

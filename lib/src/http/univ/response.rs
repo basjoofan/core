@@ -8,7 +8,10 @@ use tokio::io::ReadHalf;
 
 impl Response {
     /// Converts a stream to an http response.
-    pub async fn from(reader: &mut ReadHalf<Stream>, callback: Option<impl FnMut()>) -> Result<Response, std::io::Error> {
+    pub async fn from(
+        reader: &mut ReadHalf<Stream>,
+        callback: Option<impl FnMut()>,
+    ) -> Result<Response, std::io::Error> {
         let mut reader = BufReader::new(reader);
         let mut buf = Vec::with_capacity(1);
         reader.read_exact(&mut buf).await?;
@@ -83,15 +86,19 @@ Access-Control-Allow-Credentials: true
 "#;
     let stream = Stream::Mock(std::io::Cursor::new(message.as_bytes().to_owned()));
     let (mut reader, _) = tokio::io::split(stream);
-    let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>).await.unwrap();
+    let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>)
+        .await
+        .unwrap();
     assert_eq!(200, response.status);
     assert_eq!(7, response.headers.len());
     assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
     assert_eq!(
-        Some(&super::super::Value::Map(std::collections::HashMap::from_iter(vec![(
-            String::from("origin"),
-            super::super::Value::String(String::from("122.9.3.166"))
-        )]))),
+        Some(&super::super::Value::Map(
+            std::collections::HashMap::from_iter(vec![(
+                String::from("origin"),
+                super::super::Value::String(String::from("122.9.3.166"))
+            )])
+        )),
         response.to_map().get("json")
     )
 }
@@ -113,15 +120,19 @@ Access-Control-Allow-Credentials: true
 "#;
     let stream = Stream::Mock(std::io::Cursor::new(message.as_bytes().to_owned()));
     let (mut reader, _) = tokio::io::split(stream);
-    let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>).await.unwrap();
+    let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>)
+        .await
+        .unwrap();
     assert_eq!(200, response.status);
     assert_eq!(7, response.headers.len());
     assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
     assert_eq!(
-        Some(&super::super::Value::Map(std::collections::HashMap::from_iter(vec![(
-            String::from("origin"),
-            super::super::Value::String(String::from("122.9.3.166"))
-        )]))),
+        Some(&super::super::Value::Map(
+            std::collections::HashMap::from_iter(vec![(
+                String::from("origin"),
+                super::super::Value::String(String::from("122.9.3.166"))
+            )])
+        )),
         response.to_map().get("json")
     )
 }

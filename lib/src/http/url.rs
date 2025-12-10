@@ -35,7 +35,12 @@ impl std::convert::From<&str> for Url {
                 Scheme::Https => 443,
             },
         };
-        Url { scheme, host, port, path }
+        Url {
+            scheme,
+            host,
+            port,
+            path,
+        }
     }
 }
 
@@ -62,8 +67,14 @@ impl Default for Url {
 impl std::fmt::Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (&self.scheme, &self.port) {
-            (Scheme::Http, 80) | (Scheme::Https, 443) => write!(f, "{}://{}{}", self.scheme, self.host, self.path),
-            _ => write!(f, "{}://{}:{}{}", self.scheme, self.host, self.port, self.path),
+            (Scheme::Http, 80) | (Scheme::Https, 443) => {
+                write!(f, "{}://{}{}", self.scheme, self.host, self.path)
+            }
+            _ => write!(
+                f,
+                "{}://{}:{}{}",
+                self.scheme, self.host, self.port, self.path
+            ),
         }
     }
 }
@@ -191,7 +202,9 @@ impl Serializer {
     fn percent_encode(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
-                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'*' | b'-' | b'.' | b'_' => self.target.push(byte),
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'*' | b'-' | b'.' | b'_' => {
+                    self.target.push(byte)
+                }
                 _ => {
                     let index = (byte as usize) * 3;
                     self.target.extend_from_slice(&TABLE[index..index + 3])

@@ -42,7 +42,9 @@ impl Request {
                     if content_type.is_none() && name.to_lowercase() == "content-type" {
                         content_type = Some(value);
                     }
-                    if name.to_lowercase() != "content-type" || value.to_lowercase() != "multipart/form-data" {
+                    if name.to_lowercase() != "content-type"
+                        || value.to_lowercase() != "multipart/form-data"
+                    {
                         headers.insert(name.to_string(), value.to_string());
                     }
                 }
@@ -69,8 +71,13 @@ impl Request {
                             if value.starts_with("@") {
                                 let path = Path::new(base).join(&value[1..value.len()]);
                                 let uint8_array = match &path.as_os_str().to_str() {
-                                    Some(path) => JsFuture::from(Promise::resolve(&read_file_content(path))).await?,
-                                    None => return Err(JsValue::from_str("file path is not valid")),
+                                    Some(path) => {
+                                        JsFuture::from(Promise::resolve(&read_file_content(path)))
+                                            .await?
+                                    }
+                                    None => {
+                                        return Err(JsValue::from_str("file path is not valid"));
+                                    }
                                 };
                                 let array = Array::new();
                                 array.push(&JsValue::from(uint8_array));
@@ -78,12 +85,17 @@ impl Request {
                                     Some(mime) => {
                                         let properties = BlobPropertyBag::new();
                                         properties.set_type(mime.as_ref());
-                                        Blob::new_with_u8_array_sequence_and_options(&array, &properties)
+                                        Blob::new_with_u8_array_sequence_and_options(
+                                            &array,
+                                            &properties,
+                                        )
                                     }
                                     None => Blob::new_with_u8_array_sequence(&array),
                                 }?;
                                 match path.file_name().and_then(|os_str| os_str.to_str()) {
-                                    Some(file_name) => form.append_with_blob_and_filename(name, &blob, file_name)?,
+                                    Some(file_name) => {
+                                        form.append_with_blob_and_filename(name, &blob, file_name)?
+                                    }
                                     None => form.append_with_blob(name, &blob)?,
                                 };
                             } else {

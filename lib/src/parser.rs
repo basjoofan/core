@@ -119,11 +119,21 @@ impl Parser {
         };
         while !self.peek_token_is(Kind::Semi) && precedence < self.peek_precedence() {
             left = match self.peek_token() {
-                Some(Token { kind: Kind::Add, .. })
-                | Some(Token { kind: Kind::Sub, .. })
-                | Some(Token { kind: Kind::Mul, .. })
-                | Some(Token { kind: Kind::Div, .. })
-                | Some(Token { kind: Kind::Rem, .. })
+                Some(Token {
+                    kind: Kind::Add, ..
+                })
+                | Some(Token {
+                    kind: Kind::Sub, ..
+                })
+                | Some(Token {
+                    kind: Kind::Mul, ..
+                })
+                | Some(Token {
+                    kind: Kind::Div, ..
+                })
+                | Some(Token {
+                    kind: Kind::Rem, ..
+                })
                 | Some(Token { kind: Kind::Bx, .. })
                 | Some(Token { kind: Kind::Bo, .. })
                 | Some(Token { kind: Kind::Ba, .. })
@@ -148,11 +158,15 @@ impl Parser {
                     self.next_token();
                     self.parse_index_expr(left)?
                 }
-                Some(Token { kind: Kind::Dot, .. }) => {
+                Some(Token {
+                    kind: Kind::Dot, ..
+                }) => {
                     self.next_token();
                     self.parse_field_expr(left)?
                 }
-                Some(Token { kind: Kind::Arrow, .. }) => {
+                Some(Token {
+                    kind: Kind::Arrow, ..
+                }) => {
                     self.next_token();
                     self.parse_send_expr(left)?
                 }
@@ -592,7 +606,10 @@ fn test_parse_operator_precedence() {
         ("3 + 4; -5 * 6", "(3 + 4)((-5) * 6)"),
         ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
         ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
-        ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))"),
+        (
+            "3 + 4 * 5 == 3 * 1 + 4 * 5",
+            "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+        ),
         ("true", "true"),
         ("false", "false"),
         ("3 > 5 == false", "((3 > 5) == false)"),
@@ -608,9 +625,18 @@ fn test_parse_operator_precedence() {
             "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
             "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
         ),
-        ("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))"),
-        ("a * [1, 2, 3, 4][b * c] * d", "((a * ([1, 2, 3, 4][(b * c)])) * d)"),
-        ("add(a * b[2], b[1], 2 * [1, 2][1])", "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))"),
+        (
+            "add(a + b + c * d / f + g)",
+            "add((((a + b) + ((c * d) / f)) + g))",
+        ),
+        (
+            "a * [1, 2, 3, 4][b * c] * d",
+            "((a * ([1, 2, 3, 4][(b * c)])) * d)",
+        ),
+        (
+            "add(a * b[2], b[1], 2 * [1, 2][1])",
+            "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
+        ),
         ("!add()", "(!add())"),
         ("-add()", "(-add())"),
         ("!array[1]", "(!(array[1]))"),
@@ -950,7 +976,13 @@ fn test_parse_call_expr_argument() {
                 println!("{expr}");
                 if let Expr::Call(function, arguments) = expr {
                     assert!(function == function_name);
-                    assert!(arguments.iter().map(|a| a.to_string()).collect::<Vec<String>>() == expected);
+                    assert!(
+                        arguments
+                            .iter()
+                            .map(|a| a.to_string())
+                            .collect::<Vec<String>>()
+                            == expected
+                    );
                 } else {
                     unreachable!("call expr parse failed")
                 }
@@ -1048,7 +1080,10 @@ fn test_parse_request_asserts() {
                regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22"
                ]"#,
             2,
-            vec!["status == 200", r#"regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22""#],
+            vec![
+                "status == 200",
+                r#"regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22""#,
+            ],
         ),
         (r#"rq post`POST`[]"#, 0, vec![]),
     ];
@@ -1057,7 +1092,13 @@ fn test_parse_request_asserts() {
             Ok(Source { requests, .. }) => {
                 if let Some((_, (_, asserts))) = requests.into_iter().next() {
                     assert!(asserts.len() == expected_len);
-                    assert!(asserts.iter().map(|assert| assert.to_string()).collect::<Vec<String>>() == expected_asserts);
+                    assert!(
+                        asserts
+                            .iter()
+                            .map(|assert| assert.to_string())
+                            .collect::<Vec<String>>()
+                            == expected_asserts
+                    );
                 } else {
                     unreachable!("requests none")
                 }

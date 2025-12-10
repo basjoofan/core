@@ -150,7 +150,9 @@ pub async fn test(
                     let records = context.records();
                     records.iter().for_each(|record| println!("{record}"));
                     if let Some(ref mut writer) = writer {
-                        writer.write(&records, &name, task as u32, u32::default()).await
+                        writer
+                            .write(&records, &name, task as u32, u32::default())
+                            .await
                     }
                 });
             }
@@ -177,7 +179,9 @@ pub async fn test(
 
 async fn read_text(path: PathBuf) -> String {
     let mut text = Vec::new();
-    read_bytes(path, &mut text).await.expect("Could not read source file");
+    read_bytes(path, &mut text)
+        .await
+        .expect("Could not read source file");
     String::from_utf8(text).expect("Could not decode source file")
 }
 

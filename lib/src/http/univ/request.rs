@@ -53,8 +53,15 @@ impl Request {
                 Some("multipart/form-data") => {
                     let mut boundary = String::from("FormDataBoundary");
                     let rng = rand::rng();
-                    boundary.extend(rng.sample_iter(rand::distr::Alphanumeric).take(boundary.len()).map(char::from));
-                    headers.replace("content-type", format!("multipart/form-data; boundary={boundary}"));
+                    boundary.extend(
+                        rng.sample_iter(rand::distr::Alphanumeric)
+                            .take(boundary.len())
+                            .map(char::from),
+                    );
+                    headers.replace(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    );
                     let mut parts = Vec::new();
                     for line in lines.by_ref() {
                         if let Some((name, value)) = line.trim().split_once(':') {
@@ -74,7 +81,9 @@ impl Request {
                                     .into_bytes(),
                                 );
                                 if let Some(mime) = mime::from_path(path) {
-                                    bytes.append(&mut format!("Content-Type: {mime}\r\n\r\n").into_bytes());
+                                    bytes.append(
+                                        &mut format!("Content-Type: {mime}\r\n\r\n").into_bytes(),
+                                    );
                                 };
                                 length += bytes.len() + metadata.len() as usize + 2;
                                 parts.push(Part::Bytes(bytes));
@@ -122,7 +131,11 @@ impl Request {
         }
     }
 
-    pub async fn write<W: AsyncWrite + Unpin>(&mut self, mut writer: W, content: Content) -> Result<(), std::io::Error> {
+    pub async fn write<W: AsyncWrite + Unpin>(
+        &mut self,
+        mut writer: W,
+        content: Content,
+    ) -> Result<(), std::io::Error> {
         writer
             .write_all(format!("{} {} {}\r\n", self.method, self.url.path, self.version).as_bytes())
             .await?;

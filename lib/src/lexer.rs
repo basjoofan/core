@@ -133,7 +133,11 @@ pub fn segment(text: &str) -> Vec<Token> {
                             break;
                         }
                     }
-                    if has_dot { (Kind::Float, string) } else { (Kind::Integer, string) }
+                    if has_dot {
+                        (Kind::Float, string)
+                    } else {
+                        (Kind::Integer, string)
+                    }
                 }
                 'A'..='Z' | 'a'..='z' | '_' => {
                     let mut string = String::from(char);

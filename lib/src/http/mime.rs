@@ -2,7 +2,10 @@ use std::ffi::OsStr;
 use std::path::Path;
 
 pub fn from_path<P: AsRef<Path>>(path: P) -> Option<&'static str> {
-    path.as_ref().extension().and_then(OsStr::to_str).and_then(|key| from_ext(key))
+    path.as_ref()
+        .extension()
+        .and_then(OsStr::to_str)
+        .and_then(|key| from_ext(key))
 }
 
 fn from_ext(ext: &str) -> Option<&'static str> {
@@ -66,7 +69,10 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("aif", "audio/aiff"),
     ("aifc", "audio/aiff"),
     ("aiff", "audio/aiff"),
-    ("air", "application/vnd.adobe.air-application-installer-package+zip"),
+    (
+        "air",
+        "application/vnd.adobe.air-application-installer-package+zip",
+    ),
     ("ait", "application/vnd.dvb.ait"),
     ("amc", "application/mpeg"),
     ("ami", "application/vnd.amiga.ami"),
@@ -175,7 +181,10 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("chm", "application/vnd.ms-htmlhelp"),
     ("chrt", "application/vnd.kde.kchart"),
     ("cif", "chemical/x-cif"),
-    ("cii", "application/vnd.anser-web-certificate-issue-initiation"),
+    (
+        "cii",
+        "application/vnd.anser-web-certificate-issue-initiation",
+    ),
     ("cil", "application/vnd.ms-artgalry"),
     ("cla", "application/vnd.claymore"),
     ("class", "application/x-java-applet"),
@@ -252,7 +261,10 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("dir", "application/x-director"),
     ("dis", "application/vnd.mobius.dis"),
     ("disco", "text/xml"),
-    ("disposition-notification", "message/disposition-notification"),
+    (
+        "disposition-notification",
+        "message/disposition-notification",
+    ),
     ("dist", "application/octet-stream"),
     ("distz", "application/octet-stream"),
     ("divx", "video/divx"),
@@ -268,10 +280,16 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("dng", "image/x-adobe-dng"),
     ("doc", "application/msword"),
     ("docm", "application/vnd.ms-word.document.macroEnabled.12"),
-    ("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    (
+        "docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
     ("dot", "application/msword"),
     ("dotm", "application/vnd.ms-word.template.macroEnabled.12"),
-    ("dotx", "application/vnd.openxmlformats-officedocument.wordprocessingml.template"),
+    (
+        "dotx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+    ),
     ("dp", "application/vnd.osgi.dp"),
     ("dpg", "application/vnd.dpgraph"),
     ("dra", "audio/vnd.dra"),
@@ -576,7 +594,10 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("lasxml", "application/vnd.las.las+xml"),
     ("latex", "application/x-latex"),
     ("lbd", "application/vnd.llamagraphics.life-balance.desktop"),
-    ("lbe", "application/vnd.llamagraphics.life-balance.exchange+xml"),
+    (
+        "lbe",
+        "application/vnd.llamagraphics.life-balance.exchange+xml",
+    ),
     ("les", "application/vnd.hhe.lesson-player"),
     ("less", "text/less"),
     ("lha", "application/x-lzh-compressed"),
@@ -775,7 +796,10 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("odb", "application/vnd.oasis.opendocument.database"),
     ("odc", "application/vnd.oasis.opendocument.chart"),
     ("odf", "application/vnd.oasis.opendocument.formula"),
-    ("odft", "application/vnd.oasis.opendocument.formula-template"),
+    (
+        "odft",
+        "application/vnd.oasis.opendocument.formula-template",
+    ),
     ("odg", "application/vnd.oasis.opendocument.graphics"),
     ("odh", "text/plain"),
     ("odi", "application/vnd.oasis.opendocument.image"),
@@ -804,14 +828,26 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("org", "application/vnd.lotus-organizer"),
     ("osdx", "application/opensearchdescription+xml"),
     ("osf", "application/vnd.yamaha.openscoreformat"),
-    ("osfpvg", "application/vnd.yamaha.openscoreformat.osfpvg+xml"),
+    (
+        "osfpvg",
+        "application/vnd.yamaha.openscoreformat.osfpvg+xml",
+    ),
     ("otc", "application/vnd.oasis.opendocument.chart-template"),
     ("otf", "application/font-sfnt"),
-    ("otg", "application/vnd.oasis.opendocument.graphics-template"),
+    (
+        "otg",
+        "application/vnd.oasis.opendocument.graphics-template",
+    ),
     ("oth", "application/vnd.oasis.opendocument.text-web"),
     ("oti", "application/vnd.oasis.opendocument.image-template"),
-    ("otp", "application/vnd.oasis.opendocument.presentation-template"),
-    ("ots", "application/vnd.oasis.opendocument.spreadsheet-template"),
+    (
+        "otp",
+        "application/vnd.oasis.opendocument.presentation-template",
+    ),
+    (
+        "ots",
+        "application/vnd.oasis.opendocument.spreadsheet-template",
+    ),
     ("ott", "application/vnd.oasis.opendocument.text-template"),
     ("ova", "application/x-virtualbox-ova"),
     ("ovf", "application/x-virtualbox-ovf"),
@@ -882,18 +918,39 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("pnz", "image/png"),
     ("portpkg", "application/vnd.macports.portpkg"),
     ("pot", "application/vnd.ms-powerpoint"),
-    ("potm", "application/vnd.ms-powerpoint.template.macroEnabled.12"),
-    ("potx", "application/vnd.openxmlformats-officedocument.presentationml.template"),
+    (
+        "potm",
+        "application/vnd.ms-powerpoint.template.macroEnabled.12",
+    ),
+    (
+        "potx",
+        "application/vnd.openxmlformats-officedocument.presentationml.template",
+    ),
     ("ppa", "application/vnd.ms-powerpoint"),
-    ("ppam", "application/vnd.ms-powerpoint.addin.macroEnabled.12"),
+    (
+        "ppam",
+        "application/vnd.ms-powerpoint.addin.macroEnabled.12",
+    ),
     ("ppd", "application/vnd.cups-ppd"),
     ("ppm", "image/x-portable-pixmap"),
     ("pps", "application/vnd.ms-powerpoint"),
-    ("ppsm", "application/vnd.ms-powerpoint.slideshow.macroEnabled.12"),
-    ("ppsx", "application/vnd.openxmlformats-officedocument.presentationml.slideshow"),
+    (
+        "ppsm",
+        "application/vnd.ms-powerpoint.slideshow.macroEnabled.12",
+    ),
+    (
+        "ppsx",
+        "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+    ),
     ("ppt", "application/vnd.ms-powerpoint"),
-    ("pptm", "application/vnd.ms-powerpoint.presentation.macroEnabled.12"),
-    ("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+    (
+        "pptm",
+        "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+    ),
+    (
+        "pptx",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ),
     ("pqa", "application/vnd.palm"),
     ("prc", "application/x-mobipocket-ebook"),
     ("pre", "application/vnd.lotus-freelance"),
@@ -1011,7 +1068,10 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("sdp", "application/sdp"),
     ("sdw", "application/vnd.stardivision.writer"),
     ("sea", "application/octet-stream"),
-    ("searchconnector-ms", "application/windows-search-connector+xml"),
+    (
+        "searchconnector-ms",
+        "application/windows-search-connector+xml",
+    ),
     ("see", "application/vnd.seemail"),
     ("seed", "application/vnd.fdsn.seed"),
     ("sema", "application/vnd.sema"),
@@ -1048,8 +1108,14 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("skm", "application/vnd.koan"),
     ("skp", "application/x-koan"),
     ("skt", "application/vnd.koan"),
-    ("sldm", "application/vnd.ms-powerpoint.slide.macroEnabled.12"),
-    ("sldx", "application/vnd.openxmlformats-officedocument.presentationml.slide"),
+    (
+        "sldm",
+        "application/vnd.ms-powerpoint.slide.macroEnabled.12",
+    ),
+    (
+        "sldx",
+        "application/vnd.openxmlformats-officedocument.presentationml.slide",
+    ),
     ("slim", "text/slim"),
     ("slk", "application/vnd.ms-excel"),
     ("slm", "text/slim"),
@@ -1369,12 +1435,21 @@ pub static MIME_TYPES: &[(&str, &str)] = &[
     ("xll", "application/vnd.ms-excel"),
     ("xlm", "application/vnd.ms-excel"),
     ("xls", "application/vnd.ms-excel"),
-    ("xlsb", "application/vnd.ms-excel.sheet.binary.macroEnabled.12"),
+    (
+        "xlsb",
+        "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+    ),
     ("xlsm", "application/vnd.ms-excel.sheet.macroEnabled.12"),
-    ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    (
+        "xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ),
     ("xlt", "application/vnd.ms-excel"),
     ("xltm", "application/vnd.ms-excel.template.macroEnabled.12"),
-    ("xltx", "application/vnd.openxmlformats-officedocument.spreadsheetml.template"),
+    (
+        "xltx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+    ),
     ("xlw", "application/vnd.ms-excel"),
     ("xm", "audio/xm"),
     ("xml", "text/xml"),

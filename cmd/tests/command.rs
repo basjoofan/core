@@ -13,7 +13,9 @@ async fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
     command.stdin(Stdio::piped());
     let mut child = command.spawn().expect("Failed to spawn child process");
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all("let x = 1 + 1; println(\"{x}\");\n".as_bytes()).await?;
+        stdin
+            .write_all("let x = 1 + 1; println(\"{x}\");\n".as_bytes())
+            .await?;
         stdin.write_all("exit".as_bytes()).await?;
     }
     let output = child.wait_with_output().await?;
@@ -41,7 +43,11 @@ async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
     assert!(output.status.success());
     assert_eq!(String::from_utf8(output.stdout)?, "2null\n");
     let mut command = new_command();
-    let output = command.arg("eval").arg(r#""🍀 Hello Basjoofan!""#).output().await?;
+    let output = command
+        .arg("eval")
+        .arg(r#""🍀 Hello Basjoofan!""#)
+        .output()
+        .await?;
     assert!(output.status.success());
     assert_eq!(String::from_utf8(output.stdout)?, "🍀 Hello Basjoofan!\n");
     Ok(())
@@ -50,7 +56,9 @@ async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::test]
 async fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new().route("/hello", get(|| async { "Hello, World!" }));
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 8888)).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 8888))
+        .await
+        .unwrap();
     tokio::spawn(async move {
         axum::serve(listener, router).await.unwrap();
     });

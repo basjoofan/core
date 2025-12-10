@@ -24,11 +24,25 @@ impl Client {
     pub async fn send(&self, message: &str) -> (Request, Response, Time, String) {
         let (request, content) = match Request::from(message, self.base.as_str()).await {
             Ok((request, content)) => (request, content),
-            Err(error) => return (Request::default(), Response::default(), Time::default(), format!("{:?}", error)),
+            Err(error) => {
+                return (
+                    Request::default(),
+                    Response::default(),
+                    Time::default(),
+                    format!("{:?}", error),
+                );
+            }
         };
         let (response, time) = match fetch(&request, content, self.fetch_timeout).await {
             Ok(response) => response,
-            Err(error) => return (request, Response::default(), Time::default(), format!("{:?}", error)),
+            Err(error) => {
+                return (
+                    request,
+                    Response::default(),
+                    Time::default(),
+                    format!("{:?}", error),
+                );
+            }
         };
         (request, response, time, String::default())
     }
@@ -40,7 +54,11 @@ extern "C" {
     fn fetch_with_request(request: &WebRequest) -> Promise;
 }
 
-async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Result<(Response, Time), JsValue> {
+async fn fetch(
+    request: &Request,
+    content: Option<JsValue>,
+    timeout: u32,
+) -> Result<(Response, Time), JsValue> {
     let init = RequestInit::new();
     init.set_mode(RequestMode::Cors);
     init.set_cache(RequestCache::NoStore);
@@ -58,7 +76,10 @@ async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Res
     let start = Date::now();
     let resp_value = JsFuture::from(Promise::resolve(&fetch_with_request(&web_request))).await?;
     let web_response: WebResponse = resp_value.dyn_into()?;
-    let body = JsFuture::from(web_response.text()?).await?.as_string().unwrap_or_default();
+    let body = JsFuture::from(web_response.text()?)
+        .await?
+        .as_string()
+        .unwrap_or_default();
     let mut headers = Headers::default();
     for header in web_response.headers().entries() {
         match header {
@@ -66,7 +87,10 @@ async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Res
                 let header = Array::from(&header);
                 let name = header.shift();
                 let value = header.shift();
-                headers.insert(name.as_string().unwrap_or_default(), value.as_string().unwrap_or_default())
+                headers.insert(
+                    name.as_string().unwrap_or_default(),
+                    value.as_string().unwrap_or_default(),
+                )
             }
             Err(error) => return Err(error),
         }
@@ -129,7 +153,10 @@ mod tests {
             &JsValue::from_str("time.total: "),
             &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
         );
-        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        console::log_2(
+            &JsValue::from_str("response.body: "),
+            &JsValue::from_str(&response.body),
+        );
         assert_eq!("GET", request.method.as_ref());
         assert_eq!(200, response.status);
         // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -148,7 +175,10 @@ mod tests {
             &JsValue::from_str("time.total: "),
             &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
         );
-        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        console::log_2(
+            &JsValue::from_str("response.body: "),
+            &JsValue::from_str(&response.body),
+        );
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);
         // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -169,7 +199,10 @@ mod tests {
             &JsValue::from_str("time.total: "),
             &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
         );
-        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        console::log_2(
+            &JsValue::from_str("response.body: "),
+            &JsValue::from_str(&response.body),
+        );
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);
         // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -192,7 +225,10 @@ mod tests {
             &JsValue::from_str("time.total: "),
             &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
         );
-        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        console::log_2(
+            &JsValue::from_str("response.body: "),
+            &JsValue::from_str(&response.body),
+        );
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);
         // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);
@@ -225,7 +261,10 @@ mod tests {
             &JsValue::from_str("time.total: "),
             &JsValue::from(&BigInt::from(time.total.as_millis() as u64)),
         );
-        console::log_2(&JsValue::from_str("response.body: "), &JsValue::from_str(&response.body));
+        console::log_2(
+            &JsValue::from_str("response.body: "),
+            &JsValue::from_str(&response.body),
+        );
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);
         // assert_eq!(time.total, time.resolve + time.connect + time.write + time.delay + time.read);

@@ -60,7 +60,10 @@ pub mod tests {
         }
     }
 
-    async fn handle_get(headers: HeaderMap, Query(params): Query<HashMap<String, String>>) -> Json<Value> {
+    async fn handle_get(
+        headers: HeaderMap,
+        Query(params): Query<HashMap<String, String>>,
+    ) -> Json<Value> {
         let headers = headers
             .iter()
             .map(|(name, value)| (name.to_string(), value.to_str().unwrap().to_string()))
@@ -68,7 +71,11 @@ pub mod tests {
         Json(json!({ "headers": headers,"params": params}))
     }
 
-    async fn handle_text(headers: HeaderMap, Query(params): Query<HashMap<String, String>>, text: String) -> Json<Value> {
+    async fn handle_text(
+        headers: HeaderMap,
+        Query(params): Query<HashMap<String, String>>,
+        text: String,
+    ) -> Json<Value> {
         let headers = headers
             .iter()
             .map(|(name, value)| (name.to_string(), value.to_str().unwrap().to_string()))
@@ -76,7 +83,11 @@ pub mod tests {
         Json(json!({ "headers": headers,"params": params,"text": text}))
     }
 
-    async fn handle_json(headers: HeaderMap, Query(params): Query<HashMap<String, String>>, Json(json): Json<Value>) -> Json<Value> {
+    async fn handle_json(
+        headers: HeaderMap,
+        Query(params): Query<HashMap<String, String>>,
+        Json(json): Json<Value>,
+    ) -> Json<Value> {
         let headers = headers
             .iter()
             .map(|(name, value)| (name.to_string(), value.to_str().unwrap().to_string()))

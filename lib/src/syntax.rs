@@ -38,7 +38,9 @@ impl Expr {
             Expr::Float(float) => Value::Float(*float),
             Expr::Boolean(boolean) => Value::Boolean(*boolean),
             Expr::String(string) => Value::String(string.to_owned()),
-            Expr::Array(items) => Value::Array(items.iter().map(|e| e.eval()).collect::<Vec<Value>>()),
+            Expr::Array(items) => {
+                Value::Array(items.iter().map(|e| e.eval()).collect::<Vec<Value>>())
+            }
             Expr::Map(pairs) => Value::Map(
                 pairs
                     .iter()
@@ -94,7 +96,9 @@ impl Display for Expr {
                 }
                 write!(f, " }}")
             }
-            Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{}", ", ")),
+            Expr::Call(function, arguments) => {
+                write!(f, "{}({})", function, join!(arguments, "{}", ", "))
+            }
             Expr::Send(request) => write!(f, "{request}->"),
         }
     }
@@ -108,7 +112,9 @@ impl Debug for Expr {
             Expr::Binary(token, left, right) => {
                 write!(f, "({left:?} {token} {right:?})")
             }
-            Expr::Call(function, arguments) => write!(f, "{}({})", function, join!(arguments, "{:?}", ", ")),
+            Expr::Call(function, arguments) => {
+                write!(f, "{}({})", function, join!(arguments, "{:?}", ", "))
+            }
             _ => write!(f, "{self}"),
         }
     }
