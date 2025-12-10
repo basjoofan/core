@@ -113,69 +113,75 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
     }
 }
 
-#[tokio::test]
-async fn test_writer() {
-    let mut writer = Writer::new(Vec::new());
-    let record = Record {
-        name: "test".to_string(),
-        time: super::http::Time::default(),
-        request: super::http::Request::default(),
-        response: super::http::Response::default(),
-        asserts: Vec::new(),
-        error: String::default(),
-    };
-    writer.write(&[record], "test", 0, 0).await;
-    let encoded = writer.w;
-    print!("{}", String::from_utf8_lossy(&encoded));
-    let record = serde_json::from_slice::<serde_json::Value>(&encoded).unwrap();
-    println!("{:?}", record);
-    assert_eq!(record["name"].as_str(), Some("test"));
-    assert_eq!(record["request_headers"].as_array().unwrap().len(), 0);
+#[cfg(test)]
+pub mod tests {
+    use super::Record;
+    use super::Writer;
 
-    let mut writer = Writer::new(Vec::new());
-    let mut request_headers = super::http::Headers::default();
-    request_headers.insert(String::from("a"), String::from("b"));
-    request_headers.insert(String::from("a"), String::from("c"));
-    let mut response_headers = super::http::Headers::default();
-    response_headers.insert(String::from("d"), String::from("e"));
-    response_headers.insert(String::from("d"), String::from("f"));
-    response_headers.insert(String::from("g"), String::from("h"));
-    let record = Record {
-        name: "test".to_string(),
-        time: super::http::Time::default(),
-        request: super::http::Request {
-            method: super::http::Method::Get,
-            url: super::http::Url::from("http://localhost:8080"),
-            version: super::http::Version::Http11,
-            headers: request_headers,
-            body: String::default(),
-        },
-        response: super::http::Response {
-            version: String::from("HTTP/1.1"),
-            status: 200,
-            reason: String::from("OK"),
-            headers: response_headers,
-            body: String::default(),
-        },
-        asserts: Vec::new(),
-        error: String::default(),
-    };
-    writer.write(&[record], "test", 0, 0).await;
-    let encoded = writer.w;
-    print!("{}", String::from_utf8_lossy(&encoded));
-    let record = serde_json::from_slice::<serde_json::Value>(&encoded).unwrap();
-    println!("{:?}", record);
-    assert_eq!(record["name"].as_str(), Some("test"));
-    assert_eq!(record["request_headers"].as_array().unwrap().len(), 2);
-    assert_eq!(record["request_headers"][0][0].as_str(), Some("a"));
-    assert_eq!(record["request_headers"][0][1].as_str(), Some("b"));
-    assert_eq!(record["request_headers"][1][0].as_str(), Some("a"));
-    assert_eq!(record["request_headers"][1][1].as_str(), Some("c"));
-    assert_eq!(record["response_headers"].as_array().unwrap().len(), 3);
-    assert_eq!(record["response_headers"][0][0].as_str(), Some("d"));
-    assert_eq!(record["response_headers"][0][1].as_str(), Some("e"));
-    assert_eq!(record["response_headers"][1][0].as_str(), Some("d"));
-    assert_eq!(record["response_headers"][1][1].as_str(), Some("f"));
-    assert_eq!(record["response_headers"][2][0].as_str(), Some("g"));
-    assert_eq!(record["response_headers"][2][1].as_str(), Some("h"));
+    #[tokio::test]
+    async fn test_writer() {
+        let mut writer = Writer::new(Vec::new());
+        let record = Record {
+            name: "test".to_string(),
+            time: crate::http::Time::default(),
+            request: crate::http::Request::default(),
+            response: crate::http::Response::default(),
+            asserts: Vec::new(),
+            error: String::default(),
+        };
+        writer.write(&[record], "test", 0, 0).await;
+        let encoded = writer.w;
+        print!("{}", String::from_utf8_lossy(&encoded));
+        let record = serde_json::from_slice::<serde_json::Value>(&encoded).unwrap();
+        println!("{:?}", record);
+        assert_eq!(record["name"].as_str(), Some("test"));
+        assert_eq!(record["request_headers"].as_array().unwrap().len(), 0);
+
+        let mut writer = Writer::new(Vec::new());
+        let mut request_headers = crate::http::Headers::default();
+        request_headers.insert(String::from("a"), String::from("b"));
+        request_headers.insert(String::from("a"), String::from("c"));
+        let mut response_headers = crate::http::Headers::default();
+        response_headers.insert(String::from("d"), String::from("e"));
+        response_headers.insert(String::from("d"), String::from("f"));
+        response_headers.insert(String::from("g"), String::from("h"));
+        let record = Record {
+            name: "test".to_string(),
+            time: crate::http::Time::default(),
+            request: crate::http::Request {
+                method: crate::http::Method::Get,
+                url: crate::http::Url::from("http://localhost:8080"),
+                version: crate::http::Version::Http11,
+                headers: request_headers,
+                body: String::default(),
+            },
+            response: crate::http::Response {
+                version: String::from("HTTP/1.1"),
+                status: 200,
+                reason: String::from("OK"),
+                headers: response_headers,
+                body: String::default(),
+            },
+            asserts: Vec::new(),
+            error: String::default(),
+        };
+        writer.write(&[record], "test", 0, 0).await;
+        let encoded = writer.w;
+        print!("{}", String::from_utf8_lossy(&encoded));
+        let record = serde_json::from_slice::<serde_json::Value>(&encoded).unwrap();
+        println!("{:?}", record);
+        assert_eq!(record["name"].as_str(), Some("test"));
+        assert_eq!(record["request_headers"].as_array().unwrap().len(), 2);
+        assert_eq!(record["request_headers"][0][0].as_str(), Some("a"));
+        assert_eq!(record["request_headers"][0][1].as_str(), Some("b"));
+        assert_eq!(record["request_headers"][1][0].as_str(), Some("a"));
+        assert_eq!(record["request_headers"][1][1].as_str(), Some("c"));
+        assert_eq!(record["response_headers"].as_array().unwrap().len(), 3);
+        assert_eq!(record["response_headers"][0][0].as_str(), Some("d"));
+        assert_eq!(record["response_headers"][0][1].as_str(), Some("e"));
+        assert_eq!(record["response_headers"][1][0].as_str(), Some("d"));
+        assert_eq!(record["response_headers"][1][1].as_str(), Some("f"));
+        assert_eq!(record["response_headers"][2][0].as_str(), Some("g"));
+        assert_eq!(record["response_headers"][2][1].as_str(), Some("h"));
+    }
 }

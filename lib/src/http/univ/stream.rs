@@ -204,60 +204,68 @@ fn rotate<T, A: FusedIterator<Item = T>, B: FusedIterator<Item = T>>(
     })
 }
 
-#[test]
-fn test_rotate_even() {
-    let x: Vec<u32> = rotate(vec![1, 2, 3].into_iter(), vec![4, 5, 6].into_iter()).collect();
-    assert_eq!(&x[..], &[1, 4, 2, 5, 3, 6][..]);
-}
+#[cfg(test)]
+pub mod tests {
+    use super::Duration;
+    use super::Stream;
+    use super::Url;
+    use super::rotate;
 
-#[test]
-fn test_rotate_left() {
-    let x: Vec<u32> = rotate(
-        vec![1, 2, 3, 100, 101].into_iter(),
-        vec![4, 5, 6].into_iter(),
-    )
-    .collect();
-    assert_eq!(&x[..], &[1, 4, 2, 5, 3, 6, 100, 101][..]);
-}
-
-#[test]
-fn test_rotate_right() {
-    let x: Vec<u32> = rotate(
-        vec![1, 2, 3].into_iter(),
-        vec![4, 5, 6, 100, 101].into_iter(),
-    )
-    .collect();
-    assert_eq!(&x[..], &[1, 4, 2, 5, 3, 6, 100, 101][..]);
-}
-
-#[tokio::test]
-async fn test_connect() {
-    crate::tests::start_server(30000).await;
-    let stream = Stream::connect(
-        &Url::from("http://127.0.0.1:30000/get"),
-        Duration::from_secs(2),
-    )
-    .await;
-    if let Err(error) = stream.as_ref() {
-        println!("{error:?}");
+    #[test]
+    fn test_rotate_even() {
+        let x: Vec<u32> = rotate(vec![1, 2, 3].into_iter(), vec![4, 5, 6].into_iter()).collect();
+        assert_eq!(&x[..], &[1, 4, 2, 5, 3, 6][..]);
     }
-    assert!(stream.is_ok());
-    let stream = Stream::connect(
-        &Url::from("http://localhost:30000/get"),
-        Duration::from_secs(2),
-    )
-    .await;
-    if let Err(error) = stream.as_ref() {
-        println!("{error:?}");
+
+    #[test]
+    fn test_rotate_left() {
+        let x: Vec<u32> = rotate(
+            vec![1, 2, 3, 100, 101].into_iter(),
+            vec![4, 5, 6].into_iter(),
+        )
+        .collect();
+        assert_eq!(&x[..], &[1, 4, 2, 5, 3, 6, 100, 101][..]);
     }
-    assert!(stream.is_ok());
-    let stream = Stream::connect(
-        &Url::from("http://localhost:88/get"),
-        Duration::from_secs(2),
-    )
-    .await;
-    assert!(stream.is_err());
-    if let Err(error) = stream {
-        println!("{error:?}");
+
+    #[test]
+    fn test_rotate_right() {
+        let x: Vec<u32> = rotate(
+            vec![1, 2, 3].into_iter(),
+            vec![4, 5, 6, 100, 101].into_iter(),
+        )
+        .collect();
+        assert_eq!(&x[..], &[1, 4, 2, 5, 3, 6, 100, 101][..]);
+    }
+
+    #[tokio::test]
+    async fn test_connect() {
+        crate::tests::start_server(30000).await;
+        let stream = Stream::connect(
+            &Url::from("http://127.0.0.1:30000/get"),
+            Duration::from_secs(2),
+        )
+        .await;
+        if let Err(error) = stream.as_ref() {
+            println!("{error:?}");
+        }
+        assert!(stream.is_ok());
+        let stream = Stream::connect(
+            &Url::from("http://localhost:30000/get"),
+            Duration::from_secs(2),
+        )
+        .await;
+        if let Err(error) = stream.as_ref() {
+            println!("{error:?}");
+        }
+        assert!(stream.is_ok());
+        let stream = Stream::connect(
+            &Url::from("http://localhost:88/get"),
+            Duration::from_secs(2),
+        )
+        .await;
+        assert!(stream.is_err());
+        if let Err(error) = stream {
+            println!("{error:?}");
+        }
     }
 }

@@ -151,30 +151,36 @@ impl Request {
     }
 }
 
-#[tokio::test]
-async fn test_from_message_get() {
-    let message = r#"
+#[cfg(test)]
+pub mod tests {
+    use super::AsyncWriteExt;
+    use super::Request;
+
+    #[tokio::test]
+    async fn test_from_message_get() {
+        let message = r#"
     GET http://domain/get
     Host: domain"#;
-    let (mut request, content) = Request::from(message).await.unwrap();
-    let mut writer = tokio::io::stdout();
-    request.write(&mut writer, content).await.unwrap();
-    writer.write_all("\r\n".as_bytes()).await.unwrap();
-    assert_eq!("GET", request.method.as_ref());
-}
+        let (mut request, content) = Request::from(message).await.unwrap();
+        let mut writer = tokio::io::stdout();
+        request.write(&mut writer, content).await.unwrap();
+        writer.write_all("\r\n".as_bytes()).await.unwrap();
+        assert_eq!("GET", request.method.as_ref());
+    }
 
-#[tokio::test]
-async fn test_from_message_post_multipart() {
-    let message = r#"
+    #[tokio::test]
+    async fn test_from_message_post_multipart() {
+        let message = r#"
     POST https://domain/post
     Host: domain
     Content-Type: multipart/form-data
 
     a: b
     f: @src/lib.rs"#;
-    let (mut request, content) = Request::from(message).await.unwrap();
-    let mut writer = tokio::io::stdout();
-    request.write(&mut writer, content).await.unwrap();
-    writer.write_all("\r\n".as_bytes()).await.unwrap();
-    assert_eq!("POST", request.method.as_ref());
+        let (mut request, content) = Request::from(message).await.unwrap();
+        let mut writer = tokio::io::stdout();
+        request.write(&mut writer, content).await.unwrap();
+        writer.write_all("\r\n".as_bytes()).await.unwrap();
+        assert_eq!("POST", request.method.as_ref());
+    }
 }

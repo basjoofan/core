@@ -69,9 +69,14 @@ fn parse<T: std::str::FromStr + std::default::Default>(str: Option<&str>) -> T {
     }
 }
 
-#[tokio::test]
-async fn test_from_message_read_exact() {
-    let message = r#"HTTP/1.1 200 OK
+#[cfg(test)]
+pub mod tests {
+    use super::Response;
+    use super::Stream;
+
+    #[tokio::test]
+    async fn test_from_message_read_exact() {
+        let message = r#"HTTP/1.1 200 OK
 Date: Sun, 17 Feb 2025 07:22:38 GMT
 Content-Type: application/json
 Content-Length: 30
@@ -84,28 +89,28 @@ Access-Control-Allow-Credentials: true
   "origin": "122.9.3.166"
 }
 "#;
-    let stream = Stream::Mock(std::io::Cursor::new(message.as_bytes().to_owned()));
-    let (mut reader, _) = tokio::io::split(stream);
-    let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>)
-        .await
-        .unwrap();
-    assert_eq!(200, response.status);
-    assert_eq!(7, response.headers.len());
-    assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
-    assert_eq!(
-        Some(&super::super::Value::Map(
-            std::collections::HashMap::from_iter(vec![(
-                String::from("origin"),
-                super::super::Value::String(String::from("122.9.3.166"))
-            )])
-        )),
-        response.to_map().get("json")
-    )
-}
+        let stream = Stream::Mock(std::io::Cursor::new(message.as_bytes().to_owned()));
+        let (mut reader, _) = tokio::io::split(stream);
+        let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>)
+            .await
+            .unwrap();
+        assert_eq!(200, response.status);
+        assert_eq!(7, response.headers.len());
+        assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
+        assert_eq!(
+            Some(&crate::Value::Map(std::collections::HashMap::from_iter(
+                vec![(
+                    String::from("origin"),
+                    crate::Value::String(String::from("122.9.3.166"))
+                )]
+            ))),
+            response.to_map().get("json")
+        )
+    }
 
-#[tokio::test]
-async fn test_from_message_read_to_end() {
-    let message = r#"HTTP/1.1 200 OK
+    #[tokio::test]
+    async fn test_from_message_read_to_end() {
+        let message = r#"HTTP/1.1 200 OK
 Date: Sun, 17 Feb 2025 07:22:38 GMT
 Content-Type: application/json
 Content-Length: 3a
@@ -118,21 +123,22 @@ Access-Control-Allow-Credentials: true
   "origin": "122.9.3.166"
 }
 "#;
-    let stream = Stream::Mock(std::io::Cursor::new(message.as_bytes().to_owned()));
-    let (mut reader, _) = tokio::io::split(stream);
-    let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>)
-        .await
-        .unwrap();
-    assert_eq!(200, response.status);
-    assert_eq!(7, response.headers.len());
-    assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
-    assert_eq!(
-        Some(&super::super::Value::Map(
-            std::collections::HashMap::from_iter(vec![(
-                String::from("origin"),
-                super::super::Value::String(String::from("122.9.3.166"))
-            )])
-        )),
-        response.to_map().get("json")
-    )
+        let stream = Stream::Mock(std::io::Cursor::new(message.as_bytes().to_owned()));
+        let (mut reader, _) = tokio::io::split(stream);
+        let response = Response::from(&mut reader, None::<Box<dyn FnMut()>>)
+            .await
+            .unwrap();
+        assert_eq!(200, response.status);
+        assert_eq!(7, response.headers.len());
+        assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
+        assert_eq!(
+            Some(&crate::Value::Map(std::collections::HashMap::from_iter(
+                vec![(
+                    String::from("origin"),
+                    crate::Value::String(String::from("122.9.3.166"))
+                )]
+            ))),
+            response.to_map().get("json")
+        )
+    }
 }

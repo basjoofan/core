@@ -52,98 +52,102 @@ impl Client {
     }
 }
 
-#[tokio::test]
-async fn test_send_message_get() {
-    crate::tests::start_server(30001).await;
-    let message = r#"
+#[cfg(test)]
+pub mod tests {
+    use super::Client;
+
+    #[tokio::test]
+    async fn test_send_message_get() {
+        crate::tests::start_server(30001).await;
+        let message = r#"
     GET http://127.0.0.1:30001/get
     Host: 127.0.0.1"#;
-    let client = Client::new();
-    let (request, response, time, error) = client.send(message).await;
-    assert_eq!("GET", request.method.as_ref());
-    assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
-    println!("error: {error}");
-    println!("time.total: {:?}", time.total);
-    println!("response.body:{:?}", response.body);
-}
+        let client = Client::new();
+        let (request, response, time, error) = client.send(message).await;
+        assert_eq!("GET", request.method.as_ref());
+        assert_eq!(200, response.status);
+        assert_eq!(
+            time.total,
+            time.resolve + time.connect + time.write + time.delay + time.read
+        );
+        println!("error: {error}");
+        println!("time.total: {:?}", time.total);
+        println!("response.body:{:?}", response.body);
+    }
 
-#[tokio::test]
-async fn test_send_message_post() {
-    crate::tests::start_server(30002).await;
-    let message = r#"
+    #[tokio::test]
+    async fn test_send_message_post() {
+        crate::tests::start_server(30002).await;
+        let message = r#"
     POST http://127.0.0.1:30002/text
     Host: 127.0.0.1
     Accept-Encoding: gzip, deflate"#;
-    let client = Client::new();
-    let (request, response, time, error) = client.send(message).await;
-    println!("error: {error}");
-    println!("request: {request:?}");
-    assert_eq!("POST", request.method.as_ref());
-    assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
-    println!("{:?}", time.total);
-    println!("{:?}", response.body);
-}
+        let client = Client::new();
+        let (request, response, time, error) = client.send(message).await;
+        println!("error: {error}");
+        println!("request: {request:?}");
+        assert_eq!("POST", request.method.as_ref());
+        assert_eq!(200, response.status);
+        assert_eq!(
+            time.total,
+            time.resolve + time.connect + time.write + time.delay + time.read
+        );
+        println!("{:?}", time.total);
+        println!("{:?}", response.body);
+    }
 
-#[tokio::test]
-async fn test_send_message_post_form() {
-    crate::tests::start_server(30003).await;
-    let message = r#"
+    #[tokio::test]
+    async fn test_send_message_post_form() {
+        crate::tests::start_server(30003).await;
+        let message = r#"
     POST http://127.0.0.1:30003/form
     Host: 127.0.0.1
     Content-Type: application/x-www-form-urlencoded
 
     a: b"#;
-    let client = Client::new();
-    let (request, response, time, error) = client.send(message).await;
-    println!("error: {error}");
-    println!("request: {request:?}");
-    assert_eq!("POST", request.method.as_ref());
-    assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
-    println!("{:?}", time.total);
-    println!("{:?}", response.body);
-}
+        let client = Client::new();
+        let (request, response, time, error) = client.send(message).await;
+        println!("error: {error}");
+        println!("request: {request:?}");
+        assert_eq!("POST", request.method.as_ref());
+        assert_eq!(200, response.status);
+        assert_eq!(
+            time.total,
+            time.resolve + time.connect + time.write + time.delay + time.read
+        );
+        println!("{:?}", time.total);
+        println!("{:?}", response.body);
+    }
 
-#[tokio::test]
-async fn test_send_message_post_multipart() {
-    crate::tests::start_server(30004).await;
-    let message = r#"
+    #[tokio::test]
+    async fn test_send_message_post_multipart() {
+        crate::tests::start_server(30004).await;
+        let message = r#"
     POST http://127.0.0.1:30004/multipart
     Host: 127.0.0.1
     Content-Type: multipart/form-data
 
     a: b
     f: @src/lib.rs"#;
-    let client = Client::new();
-    let (request, response, time, error) = client.send(message).await;
-    println!("error: {error}");
-    println!("request: {request:?}");
-    println!("response: {response:?}");
-    assert_eq!("POST", request.method.as_ref());
-    assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
-    println!("{:?}", time.total);
-    println!("{:?}", response.body);
-}
+        let client = Client::new();
+        let (request, response, time, error) = client.send(message).await;
+        println!("error: {error}");
+        println!("request: {request:?}");
+        println!("response: {response:?}");
+        assert_eq!("POST", request.method.as_ref());
+        assert_eq!(200, response.status);
+        assert_eq!(
+            time.total,
+            time.resolve + time.connect + time.write + time.delay + time.read
+        );
+        println!("{:?}", time.total);
+        println!("{:?}", response.body);
+    }
 
-#[tokio::test]
-async fn test_send_message_post_json() {
-    crate::tests::start_server(30005).await;
-    let message = r#"
+    #[tokio::test]
+    async fn test_send_message_post_json() {
+        crate::tests::start_server(30005).await;
+        let message = r#"
     POST http://127.0.0.1:30005/json
     Host: 127.0.0.1
     Content-Type: application/json
@@ -161,15 +165,16 @@ async fn test_send_message_post_json() {
         ]
     }
     "#;
-    let client = Client::new();
-    let (request, response, time, error) = client.send(message).await;
-    println!("error: {error}");
-    assert_eq!("POST", request.method.as_ref());
-    assert_eq!(200, response.status);
-    assert_eq!(
-        time.total,
-        time.resolve + time.connect + time.write + time.delay + time.read
-    );
-    println!("{:?}", time.total);
-    println!("{:?}", response.body);
+        let client = Client::new();
+        let (request, response, time, error) = client.send(message).await;
+        println!("error: {error}");
+        assert_eq!("POST", request.method.as_ref());
+        assert_eq!(200, response.status);
+        assert_eq!(
+            time.total,
+            time.resolve + time.connect + time.write + time.delay + time.read
+        );
+        println!("{:?}", time.total);
+        println!("{:?}", response.body);
+    }
 }
