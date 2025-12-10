@@ -89,7 +89,7 @@ jobs:
         run: echo version=$((Get-Content ./cmd/Cargo.toml | Select-String '^version').ToString().Split('"')[1]) | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Naming (windows)
         if: contains(matrix.target, 'windows')
-        run: Rename-Item -Path target/${{ matrix.target }}/release/basjoofan.exe -NewName basjoofan-${{ env.version }}-${{ matrix.target }}.exe
+        run: Move-Item -Path target/${{ matrix.target }}/release/basjoofan.exe -Destination target/${{ matrix.target }}/release/basjoofan-${{ env.version }}-${{ matrix.target }}.exe -Force
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
