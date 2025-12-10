@@ -1,4 +1,4 @@
-use crate::Record;
+use super::Record;
 use std::fmt::Write;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
@@ -82,9 +82,9 @@ async fn test_writer() {
     let mut writer = Writer::new(Vec::new());
     let record = Record {
         name: "test".to_string(),
-        time: crate::http::Time::default(),
-        request: crate::http::Request::default(),
-        response: crate::http::Response::default(),
+        time: super::http::Time::default(),
+        request: super::http::Request::default(),
+        response: super::http::Response::default(),
         asserts: Vec::new(),
         error: String::default(),
     };
@@ -97,24 +97,24 @@ async fn test_writer() {
     assert_eq!(record["request_headers"].as_array().unwrap().len(), 0);
 
     let mut writer = Writer::new(Vec::new());
-    let mut request_headers = crate::http::Headers::default();
+    let mut request_headers = super::http::Headers::default();
     request_headers.insert(String::from("a"), String::from("b"));
     request_headers.insert(String::from("a"), String::from("c"));
-    let mut response_headers = crate::http::Headers::default();
+    let mut response_headers = super::http::Headers::default();
     response_headers.insert(String::from("d"), String::from("e"));
     response_headers.insert(String::from("d"), String::from("f"));
     response_headers.insert(String::from("g"), String::from("h"));
     let record = Record {
         name: "test".to_string(),
-        time: crate::http::Time::default(),
-        request: crate::http::Request {
-            method: crate::http::Method::Get,
-            url: crate::http::Url::from("http://localhost:8080"),
-            version: crate::http::Version::Http11,
+        time: super::http::Time::default(),
+        request: super::http::Request {
+            method: super::http::Method::Get,
+            url: super::http::Url::from("http://localhost:8080"),
+            version: super::http::Version::Http11,
             headers: request_headers,
             body: String::default(),
         },
-        response: crate::http::Response {
+        response: super::http::Response {
             version: String::from("HTTP/1.1"),
             status: 200,
             reason: String::from("OK"),

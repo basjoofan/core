@@ -21,14 +21,15 @@ pub use parser::Parser;
 pub use stat::Stats;
 pub use syntax::Source;
 
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 mod writer;
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 pub use writer::Writer;
 
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 pub mod tests {
+    use axum::Router;
     use axum::extract::Form;
     use axum::extract::Json;
     use axum::extract::Multipart;
@@ -36,9 +37,8 @@ pub mod tests {
     use axum::http::header::HeaderMap;
     use axum::routing::get;
     use axum::routing::post;
-    use axum::Router;
-    use serde_json::json;
     use serde_json::Value;
+    use serde_json::json;
     use std::collections::HashMap;
     use std::net::ToSocketAddrs;
     use tokio::net::TcpListener;

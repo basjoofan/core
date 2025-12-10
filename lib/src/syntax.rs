@@ -1,5 +1,5 @@
-use crate::Token;
-use crate::Value;
+use super::Token;
+use super::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Display;

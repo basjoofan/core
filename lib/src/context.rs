@@ -1,7 +1,7 @@
-use crate::http::Request;
-use crate::http::Response;
-use crate::http::Time;
-use crate::Value;
+use super::Value;
+use super::http::Request;
+use super::http::Response;
+use super::http::Time;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;

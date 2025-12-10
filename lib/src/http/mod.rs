@@ -1,45 +1,46 @@
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 mod univ;
-#[cfg(feature = "wasm")]
+#[cfg(target_arch = "wasm32")]
 mod wasm;
 
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 mod error;
 mod header;
 mod mime;
 mod time;
 mod url;
 
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 use error::Error;
 pub use header::Headers;
 pub use time::Time;
 pub use url::Url;
 
-use crate::Parser;
-use crate::Source;
-use crate::Value;
+use super::Parser;
+use super::Source;
+use super::Value;
 use std::collections::HashMap;
+use url::Serializer;
 
 pub struct Client {
-    #[cfg(feature = "univ")]
+    #[cfg(not(target_arch = "wasm32"))]
     connect_tiomeout: std::time::Duration,
     // TODO read_tiomeout: Option<std::time::Duration>,
-    #[cfg(feature = "wasm")]
+    #[cfg(target_arch = "wasm32")]
     fetch_timeout: u32,
-    #[cfg(feature = "wasm")]
+    #[cfg(target_arch = "wasm32")]
     base: String,
 }
 
 impl Client {
-    #[cfg(feature = "univ")]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new() -> Self {
         Self {
             connect_tiomeout: std::time::Duration::from_secs(120),
         }
     }
 
-    #[cfg(feature = "wasm")]
+    #[cfg(target_arch = "wasm32")]
     pub fn new(base: &str) -> Self {
         Self {
             fetch_timeout: 300_000,

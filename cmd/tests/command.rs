@@ -1,6 +1,6 @@
 use assert_fs::prelude::*;
-use axum::routing::get;
 use axum::Router;
+use axum::routing::get;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;

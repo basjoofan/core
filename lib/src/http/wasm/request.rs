@@ -1,15 +1,16 @@
-use super::super::mime;
 use super::super::Headers;
 use super::super::Method;
 use super::super::Request;
+use super::super::Serializer;
 use super::super::Url;
 use super::super::Version;
+use super::super::mime;
 use js_sys::Array;
 use js_sys::Promise;
 use js_sys::Uint8Array;
 use std::path::Path;
-use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::Blob;
 use web_sys::BlobPropertyBag;
@@ -50,14 +51,14 @@ impl Request {
             let mut content = None;
             match content_type {
                 Some("application/x-www-form-urlencoded") => {
-                    let mut serializer = form_urlencoded::Serializer::new(String::default());
+                    let mut serializer = Serializer::new();
                     for line in lines.by_ref() {
                         if let Some((name, value)) = line.trim().split_once(':') {
-                            serializer.append_pair(name, value);
+                            serializer.append(name, value);
                             body.push_str(line);
                         }
                     }
-                    let bytes = serializer.finish().into_bytes();
+                    let bytes = serializer.finish();
                     content = Some(JsValue::from(Uint8Array::from(bytes.as_slice())));
                 }
                 Some("multipart/form-data") => {

@@ -7,9 +7,9 @@ use js_sys::Array;
 use js_sys::Date;
 use js_sys::Promise;
 use std::time::Duration;
-use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::AbortSignal;
 use web_sys::Request as WebRequest;
@@ -89,9 +89,9 @@ async fn fetch(request: &Request, content: Option<JsValue>, timeout: u32) -> Res
 
 #[cfg(test)]
 mod tests {
-    use crate::http::Client;
-    use js_sys::eval;
+    use super::Client;
     use js_sys::BigInt;
+    use js_sys::eval;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
     use web_sys::console;

@@ -50,9 +50,9 @@ jobs:
           rustup target add wasm32-unknown-unknown
           cargo install wasm-pack --force
       - name: Run Tests (univ)
-        run: cargo test --features univ
+        run: cargo test
       - name: Run Tests (wasm)
-        run: wasm-pack test --node ./lib --features wasm
+        run: wasm-pack test --node ./lib
       - name: Clippy Check
         run: cargo clippy --all-targets
       - name: Format Check
@@ -64,7 +64,7 @@ jobs:
           cross build --release --target ${{ matrix.target }}
       - name: Build Release (darwin or windows)
         if: ${{ !contains(matrix.target, 'linux') }}
-        run: cargo build --features univ --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
       # - name: Code Sign (darwin)
       # if: contains(matrix.target, 'darwin')
       # env:

@@ -1,13 +1,13 @@
-use crate::http;
-use crate::native;
-use crate::Assert;
-use crate::Context;
-use crate::Expr;
-use crate::Kind;
-use crate::Record;
-use crate::Source;
-use crate::Token;
-use crate::Value;
+use super::Assert;
+use super::Context;
+use super::Expr;
+use super::Kind;
+use super::Record;
+use super::Source;
+use super::Token;
+use super::Value;
+use super::http;
+use super::native;
 use std::collections::HashMap;
 
 impl Source {
@@ -212,9 +212,9 @@ impl Source {
             Some((message, exprs)) => {
                 let name = name.to_string();
                 let message = native::format_template(message, context);
-                #[cfg(feature = "univ")]
+                #[cfg(not(target_arch = "wasm32"))]
                 let client = http::Client::new();
-                #[cfg(feature = "wasm")]
+                #[cfg(target_arch = "wasm32")]
                 let client = http::Client::new(&self.base);
                 let (request, response, time, error) = client.send(message.as_str()).await;
                 let variables = response.to_map();
@@ -275,12 +275,12 @@ impl Source {
     }
 }
 
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use crate::Context;
-    use crate::Parser;
-    use crate::Value;
+    use super::super::Context;
+    use super::super::Parser;
+    use super::super::Value;
     use std::collections::HashMap;
 
     async fn run_eval_tests(tests: Vec<(&str, Value)>) {

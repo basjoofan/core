@@ -1,8 +1,8 @@
-use crate::lexer;
-use crate::Expr;
-use crate::Kind;
-use crate::Source;
-use crate::Token;
+use super::Expr;
+use super::Kind;
+use super::Source;
+use super::Token;
+use super::lexer;
 use std::collections::HashMap;
 
 pub struct Parser {

@@ -1,9 +1,10 @@
-use super::super::mime;
 use super::super::Headers;
 use super::super::Method;
 use super::super::Request;
+use super::super::Serializer;
 use super::super::Url;
 use super::super::Version;
+use super::super::mime;
 use super::Content;
 use super::Part;
 use rand::Rng;
@@ -38,14 +39,14 @@ impl Request {
             let mut length = 0;
             match content_type {
                 Some("application/x-www-form-urlencoded") => {
-                    let mut serializer = form_urlencoded::Serializer::new(String::default());
+                    let mut serializer = Serializer::new();
                     for line in lines.by_ref() {
                         if let Some((name, value)) = line.trim().split_once(':') {
-                            serializer.append_pair(name, value);
+                            serializer.append(name, value);
                             body.push_str(line);
                         }
                     }
-                    let bytes = serializer.finish().into_bytes();
+                    let bytes = serializer.finish();
                     length = bytes.len();
                     content = Content::Bytes(bytes);
                 }

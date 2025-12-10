@@ -1,13 +1,13 @@
-use crate::Context;
-use crate::Value;
+use super::Context;
+use super::Value;
 
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 pub use univ::*;
-#[cfg(feature = "univ")]
+#[cfg(not(target_arch = "wasm32"))]
 mod univ {
+    use super::Context;
+    use super::Value;
     use super::format;
-    use crate::Context;
-    use crate::Value;
 
     pub fn println(values: Vec<Value>, context: &Context) -> Result<Value, String> {
         match format(values, context) {
@@ -30,13 +30,13 @@ mod univ {
     }
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(target_arch = "wasm32")]
 pub use wasm::*;
-#[cfg(feature = "wasm")]
+#[cfg(target_arch = "wasm32")]
 mod wasm {
+    use super::Context;
+    use super::Value;
     use super::format;
-    use crate::Context;
-    use crate::Value;
     use wasm_bindgen::prelude::wasm_bindgen;
 
     #[wasm_bindgen]

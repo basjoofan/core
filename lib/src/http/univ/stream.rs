@@ -2,8 +2,8 @@ use super::super::Error;
 use super::super::Scheme;
 use super::super::Url;
 use rustls_platform_verifier::ConfigVerifierExt;
-use std::iter::from_fn;
 use std::iter::FusedIterator;
+use std::iter::from_fn;
 use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::pin::Pin;
@@ -18,9 +18,9 @@ use tokio::io::ReadBuf;
 use tokio::net::TcpStream;
 use tokio::task::JoinSet;
 use tokio::time;
+use tokio_rustls::TlsConnector;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::rustls::ClientConfig;
-use tokio_rustls::TlsConnector;
 
 pub enum Stream {
     Plain {

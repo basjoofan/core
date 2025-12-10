@@ -2,22 +2,22 @@
 name = "cmd"
 version = "0.1.0"
 description = "continuous test"
-repository = "https://github.com/basjoofan/lib"
+repository = "https://github.com/basjoofan/core"
 license = "MIT OR Apache-2.0"
 authors = ["Lamb <lamb@basjoofan.com>"]
 keywords = ["continuous", "test", "http"]
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "basjoofan"
 path = "src/main.rs"
 
 [dependencies]
-lib = { path = "../lib", features = ["univ"] }
-clap = { version = "4.5.48", features = ["derive"] }
-tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "io-std"] }
+lib = { path = "../lib" }
+clap = { version = "4.5.53", features = ["derive"] }
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "signal", "time", "sync", "io-std"] }
 
 [dev-dependencies]
 assert_fs = "1.1.3"
-tokio = { version = "1.47.1", features = ["process"] }
-axum = "0.8.4"
+tokio = { version = "1.48.0", features = ["process"] }
+axum = "0.8.7"
