@@ -24,6 +24,7 @@ impl Request {
             let version = Version::from(splits.next());
             let mut content_type = None;
             let mut headers = Headers::default();
+            headers.insert(String::from("Host"), url.host.clone());
             for line in lines.by_ref() {
                 if line.trim().is_empty() {
                     break;

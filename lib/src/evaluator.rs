@@ -710,7 +710,7 @@ mod tests {
             r#"
             rq get`
                 GET http://{host}:30006/get
-                Host: {{host}}
+                Host: {host}
                 Connection: close
             `[];
             let host = "127.0.0.1";

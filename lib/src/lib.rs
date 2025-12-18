@@ -10,13 +10,13 @@ mod token;
 mod value;
 
 use context::Assert;
-use context::Record;
 use syntax::Expr;
 use token::Kind;
 use token::Token;
 use value::Value;
 
 pub use context::Context;
+pub use context::Record;
 pub use parser::Parser;
 pub use stat::Stats;
 pub use syntax::Source;
