@@ -29,9 +29,12 @@ impl Request {
                 if line.trim().is_empty() {
                     break;
                 } else if let Some((name, value)) = line.trim().split_once(':') {
-                    headers.insert(name.trim().to_string(), value.trim().to_string());
-                    if content_type.is_none() && name.trim().to_lowercase() == "content-type" {
-                        content_type = Some(value.trim());
+                    let (name, value) = (name.trim(), value.trim());
+                    if !name.is_empty() {
+                        headers.insert(name.to_string(), value.to_string());
+                        if content_type.is_none() && name.to_lowercase() == "content-type" {
+                            content_type = Some(value);
+                        }
                     }
                 }
             }
@@ -183,5 +186,23 @@ pub mod tests {
         request.write(&mut writer, content).await.unwrap();
         writer.write_all("\r\n".as_bytes()).await.unwrap();
         assert_eq!("POST", request.method.as_ref());
+    }
+
+    #[tokio::test]
+    async fn test_from_message_header_empty_value() {
+        let message = r#"
+    GET http://domain/get
+:
+    :
+    a: b
+     :c
+    d:"#;
+        let (mut request, content) = Request::from(message).await.unwrap();
+        let mut writer = tokio::io::stdout();
+        request.write(&mut writer, content).await.unwrap();
+        writer.write_all("\r\n".as_bytes()).await.unwrap();
+        println!("{:?}", request.headers);
+        assert_eq!("GET", request.method.as_ref());
+        assert_eq!(2, request.headers.len() - 2);
     }
 }
