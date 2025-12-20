@@ -14,13 +14,13 @@ mod url;
 use error::Error;
 pub use header::Headers;
 pub use time::Time;
+pub use url::Serializer;
 pub use url::Url;
 
 use super::Parser;
 use super::Source;
 use super::Value;
 use std::collections::HashMap;
-use url::Serializer;
 
 pub struct Client {
     #[cfg(not(target_arch = "wasm32"))]

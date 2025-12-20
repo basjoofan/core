@@ -17,6 +17,7 @@ use value::Value;
 
 pub use context::Context;
 pub use context::Record;
+pub use http::Serializer;
 pub use parser::Parser;
 pub use stat::Stats;
 pub use syntax::Source;
