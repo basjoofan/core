@@ -60,7 +60,7 @@ pub async fn eval(text: String, source: &mut Source, context: Option<Context>) -
 
 pub async fn test(
     name: Option<String>,
-    tasks: u32,
+    task: u32,
     duration: Duration,
     number: u32,
     path: Option<PathBuf>,
@@ -83,14 +83,14 @@ pub async fn test(
         }
     });
     let mut set = task::JoinSet::new();
-    let (sender, mut receiver) = sync::mpsc::channel(tasks as usize);
+    let (sender, mut receiver) = sync::mpsc::channel(task as usize);
     match name {
         Some(name) => {
             match source.test(&name) {
                 Some(test) => {
                     let continuous = Arc::new(AtomicBool::new(true));
-                    let maximun = number / tasks;
-                    for task in 0..tasks {
+                    let maximun = number / task;
+                    for task in 0..task {
                         let continuous = continuous.to_owned();
                         let sender = sender.to_owned();
                         let mut writer = writer(record.as_ref(), task).await;
