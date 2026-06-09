@@ -1,5 +1,5 @@
-use super::super::Headers;
-use super::super::Response;
+use super::Headers;
+use super::Response;
 use super::Stream;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncReadExt;

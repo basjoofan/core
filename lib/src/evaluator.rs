@@ -259,7 +259,7 @@ impl Source {
             Some((params, body)) => {
                 let variables = params
                     .iter()
-                    .zip(arguments.into_iter())
+                    .zip(arguments)
                     .map(|(p, a)| (p.to_owned(), a))
                     .collect::<HashMap<String, Value>>();
                 let mut local = Context::from(variables);
@@ -281,10 +281,7 @@ impl Source {
             Some((message, exprs)) => {
                 let name = name.to_string();
                 let message = native::format_template(message, context);
-                #[cfg(not(target_arch = "wasm32"))]
                 let client = http::Client::new();
-                #[cfg(target_arch = "wasm32")]
-                let client = http::Client::new(&self.base);
                 let (request, response, time, error) = client.send(message.as_str()).await;
                 let variables = response.to_map();
                 let mut local = Context::from(variables);
@@ -350,7 +347,6 @@ impl Source {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use super::super::Context;
@@ -683,7 +679,7 @@ mod tests {
             fibonacci(x - 1) + fibonacci(x -2)
           }
         }
-      };  
+      };
     fibonacci(22);
     "#,
             Value::Integer(17711),

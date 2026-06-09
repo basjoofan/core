@@ -178,13 +178,14 @@ const TABLE: &[u8; 768] = b"\
       %F0%F1%F2%F3%F4%F5%F6%F7%F8%F9%FA%FB%FC%FD%FE%FF\
       ";
 
+#[derive(Debug, Default)]
 pub struct Serializer {
     target: Vec<u8>,
 }
 
 impl Serializer {
     pub fn new() -> Self {
-        Self { target: Vec::new() }
+        Self::default()
     }
 
     pub fn append(&mut self, name: &str, value: &str) {

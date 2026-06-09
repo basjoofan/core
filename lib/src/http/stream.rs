@@ -1,6 +1,6 @@
-use super::super::Error;
-use super::super::Scheme;
-use super::super::Url;
+use super::Error;
+use super::Scheme;
+use super::Url;
 use rustls_platform_verifier::ConfigVerifierExt;
 use std::iter::FusedIterator;
 use std::iter::from_fn;

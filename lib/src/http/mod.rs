@@ -1,18 +1,19 @@
-#[cfg(not(target_arch = "wasm32"))]
-mod univ;
-#[cfg(target_arch = "wasm32")]
-mod wasm;
-
-#[cfg(not(target_arch = "wasm32"))]
+mod client;
+mod content;
 mod error;
 mod header;
 mod mime;
+mod request;
+mod response;
+mod stream;
 mod time;
 mod url;
 
-#[cfg(not(target_arch = "wasm32"))]
+use content::Content;
+use content::Part;
 use error::Error;
 pub use header::Headers;
+use stream::Stream;
 pub use time::Time;
 pub use url::Serializer;
 pub use url::Url;
@@ -23,28 +24,14 @@ use super::Value;
 use std::collections::HashMap;
 
 pub struct Client {
-    #[cfg(not(target_arch = "wasm32"))]
     connect_tiomeout: std::time::Duration,
     // TODO read_tiomeout: Option<std::time::Duration>,
-    #[cfg(target_arch = "wasm32")]
-    fetch_timeout: u32,
-    #[cfg(target_arch = "wasm32")]
-    base: String,
 }
 
 impl Client {
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn new() -> Self {
         Self {
             connect_tiomeout: std::time::Duration::from_secs(120),
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    pub fn new(base: &str) -> Self {
-        Self {
-            fetch_timeout: 300_000,
-            base: base.to_owned(),
         }
     }
 }

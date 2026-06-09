@@ -1,8 +1,8 @@
-use super::super::Client;
-use super::super::Request;
-use super::super::Response;
-use super::super::Time;
+use super::Client;
+use super::Request;
+use super::Response;
 use super::Stream;
+use super::Time;
 use std::time::Instant;
 use std::time::SystemTime;
 use tokio::io::split;

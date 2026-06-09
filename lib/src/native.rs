@@ -1,71 +1,25 @@
 use super::Context;
 use super::Value;
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use univ::*;
-#[cfg(not(target_arch = "wasm32"))]
-mod univ {
-    use super::Context;
-    use super::Value;
-    use super::format;
-
-    pub fn println(values: Vec<Value>, context: &Context) -> Result<Value, String> {
-        match format(values, context) {
-            error @ Err(_) => error,
-            Ok(value) => {
-                println!("{value}");
-                Ok(Value::Null)
-            }
-        }
-    }
-
-    pub fn print(values: Vec<Value>, context: &Context) -> Result<Value, String> {
-        match format(values, context) {
-            error @ Err(_) => error,
-            Ok(value) => {
-                print!("{value}");
-                Ok(Value::Null)
-            }
+pub fn println(values: Vec<Value>, context: &Context) -> Result<Value, String> {
+    match format(values, context) {
+        error @ Err(_) => error,
+        Ok(value) => {
+            println!("{value}");
+            Ok(Value::Null)
         }
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-pub use wasm::*;
-#[cfg(target_arch = "wasm32")]
-mod wasm {
-    use super::Context;
-    use super::Value;
-    use super::format;
-    use wasm_bindgen::prelude::wasm_bindgen;
-
-    #[wasm_bindgen]
-    extern "C" {
-        #[wasm_bindgen(js_name = appendOutput)]
-        fn append_output(output: &str);
-    }
-
-    pub fn println(values: Vec<Value>, context: &Context) -> Result<Value, String> {
-        match format(values, context) {
-            error @ Err(_) => error,
-            Ok(value) => {
-                append_output(format!("{value}\r\n").as_str());
-                Ok(Value::Null)
-            }
-        }
-    }
-
-    pub fn print(values: Vec<Value>, context: &Context) -> Result<Value, String> {
-        match format(values, context) {
-            error @ Err(_) => error,
-            Ok(value) => {
-                append_output(format!("{value}").as_str());
-                Ok(Value::Null)
-            }
+pub fn print(values: Vec<Value>, context: &Context) -> Result<Value, String> {
+    match format(values, context) {
+        error @ Err(_) => error,
+        Ok(value) => {
+            print!("{value}");
+            Ok(Value::Null)
         }
     }
 }
-
 pub fn format(values: Vec<Value>, context: &Context) -> Result<Value, String> {
     match values.first() {
         Some(Value::String(string)) => Ok(Value::String(format_template(string, context))),
