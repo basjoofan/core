@@ -72,8 +72,9 @@ impl Parser {
         while self.current_token().kind != Kind::Eof {
             match self.current_token().kind {
                 Kind::Function => {
-                    let (name, params, block) = self.parse_function_literal()?;
-                    functions.insert(name, (params, block));
+                    if let Expr::Function(name, params, block) = self.parse_function_literal()? {
+                        functions.insert(name, (params, block));
+                    }
                 }
                 Kind::Test => {
                     let (name, block) = self.parse_test_literal()?;
@@ -321,7 +322,7 @@ impl Parser {
         Ok(exprs)
     }
 
-    fn parse_function_literal(&mut self) -> Result<(String, Vec<String>, Vec<Expr>), String> {
+    fn parse_function_literal(&mut self) -> Result<Expr, String> {
         self.peek_token_expect(Kind::Ident)?;
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Lp)?;
@@ -335,7 +336,7 @@ impl Parser {
         }
         self.peek_token_expect(Kind::Rp)?;
         let block = self.parse_block_expr()?;
-        Ok((name, params, block))
+        Ok(Expr::Function(name, params, block))
     }
 
     fn parse_test_literal(&mut self) -> Result<(String, Vec<Expr>), String> {
@@ -974,11 +975,47 @@ fn test_parse_call_expr_argument() {
 #[test]
 fn test_parse_function_literal() {
     let tests = vec![
-        ("fn add(x, y) { x + y }", "add", vec!["x", "y"], "x + y"),
-        ("fn add_one(x) { x + 1;x }", "add_one", vec!["x"], "x + 1"),
-        ("fn addTwo() { 1 + 2;3 }", "addTwo", vec![], "1 + 2"),
+        (
+            "fn add(x, y) { x + y }",
+            "add",
+            vec!["x", "y"],
+            "x + y",
+            "fn add(x, y) { x + y }",
+        ),
+        (
+            "fn add_one(x) { x + 1;x }",
+            "add_one",
+            vec!["x"],
+            "x + 1",
+            "fn add_one(x) { x + 1;x }",
+        ),
+        (
+            "fn addTwo() { 1 + 2;3 }",
+            "addTwo",
+            vec![],
+            "1 + 2",
+            "fn addTwo() { 1 + 2;3 }",
+        ),
     ];
-    for (text, expected_name, expected_parameters, expected_body) in tests {
+    for (text, expected_name, expected_parameters, expected_body, expected_display) in tests {
+        match Parser::new(text).parse_function_literal() {
+            Ok(Expr::Function(name, parameters, body)) => {
+                assert!(name == expected_name);
+                assert!(parameters == expected_parameters);
+                assert!(body[0].to_string() == expected_body);
+                assert_eq!(
+                    Expr::Function(name, parameters, body).to_string(),
+                    expected_display
+                );
+            }
+            Ok(expr) => {
+                unreachable!("function literal parsed as {expr:?}")
+            }
+            Err(error) => {
+                unreachable!("{}", error)
+            }
+        }
+
         match Parser::new(text).parse() {
             Ok(Source { functions, .. }) => {
                 if let Some((name, (parameters, body))) = functions.into_iter().next() {

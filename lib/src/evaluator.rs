@@ -35,6 +35,7 @@ impl Source {
             Expr::If(condition, consequence, alternative) => {
                 Box::pin(self.eval_if_expr(condition, consequence, alternative, context)).await
             }
+            Expr::Function(_, _, _) => Ok(Value::Null),
             Expr::Call(name, arguments) => {
                 Box::pin(self.eval_call_expr(name, arguments, context)).await
             }

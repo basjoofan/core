@@ -24,6 +24,7 @@ pub enum Expr {
     Binary(Token, Box<Expr>, Box<Expr>),
     Paren(Box<Expr>),
     If(Box<Expr>, Vec<Expr>, Vec<Expr>),
+    Function(String, Vec<String>, Vec<Expr>),
     Call(Box<Expr>, Vec<Expr>),
     // TODO Break A break, with an optional label to break and an optional expr.
     // TODO For A for loop: for pat in expr { ... }.
@@ -95,6 +96,14 @@ impl Display for Expr {
                     write!(f, "}} else {{ {}", join!(alternative, "{}", ";"))?
                 }
                 write!(f, " }}")
+            }
+            Expr::Function(name, params, body) => {
+                write!(
+                    f,
+                    "fn {name}({}) {{ {} }}",
+                    params.join(", "),
+                    join!(body, "{}", ";")
+                )
             }
             Expr::Call(function, arguments) => {
                 write!(f, "{}({})", function, join!(arguments, "{}", ", "))
