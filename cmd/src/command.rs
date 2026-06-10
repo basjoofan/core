@@ -28,12 +28,27 @@ pub async fn repl() {
     let mut lines = stdin.lines();
     let mut context = Context::new();
     let mut source = Source::new();
+    let mut yaml_buffer = Vec::new();
     loop {
         if let Ok(Some(text)) = lines.next_line().await {
             if text == "exit" {
+                flush_yaml_buffer(&mut yaml_buffer, &mut source);
                 break;
             }
-            if text.trim().is_empty() {
+            if !yaml_buffer.is_empty() {
+                if text.trim().is_empty() {
+                    flush_yaml_buffer(&mut yaml_buffer, &mut source);
+                } else {
+                    yaml_buffer.push(text);
+                }
+                continue;
+            }
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if looks_like_yaml_request_definition_start(trimmed) {
+                yaml_buffer.push(text);
                 continue;
             }
             context = eval(text, &mut source, Some(context)).await;
@@ -43,6 +58,13 @@ pub async fn repl() {
 
 pub async fn eval(text: String, source: &mut Source, context: Option<Context>) -> Context {
     let mut context = context.unwrap_or_default();
+    if looks_like_yaml_request_definition(&text) {
+        match load_yaml_request_definition(&text, source) {
+            Ok(names) => print_loaded_clients(&names),
+            Err(error) => println!("{error}"),
+        }
+        return context;
+    }
     match Parser::new(&text).parse() {
         Ok(s) => {
             let index = source.extend(s);
@@ -57,6 +79,101 @@ pub async fn eval(text: String, source: &mut Source, context: Option<Context>) -
         Err(error) => println!("{error}"),
     }
     context
+}
+
+fn flush_yaml_buffer(buffer: &mut Vec<String>, source: &mut Source) {
+    if buffer.is_empty() {
+        return;
+    }
+    let text = buffer.join("\n");
+    match load_yaml_request_definition(&text, source) {
+        Ok(names) => print_loaded_clients(&names),
+        Err(error) => println!("{error}"),
+    }
+    buffer.clear();
+}
+
+fn load_yaml_request_definition(text: &str, source: &mut Source) -> Result<Vec<String>, String> {
+    if contains_mixed_yaml_and_fan(text) {
+        return Err(
+            "YAML request definitions and fan code must be submitted separately".to_string(),
+        );
+    }
+
+    let clients = Clients::from_str(text).map_err(|error| error.to_string())?;
+    let mut names = clients.inner.keys().cloned().collect::<Vec<_>>();
+    names.sort();
+    source
+        .clients
+        .try_extend(clients)
+        .map_err(|error| error.to_string())?;
+    Ok(names)
+}
+
+fn print_loaded_clients(names: &[String]) {
+    for name in names {
+        println!("loaded client: {name}");
+    }
+}
+
+fn looks_like_yaml_request_definition(text: &str) -> bool {
+    let mut has_name = false;
+    let mut has_scheme = false;
+    let mut has_host = false;
+    let mut has_requests = false;
+
+    for line in text.lines() {
+        match top_level_yaml_key(line) {
+            Some("name") => has_name = true,
+            Some("scheme") => has_scheme = true,
+            Some("host") => has_host = true,
+            Some("requests") => has_requests = true,
+            _ => {}
+        }
+    }
+
+    has_name && has_scheme && has_host && has_requests
+}
+
+fn looks_like_yaml_request_definition_start(text: &str) -> bool {
+    matches!(
+        top_level_yaml_key(text),
+        Some("name" | "scheme" | "host" | "requests")
+    )
+}
+
+fn top_level_yaml_key(line: &str) -> Option<&str> {
+    if line.is_empty() || line.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') || trimmed == "---" || trimmed == "..." {
+        return None;
+    }
+    let (key, _) = trimmed.split_once(':')?;
+    if key.is_empty()
+        || !key
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+    {
+        return None;
+    }
+    Some(key)
+}
+
+fn contains_mixed_yaml_and_fan(text: &str) -> bool {
+    let top_level_keys = ["name", "scheme", "host", "port", "requests"];
+    text.lines().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && trimmed != "---"
+            && trimmed != "..."
+            && !trimmed.starts_with('-')
+            && !trimmed.contains(':')
+            && !line.starts_with(char::is_whitespace)
+            && !top_level_keys.contains(&trimmed)
+    })
 }
 
 pub async fn test(
@@ -262,4 +379,38 @@ async fn register(continuous: Arc<AtomicBool>) {
         Ok(result) => result,
     };
     continuous.store(false, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_yaml_request_definition_shape() {
+        let input = r#"
+name: user
+scheme: http
+host: example.com
+requests:
+  - get:
+      path: /get
+      method: GET
+"#;
+
+        assert!(looks_like_yaml_request_definition(input));
+    }
+
+    #[test]
+    fn does_not_detect_fan_inputs_as_yaml() {
+        let inputs = [
+            r#""name: user""#,
+            r#"let requests = "value";"#,
+            r#"{"name": "user", "requests": []}"#,
+            r#"println("requests: {requests}")"#,
+        ];
+
+        for input in inputs {
+            assert!(!looks_like_yaml_request_definition(input), "{input}");
+        }
+    }
 }

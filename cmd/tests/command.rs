@@ -25,6 +25,75 @@ async fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
+async fn test_command_repl_loads_yaml_then_evaluates_fan() -> Result<(), Box<dyn std::error::Error>>
+{
+    let router = Router::new().route("/hello", get(|| async { "Hello, World!" }));
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 8889))
+        .await
+        .unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    });
+
+    let mut command = new_command();
+    command.stdout(Stdio::piped());
+    command.stdin(Stdio::piped());
+    let mut child = command.spawn().expect("Failed to spawn child process");
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(
+                r#"name: user
+scheme: http
+host: 127.0.0.1:8889
+requests:
+  - hello:
+      path: /hello
+      method: GET
+      headers:
+        - Connection: close
+      asserts:
+        - status == 200
+
+let response = user.hello(); response.status
+exit"#
+                    .as_bytes(),
+            )
+            .await?;
+    }
+    let output = child.wait_with_output().await?;
+    let stdout = String::from_utf8(output.stdout)?;
+    assert!(stdout.contains("loaded client: user"));
+    assert!(stdout.contains("200"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_command_repl_flushes_yaml_on_exit() -> Result<(), Box<dyn std::error::Error>> {
+    let mut command = new_command();
+    command.stdout(Stdio::piped());
+    command.stdin(Stdio::piped());
+    let mut child = command.spawn().expect("Failed to spawn child process");
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(
+                r#"name: user
+scheme: http
+host: example.com
+requests:
+  - get:
+      path: /get
+      method: GET
+exit"#
+                    .as_bytes(),
+            )
+            .await?;
+    }
+    let output = child.wait_with_output().await?;
+    assert_eq!(String::from_utf8(output.stdout)?, "loaded client: user\n");
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
     let mut command = new_command();
     let output = command
@@ -50,6 +119,68 @@ async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     assert!(output.status.success());
     assert_eq!(String::from_utf8(output.stdout)?, "🍀 Hello Basjoofan!\n");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_command_eval_loads_yaml_client_definition() -> Result<(), Box<dyn std::error::Error>>
+{
+    let mut command = new_command();
+    let output = command
+        .arg("eval")
+        .arg(
+            r#"name: user
+scheme: http
+host: example.com
+requests:
+  - get:
+      path: /get
+      method: GET"#,
+        )
+        .output()
+        .await?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8(output.stdout)?, "loaded client: user\n");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_command_eval_reports_invalid_yaml_shape() -> Result<(), Box<dyn std::error::Error>> {
+    let mut command = new_command();
+    let output = command
+        .arg("eval")
+        .arg(
+            r#"name: user
+scheme: http
+host: example.com
+requests:"#,
+        )
+        .output()
+        .await?;
+    assert!(output.status.success());
+    assert!(String::from_utf8(output.stdout)?.contains("request list"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_command_eval_rejects_mixed_yaml_and_fan() -> Result<(), Box<dyn std::error::Error>> {
+    let mut command = new_command();
+    let output = command
+        .arg("eval")
+        .arg(
+            r#"name: user
+scheme: http
+host: example.com
+requests:
+  - get:
+      path: /get
+      method: GET
+let response = user.get();"#,
+        )
+        .output()
+        .await?;
+    assert!(output.status.success());
+    assert!(String::from_utf8(output.stdout)?.contains("must be submitted separately"));
     Ok(())
 }
 
