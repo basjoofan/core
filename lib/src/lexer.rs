@@ -26,15 +26,7 @@ pub fn segment(text: &str) -> Vec<Token> {
                     }
                 }
                 '+' => (Kind::Add, String::from(char)),
-                '-' => {
-                    if let Some(peek @ '>') = chars.peek() {
-                        let literal = String::from_iter([char, *peek]);
-                        chars.next();
-                        (Kind::Arrow, literal)
-                    } else {
-                        (Kind::Sub, String::from(char))
-                    }
-                }
+                '-' => (Kind::Sub, String::from(char)),
                 '*' => (Kind::Mul, String::from(char)),
                 '/' => (Kind::Div, String::from(char)),
                 '%' => (Kind::Rem, String::from(char)),
@@ -152,7 +144,6 @@ pub fn segment(text: &str) -> Vec<Token> {
                     match string.as_str() {
                         "true" => (Kind::True, string),
                         "false" => (Kind::False, string),
-                        "rq" => (Kind::Request, string),
                         "fn" => (Kind::Function, string),
                         "let" => (Kind::Let, string),
                         "if" => (Kind::If, string),
@@ -198,16 +189,9 @@ fn test_segment() {
             [1, 2];
             {"foo": "bar"};
             _a2
-            rq request`
-              GET http://example.com
-              Host: example.com
-            `[
-            status == 200,
-            regex(text, "^\d{4}-\d{2}-\d{2}$") == "2022-02-22"
-            ]
             left.field
             test expectStatusOk {
-                let response = request->;
+                let response = user.getIp();
                 response.status
             }
             1&0
@@ -309,26 +293,6 @@ fn test_segment() {
         (Kind::Rb, "}"),
         (Kind::Semi, ";"),
         (Kind::Ident, "_a2"),
-        (Kind::Request, "rq"),
-        (Kind::Ident, "request"),
-        (
-            Kind::Template,
-            "\n              GET http://example.com\n              Host: example.com\n            ",
-        ),
-        (Kind::Ls, "["),
-        (Kind::Ident, "status"),
-        (Kind::Eq, "=="),
-        (Kind::Integer, "200"),
-        (Kind::Comma, ","),
-        (Kind::Ident, "regex"),
-        (Kind::Lp, "("),
-        (Kind::Ident, "text"),
-        (Kind::Comma, ","),
-        (Kind::String, r"^\d{4}-\d{2}-\d{2}$"),
-        (Kind::Rp, ")"),
-        (Kind::Eq, "=="),
-        (Kind::String, "2022-02-22"),
-        (Kind::Rs, "]"),
         (Kind::Ident, "left"),
         (Kind::Dot, "."),
         (Kind::Ident, "field"),
@@ -338,8 +302,11 @@ fn test_segment() {
         (Kind::Let, "let"),
         (Kind::Ident, "response"),
         (Kind::Assign, "="),
-        (Kind::Ident, "request"),
-        (Kind::Arrow, "->"),
+        (Kind::Ident, "user"),
+        (Kind::Dot, "."),
+        (Kind::Ident, "getIp"),
+        (Kind::Lp, "("),
+        (Kind::Rp, ")"),
         (Kind::Semi, ";"),
         (Kind::Ident, "response"),
         (Kind::Dot, "."),

@@ -1,7 +1,10 @@
 use super::Expr;
 use super::Parser as ExprParser;
+use super::context::Context;
 use super::http::Method;
 use super::http::Scheme;
+use super::http::Serializer;
+use super::native;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
@@ -27,6 +30,20 @@ impl Clients {
     pub fn get(&self, name: &str) -> Option<&Client> {
         self.inner.get(name)
     }
+
+    pub fn extend(&mut self, clients: Clients) {
+        self.inner.extend(clients.inner);
+    }
+
+    pub fn try_extend(&mut self, clients: Clients) -> Result<(), ParseError> {
+        for name in clients.inner.keys() {
+            if self.inner.contains_key(name) {
+                return Err(ParseError::new(0, format!("duplicate client '{name}'")));
+            }
+        }
+        self.extend(clients);
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -41,6 +58,49 @@ pub struct Client {
 impl Client {
     pub fn request(&self, name: &str) -> Option<&Request> {
         self.requests.get(name)
+    }
+
+    pub fn render(&self, request: &Request, context: &Context) -> String {
+        let host = native::format_template(&self.host, context);
+        let path = native::format_template(&request.path, context);
+        let mut url = format!("{}://{}", self.scheme.as_ref(), host);
+        if let Some(port) = self.port {
+            url.push_str(&format!(":{port}"));
+        }
+        url.push_str(&path);
+        if !request.params.is_empty() {
+            let mut serializer = Serializer::new();
+            for (key, value) in &request.params {
+                serializer.append(key, &native::format_template(value, context));
+            }
+            url.push('?');
+            url.push_str(&String::from_utf8_lossy(&serializer.finish()));
+        }
+
+        let mut message = format!("{} {url}\n", request.method.as_ref());
+        for (key, value) in &request.headers {
+            message.push_str(key);
+            message.push_str(": ");
+            message.push_str(&native::format_template(value, context));
+            message.push('\n');
+        }
+        match &request.body {
+            Body::None => {}
+            Body::Form(items) => {
+                message.push('\n');
+                for (key, value) in items {
+                    message.push_str(key);
+                    message.push_str(": ");
+                    message.push_str(&native::format_template(value, context));
+                    message.push('\n');
+                }
+            }
+            Body::Text(body) => {
+                message.push('\n');
+                message.push_str(&native::format_template(body, context));
+            }
+        }
+        message
     }
 }
 

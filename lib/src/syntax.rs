@@ -1,5 +1,6 @@
 use super::Token;
 use super::Value;
+use crate::client::Clients;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -23,8 +24,7 @@ pub enum Expr {
     Binary(Token, Box<Expr>, Box<Expr>),
     Paren(Box<Expr>),
     If(Box<Expr>, Vec<Expr>, Vec<Expr>),
-    Call(String, Vec<Expr>),
-    Send(String),
+    Call(Box<Expr>, Vec<Expr>),
     // TODO Break A break, with an optional label to break and an optional expr.
     // TODO For A for loop: for pat in expr { ... }.
     // TODO Range A range expr: 1..2, 1.., ..2, 1..=2, ..=2.
@@ -99,7 +99,6 @@ impl Display for Expr {
             Expr::Call(function, arguments) => {
                 write!(f, "{}({})", function, join!(arguments, "{}", ", "))
             }
-            Expr::Send(request) => write!(f, "{request}->"),
         }
     }
 }
@@ -125,7 +124,7 @@ pub struct Source {
     pub base: String,
     pub exprs: Vec<Expr>,
     pub functions: HashMap<String, (Vec<String>, Vec<Expr>)>,
-    pub requests: HashMap<String, (String, Vec<Expr>)>,
+    pub clients: Clients,
     pub tests: HashMap<String, Vec<Expr>>,
 }
 
@@ -135,7 +134,7 @@ impl Source {
             base: String::from("./"),
             exprs: Vec::new(),
             functions: HashMap::new(),
-            requests: HashMap::new(),
+            clients: Clients::default(),
             tests: HashMap::new(),
         }
     }
@@ -144,17 +143,13 @@ impl Source {
         let length = self.exprs.len();
         self.exprs.extend(source.exprs);
         self.functions.extend(source.functions);
-        self.requests.extend(source.requests);
+        self.clients.extend(source.clients);
         self.tests.extend(source.tests);
         length
     }
 
     pub fn function(&self, name: &str) -> Option<&(Vec<String>, Vec<Expr>)> {
         self.functions.get(name)
-    }
-
-    pub fn request(&self, name: &str) -> Option<&(String, Vec<Expr>)> {
-        self.requests.get(name)
     }
 
     pub fn test(&self, name: &str) -> Option<&Vec<Expr>> {

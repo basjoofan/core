@@ -65,16 +65,26 @@ async fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let temp = assert_fs::TempDir::new().unwrap();
     let file = temp.child("request.fan");
     let text = r#"
-    let host = "localhost:8888";
-    rq hello`
-        GET http://{host}/hello
-        Host: {host}
-    `[status == 200];
-
     test call {
-        let response = hello->;
+        let host = "localhost:8888";
+        let response = user.hello();
         response.status
     }
+    "#;
+    file.write_str(text)?;
+    let file = temp.child("client.yaml");
+    let text = r#"
+name: user
+scheme: http
+host: {host}
+requests:
+  - hello:
+      path: /hello
+      method: GET
+      headers:
+        - Connection: close
+      asserts:
+        - status == 200
     "#;
     file.write_str(text)?;
     // command test
@@ -86,13 +96,13 @@ async fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let stderr = String::from_utf8(output.stderr)?;
     println!("stdout:{stdout}");
     println!("stderr:{stderr}");
-    assert!(stdout.contains("--- PASS  hello ("));
+    assert!(stdout.contains("--- PASS  user.hello ("));
     // command test call
     let mut command = new_command();
     command.current_dir(&temp);
     let output = command.arg("test").arg("call").output().await?;
     assert!(output.status.success());
-    assert!(String::from_utf8(output.stdout)?.contains("--- PASS  hello ("));
+    assert!(String::from_utf8(output.stdout)?.contains("--- PASS  user.hello ("));
     // command test blank
     let mut command = new_command();
     command.current_dir(&temp);

@@ -38,7 +38,6 @@ impl Source {
             Expr::Call(name, arguments) => {
                 Box::pin(self.eval_call_expr(name, arguments, context)).await
             }
-            Expr::Send(name) => Box::pin(self.eval_send_expr(name, context)).await,
         }
     }
 
@@ -250,10 +249,22 @@ impl Source {
 
     async fn eval_call_expr(
         &self,
-        name: &str,
+        function: &Expr,
         arguments: &[Expr],
         context: &mut Context,
     ) -> Result<Value, String> {
+        if let Expr::Field(left, request_name) = function
+            && let Expr::Ident(client_name) = left.as_ref()
+        {
+            if !arguments.is_empty() {
+                return Err("client request calls do not accept arguments".to_string());
+            }
+            return Box::pin(self.eval_client_request_call(client_name, request_name, context))
+                .await;
+        }
+        let Expr::Ident(name) = function else {
+            return Err(format!("function {function} not found"));
+        };
         let arguments = self.eval_list(arguments, context).await?;
         match self.function(name) {
             Some((params, body)) => {
@@ -265,7 +276,7 @@ impl Source {
                 let mut local = Context::from(variables);
                 self.eval_block(body, &mut local).await
             }
-            None => match name {
+            None => match name.as_str() {
                 "println" => Ok(native::println(arguments, context)?),
                 "print" => Ok(native::print(arguments, context)?),
                 "format" => Ok(native::format(arguments, context)?),
@@ -276,17 +287,26 @@ impl Source {
         }
     }
 
-    async fn eval_send_expr(&self, name: &str, context: &mut Context) -> Result<Value, String> {
-        match self.request(name) {
-            Some((message, exprs)) => {
-                let name = name.to_string();
-                let message = native::format_template(message, context);
+    async fn eval_client_request_call(
+        &self,
+        client_name: &str,
+        request_name: &str,
+        context: &mut Context,
+    ) -> Result<Value, String> {
+        match self.clients.get(client_name).and_then(|client| {
+            client
+                .request(request_name)
+                .map(|request| (client, request))
+        }) {
+            Some((client, request_definition)) => {
+                let name = format!("{client_name}.{request_name}");
+                let message = client.render(request_definition, context);
                 let client = http::Client::new();
                 let (request, response, time, error) = client.send(message.as_str()).await;
                 let variables = response.to_map();
                 let mut local = Context::from(variables);
                 let mut asserts = Vec::new();
-                for assert in exprs {
+                for assert in &request_definition.asserts {
                     if let Expr::Binary(token, left, right) = assert {
                         let expr = format!("{left} {token} {right}");
                         let left = self
@@ -326,7 +346,7 @@ impl Source {
                 });
                 Ok(Value::Map(local.into_map()))
             }
-            None => Err(format!("request {name} not found")),
+            None => Err(format!("request {client_name}.{request_name} not found")),
         }
     }
 
@@ -352,6 +372,7 @@ mod tests {
     use super::super::Context;
     use super::super::Parser;
     use super::super::Value;
+    use super::super::client::Clients;
     use std::collections::HashMap;
 
     async fn run_eval_tests(tests: Vec<(&str, Value)>) {
@@ -700,40 +721,82 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_request_literal() {
+    async fn test_client_request_call() {
         crate::tests::start_server(30006).await;
-        let tests = vec![(
+        let mut source = Parser::new(
             r#"
-            rq get`
-                GET http://{host}:30006/get
-                Host: {host}
-                Connection: close
-            `[];
             let host = "127.0.0.1";
-            let response = get->;
+            let response = user.getIp();
             response.status
             "#,
-            Value::Integer(200),
-        )];
-        run_eval_tests(tests).await;
+        )
+        .parse()
+        .unwrap();
+        source.clients = Clients::from_str(
+            r#"
+name: user
+scheme: http
+host: {host}:30006
+requests:
+  - getIp:
+      path: /get
+      method: GET
+      headers:
+        - Connection: close
+      asserts:
+        - status == 200
+"#,
+        )
+        .unwrap();
+        let mut context = Context::new();
+        let value = source
+            .eval_block(&source.exprs, &mut context)
+            .await
+            .unwrap();
+        assert_eq!(value, Value::Integer(200));
+        let records = context.records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].name, "user.getIp");
+        assert!(records[0].asserts.iter().all(|assert| assert.result));
     }
 
     #[tokio::test]
-    async fn test_request_asserts() {
-        crate::tests::start_server(30007).await;
-        let tests = vec![(
+    async fn test_client_request_call_rejects_arguments() {
+        let mut source = Parser::new(
             r#"
-            rq get`
-                GET http://{host}:30007/get
-                Host: {host}
-                Connection: close
-            `[status == 200];
-            let host = "127.0.0.1";
-            let response = get->;
-            response.status
+            user.getIp(1)
             "#,
-            Value::Integer(200),
-        )];
-        run_eval_tests(tests).await;
+        )
+        .parse()
+        .unwrap();
+        source.clients = Clients::from_str(
+            r#"
+name: user
+scheme: http
+host: localhost:30006
+requests:
+  - getIp:
+      path: /get
+      method: GET
+"#,
+        )
+        .unwrap();
+        let mut context = Context::new();
+        let error = source
+            .eval_block(&source.exprs, &mut context)
+            .await
+            .unwrap_err();
+        assert!(error.contains("client request calls do not accept arguments"));
+    }
+
+    #[tokio::test]
+    async fn test_unknown_client_request_reports_error() {
+        let source = Parser::new("user.missing();").parse().unwrap();
+        let mut context = Context::new();
+        let error = source
+            .eval_block(&source.exprs, &mut context)
+            .await
+            .unwrap_err();
+        assert!(error.contains("request user.missing not found"));
     }
 }

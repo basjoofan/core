@@ -3,6 +3,7 @@ use lib::Parser;
 use lib::Source;
 use lib::Stats;
 use lib::Writer;
+use lib::client::Clients;
 use std::env::current_dir;
 use std::env::var;
 use std::ffi::OsStr;
@@ -67,16 +68,25 @@ pub async fn test(
     record: Option<PathBuf>,
     stat: bool,
 ) {
-    let text = read_text(path.unwrap_or(current_dir().unwrap())).await;
+    let (text, clients) = match read_sources(path.unwrap_or(current_dir().unwrap())).await {
+        Ok(source) => source,
+        Err(error) => {
+            println!("{error}");
+            return;
+        }
+    };
     let mut context = Context::new();
     let source = Arc::new(match Parser::new(&text).parse() {
-        Ok(source) => match source.eval_block(&source.exprs, &mut context).await {
-            Ok(_) => source,
-            Err(error) => {
-                println!("{error}");
-                return;
+        Ok(mut source) => {
+            source.clients = clients;
+            match source.eval_block(&source.exprs, &mut context).await {
+                Ok(_) => source,
+                Err(error) => {
+                    println!("{error}");
+                    return;
+                }
             }
-        },
+        }
         Err(error) => {
             println!("{error}");
             return;
@@ -177,23 +187,56 @@ pub async fn test(
     }
 }
 
-async fn read_text(path: PathBuf) -> String {
+async fn read_sources(path: PathBuf) -> Result<(String, Clients), String> {
     let mut text = Vec::new();
-    read_bytes(path, &mut text)
-        .await
-        .expect("Could not read source file");
-    String::from_utf8(text).expect("Could not decode source file")
+    let mut clients = Clients::default();
+    read_source_bytes(path, &mut text, &mut clients).await?;
+    let text = String::from_utf8(text)
+        .map_err(|error| format!("Could not decode source file: {error}"))?;
+    Ok((text, clients))
 }
 
-async fn read_bytes(path: PathBuf, text: &mut Vec<u8>) -> std::io::Result<()> {
+async fn read_source_bytes(
+    path: PathBuf,
+    text: &mut Vec<u8>,
+    clients: &mut Clients,
+) -> Result<(), String> {
     if path.is_dir() {
-        let mut entries = read_dir(path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            Box::pin(read_bytes(path, text)).await?;
+        let mut entries = read_dir(&path)
+            .await
+            .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|error| format!("Could not read {}: {error}", path.display()))?
+        {
+            Box::pin(read_source_bytes(entry.path(), text, clients)).await?;
         }
-    } else if path.is_file() && path.extension() == Some(OsStr::new("fan")) {
-        text.append(&mut read(path).await?);
+    } else if path.is_file() {
+        match path.extension().and_then(OsStr::to_str) {
+            Some("fan") => {
+                text.append(
+                    &mut read(&path)
+                        .await
+                        .map_err(|error| format!("Could not read {}: {error}", path.display()))?,
+                );
+                text.push(b'\n');
+            }
+            Some("yaml") | Some("yml") => {
+                let input = String::from_utf8(
+                    read(&path)
+                        .await
+                        .map_err(|error| format!("Could not read {}: {error}", path.display()))?,
+                )
+                .map_err(|error| format!("Could not decode {}: {error}", path.display()))?;
+                let parsed = Clients::from_str(&input)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                clients
+                    .try_extend(parsed)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+            }
+            _ => {}
+        }
     }
     Ok(())
 }
