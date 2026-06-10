@@ -1,3 +1,4 @@
+pub mod client;
 mod context;
 mod evaluator;
 mod http;
