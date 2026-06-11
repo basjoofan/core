@@ -110,6 +110,13 @@ impl Parser {
             Kind::Not | Kind::Sub => self.parse_unary_expr()?,
             Kind::Lp => self.parse_paren_expr()?,
             Kind::If => self.parse_if_expr()?,
+            Kind::Break => self.parse_break_expr()?,
+            Kind::Continue => self.parse_continue_expr()?,
+            Kind::Loop => self.parse_loop_expr(None)?,
+            Kind::While => self.parse_while_expr(None)?,
+            Kind::For => self.parse_for_expr(None)?,
+            Kind::Label => self.parse_labeled_loop_expr()?,
+            Kind::DotDot | Kind::DotDotEq => self.parse_prefix_range_expr()?,
             Kind::Ls => self.parse_array_literal()?,
             Kind::Lb => self.parse_map_literal()?,
             _ => Err(format!("parse expr error: {}", self.current_token()))?,
@@ -146,6 +153,16 @@ impl Parser {
                 | Some(Token { kind: Kind::Ne, .. }) => {
                     self.next_token();
                     self.parse_binary_expr(left)?
+                }
+                Some(Token {
+                    kind: Kind::DotDot, ..
+                })
+                | Some(Token {
+                    kind: Kind::DotDotEq,
+                    ..
+                }) => {
+                    self.next_token();
+                    self.parse_infix_range_expr(left)?
                 }
                 Some(Token { kind: Kind::Lp, .. }) => {
                     self.next_token();
@@ -253,6 +270,130 @@ impl Parser {
             alternative = self.parse_block_expr()?;
         }
         Ok(Expr::If(Box::new(condition), consequence, alternative))
+    }
+
+    fn parse_label(&self) -> String {
+        self.current_token().literal.to_owned()
+    }
+
+    fn parse_labeled_loop_expr(&mut self) -> Result<Expr, String> {
+        let label = self.parse_label();
+        self.peek_token_expect(Kind::Colon)?;
+        self.next_token();
+        match self.current_token().kind {
+            Kind::Loop => self.parse_loop_expr(Some(label)),
+            Kind::While => self.parse_while_expr(Some(label)),
+            Kind::For => self.parse_for_expr(Some(label)),
+            _ => Err(format!(
+                "label can only be applied to loop expressions: {label}"
+            )),
+        }
+    }
+
+    fn parse_break_expr(&mut self) -> Result<Expr, String> {
+        let label = if self.peek_token_is(Kind::Label) {
+            self.next_token();
+            Some(self.parse_label())
+        } else {
+            None
+        };
+        let value = if self.peek_starts_expr() {
+            self.next_token();
+            Some(Box::new(self.parse_expr(u8::MIN)?))
+        } else {
+            None
+        };
+        Ok(Expr::Break(label, value))
+    }
+
+    fn parse_continue_expr(&mut self) -> Result<Expr, String> {
+        let label = if self.peek_token_is(Kind::Label) {
+            self.next_token();
+            Some(self.parse_label())
+        } else {
+            None
+        };
+        Ok(Expr::Continue(label))
+    }
+
+    fn parse_loop_expr(&mut self, label: Option<String>) -> Result<Expr, String> {
+        let body = self.parse_block_expr()?;
+        Ok(Expr::Loop(label, body))
+    }
+
+    fn parse_while_expr(&mut self, label: Option<String>) -> Result<Expr, String> {
+        self.peek_token_expect(Kind::Lp)?;
+        self.next_token();
+        let condition = self.parse_expr(u8::MIN)?;
+        self.peek_token_expect(Kind::Rp)?;
+        let body = self.parse_block_expr()?;
+        Ok(Expr::While(label, Box::new(condition), body))
+    }
+
+    fn parse_for_expr(&mut self, label: Option<String>) -> Result<Expr, String> {
+        self.peek_token_expect(Kind::Ident)?;
+        let binding = self.parse_current_string();
+        self.peek_token_expect(Kind::In)?;
+        self.next_token();
+        let iterator = self.parse_expr(u8::MIN)?;
+        let body = self.parse_block_expr()?;
+        Ok(Expr::For(label, binding, Box::new(iterator), body))
+    }
+
+    fn parse_prefix_range_expr(&mut self) -> Result<Expr, String> {
+        let inclusive = self.current_token().kind == Kind::DotDotEq;
+        let end = if self.peek_starts_range_end() {
+            self.next_token();
+            Some(Box::new(self.parse_expr(self.current_precedence())?))
+        } else {
+            None
+        };
+        Ok(Expr::Range(None, end, inclusive))
+    }
+
+    fn parse_infix_range_expr(&mut self, left: Expr) -> Result<Expr, String> {
+        let inclusive = self.current_token().kind == Kind::DotDotEq;
+        let end = if self.peek_starts_range_end() {
+            let precedence = self.current_precedence();
+            self.next_token();
+            Some(Box::new(self.parse_expr(precedence)?))
+        } else {
+            None
+        };
+        Ok(Expr::Range(Some(Box::new(left)), end, inclusive))
+    }
+
+    fn peek_starts_expr(&self) -> bool {
+        matches!(
+            self.peek_token().map(|token| token.kind),
+            Some(
+                Kind::Ident
+                    | Kind::Integer
+                    | Kind::Float
+                    | Kind::True
+                    | Kind::False
+                    | Kind::String
+                    | Kind::Let
+                    | Kind::Not
+                    | Kind::Sub
+                    | Kind::Lp
+                    | Kind::If
+                    | Kind::Break
+                    | Kind::Continue
+                    | Kind::Loop
+                    | Kind::While
+                    | Kind::For
+                    | Kind::Label
+                    | Kind::DotDot
+                    | Kind::DotDotEq
+                    | Kind::Ls
+                    | Kind::Lb
+            )
+        )
+    }
+
+    fn peek_starts_range_end(&self) -> bool {
+        self.peek_starts_expr() && !self.peek_token_is(Kind::Lb)
     }
 
     fn parse_call_expr(&mut self, function: Expr) -> Result<Expr, String> {
@@ -969,6 +1110,54 @@ fn test_parse_call_expr_argument() {
                 unreachable!("exprs expr none")
             }
         }
+    }
+}
+
+#[test]
+fn test_parse_loop_exprs() {
+    let tests = vec![
+        ("break;", "break"),
+        ("break 5;", "break 5"),
+        ("break 'outer 5;", "break 'outer 5"),
+        ("continue;", "continue"),
+        ("continue 'outer;", "continue 'outer"),
+        ("loop { break 5 }", "loop { break 5 }"),
+        (
+            "'outer: loop { break 'outer 5 }",
+            "'outer: loop { break 'outer 5 }",
+        ),
+        ("while (true) { break 5 }", "while (true) { break 5 }"),
+        (
+            "'outer: while (true) { break 'outer 5 }",
+            "'outer: while (true) { break 'outer 5 }",
+        ),
+        ("for x in 1..3 { x }", "for x in 1..3 { x }"),
+        (
+            "'outer: for x in 1..=3 { break 'outer x }",
+            "'outer: for x in 1..=3 { break 'outer x }",
+        ),
+    ];
+    for (text, expected) in tests {
+        let Source { exprs, .. } = Parser::new(text).parse().unwrap();
+        assert_eq!(exprs.len(), 1);
+        assert_eq!(exprs[0].to_string(), expected);
+    }
+}
+
+#[test]
+fn test_parse_range_exprs() {
+    let tests = vec![
+        ("1..2", "1..2"),
+        ("1..", "1.."),
+        ("..2", "..2"),
+        ("1..=2", "1..=2"),
+        ("..=2", "..=2"),
+        ("1 + 1..4", "1 + 1..4"),
+    ];
+    for (text, expected) in tests {
+        let Source { exprs, .. } = Parser::new(text).parse().unwrap();
+        assert_eq!(exprs.len(), 1);
+        assert_eq!(exprs[0].to_string(), expected);
     }
 }
 

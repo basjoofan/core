@@ -26,10 +26,12 @@ pub enum Expr {
     If(Box<Expr>, Vec<Expr>, Vec<Expr>),
     Function(String, Vec<String>, Vec<Expr>),
     Call(Box<Expr>, Vec<Expr>),
-    // TODO Break A break, with an optional label to break and an optional expr.
-    // TODO For A for loop: for pat in expr { ... }.
-    // TODO Range A range expr: 1..2, 1.., ..2, 1..=2, ..=2.
-    // TODO While A while loop: while expr { ... }.
+    Break(Option<String>, Option<Box<Expr>>),
+    Continue(Option<String>),
+    Loop(Option<String>, Vec<Expr>),
+    While(Option<String>, Box<Expr>, Vec<Expr>),
+    For(Option<String>, String, Box<Expr>, Vec<Expr>),
+    Range(Option<Box<Expr>>, Option<Box<Expr>>, bool),
 }
 
 impl Expr {
@@ -107,6 +109,59 @@ impl Display for Expr {
             }
             Expr::Call(function, arguments) => {
                 write!(f, "{}({})", function, join!(arguments, "{}", ", "))
+            }
+            Expr::Break(label, value) => {
+                write!(f, "break")?;
+                if let Some(label) = label {
+                    write!(f, " '{label}")?;
+                }
+                if let Some(value) = value {
+                    write!(f, " {value}")?;
+                }
+                Ok(())
+            }
+            Expr::Continue(label) => {
+                write!(f, "continue")?;
+                if let Some(label) = label {
+                    write!(f, " '{label}")?;
+                }
+                Ok(())
+            }
+            Expr::Loop(label, body) => {
+                if let Some(label) = label {
+                    write!(f, "'{label}: ")?;
+                }
+                write!(f, "loop {{ {} }}", join!(body, "{}", ";"))
+            }
+            Expr::While(label, condition, body) => {
+                if let Some(label) = label {
+                    write!(f, "'{label}: ")?;
+                }
+                write!(f, "while ({condition}) {{ {} }}", join!(body, "{}", ";"))
+            }
+            Expr::For(label, binding, iterator, body) => {
+                if let Some(label) = label {
+                    write!(f, "'{label}: ")?;
+                }
+                write!(
+                    f,
+                    "for {binding} in {iterator} {{ {} }}",
+                    join!(body, "{}", ";")
+                )
+            }
+            Expr::Range(start, end, inclusive) => {
+                if let Some(start) = start {
+                    write!(f, "{start}")?;
+                }
+                if *inclusive {
+                    write!(f, "..=")?;
+                } else {
+                    write!(f, "..")?;
+                }
+                if let Some(end) = end {
+                    write!(f, "{end}")?;
+                }
+                Ok(())
             }
         }
     }

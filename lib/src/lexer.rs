@@ -78,7 +78,21 @@ pub fn segment(text: &str) -> Vec<Token> {
                 ',' => (Kind::Comma, String::from(char)),
                 ';' => (Kind::Semi, String::from(char)),
                 ':' => (Kind::Colon, String::from(char)),
-                '.' => (Kind::Dot, String::from(char)),
+                '.' => {
+                    if let Some(peek @ '.') = chars.peek() {
+                        let mut literal = String::from_iter([char, *peek]);
+                        chars.next();
+                        if let Some(peek @ '=') = chars.peek() {
+                            literal.push(*peek);
+                            chars.next();
+                            (Kind::DotDotEq, literal)
+                        } else {
+                            (Kind::DotDot, literal)
+                        }
+                    } else {
+                        (Kind::Dot, String::from(char))
+                    }
+                }
                 '(' => (Kind::Lp, String::from(char)),
                 ')' => (Kind::Rp, String::from(char)),
                 '{' => (Kind::Lb, String::from(char)),
@@ -111,15 +125,38 @@ pub fn segment(text: &str) -> Vec<Token> {
                     }
                     (Kind::Template, string.to_owned())
                 }
+                '\'' => {
+                    let mut string = String::new();
+                    while let Some(peek) = chars.peek() {
+                        if peek.is_ascii_alphanumeric() || *peek == '_' {
+                            string.push(*peek);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if string.is_empty() {
+                        (Kind::Illegal, String::from(char))
+                    } else {
+                        (Kind::Label, string)
+                    }
+                }
                 '0'..='9' => {
                     let mut string = String::from(char);
                     let mut has_dot = false;
                     while let Some(peek) = chars.peek() {
-                        if peek.is_ascii_digit() || *peek == '.' {
-                            if *peek == '.' {
-                                has_dot = true
+                        let peek = *peek;
+                        if peek.is_ascii_digit() {
+                            string.push(peek);
+                            chars.next();
+                        } else if peek == '.' {
+                            let mut lookahead = chars.clone();
+                            lookahead.next();
+                            if matches!(lookahead.peek(), Some('.')) {
+                                break;
                             }
-                            string.push(*peek);
+                            has_dot = true;
+                            string.push(peek);
                             chars.next();
                         } else {
                             break;
@@ -149,6 +186,12 @@ pub fn segment(text: &str) -> Vec<Token> {
                         "if" => (Kind::If, string),
                         "else" => (Kind::Else, string),
                         "test" => (Kind::Test, string),
+                        "break" => (Kind::Break, string),
+                        "continue" => (Kind::Continue, string),
+                        "loop" => (Kind::Loop, string),
+                        "while" => (Kind::While, string),
+                        "for" => (Kind::For, string),
+                        "in" => (Kind::In, string),
                         _ => (Kind::Ident, string),
                     }
                 }
@@ -324,6 +367,45 @@ fn test_segment() {
         (Kind::False, "false"),
         (Kind::Lo, "||"),
         (Kind::True, "true"),
+        (Kind::Eof, ""),
+    ];
+    let tokens = segment(text);
+    assert_eq!(expect.len(), tokens.len());
+    for (i, (kind, literal)) in expect.into_iter().enumerate() {
+        let token = tokens.get(i).unwrap();
+        assert_eq!(kind, token.kind);
+        assert_eq!(literal, token.literal);
+    }
+}
+
+#[test]
+fn test_segment_loop_tokens() {
+    let text = "'outer: loop { break 'outer 1 } continue while for in 1..2 1.. ..2 1..=2 ..=2";
+    let expect = vec![
+        (Kind::Label, "outer"),
+        (Kind::Colon, ":"),
+        (Kind::Loop, "loop"),
+        (Kind::Lb, "{"),
+        (Kind::Break, "break"),
+        (Kind::Label, "outer"),
+        (Kind::Integer, "1"),
+        (Kind::Rb, "}"),
+        (Kind::Continue, "continue"),
+        (Kind::While, "while"),
+        (Kind::For, "for"),
+        (Kind::In, "in"),
+        (Kind::Integer, "1"),
+        (Kind::DotDot, ".."),
+        (Kind::Integer, "2"),
+        (Kind::Integer, "1"),
+        (Kind::DotDot, ".."),
+        (Kind::DotDot, ".."),
+        (Kind::Integer, "2"),
+        (Kind::Integer, "1"),
+        (Kind::DotDotEq, "..="),
+        (Kind::Integer, "2"),
+        (Kind::DotDotEq, "..="),
+        (Kind::Integer, "2"),
         (Kind::Eof, ""),
     ];
     let tokens = segment(text);

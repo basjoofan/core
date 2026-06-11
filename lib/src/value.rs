@@ -22,6 +22,11 @@ pub enum Value {
     String(String),
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
+    Range {
+        start: Option<i64>,
+        end: Option<i64>,
+        inclusive: bool,
+    },
 }
 
 impl Display for Value {
@@ -34,6 +39,24 @@ impl Display for Value {
             Value::String(string) => write!(f, "{string}"),
             Value::Array(items) => write!(f, "{items:?}"),
             Value::Map(pairs) => write!(f, "{pairs:?}"),
+            Value::Range {
+                start,
+                end,
+                inclusive,
+            } => {
+                if let Some(start) = start {
+                    write!(f, "{start}")?;
+                }
+                if *inclusive {
+                    write!(f, "..=")?;
+                } else {
+                    write!(f, "..")?;
+                }
+                if let Some(end) = end {
+                    write!(f, "{end}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
