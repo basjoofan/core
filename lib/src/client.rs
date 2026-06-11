@@ -166,7 +166,8 @@ impl Yaml {
         let mut lines = Vec::new();
         for (index, raw) in input.lines().enumerate() {
             let line = raw.strip_suffix('\r').unwrap_or(raw).trim_end();
-            if line.trim().is_empty() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
             let indent = count_indent(line).ok_or_else(|| {
@@ -780,6 +781,30 @@ requests:
 
         assert!(clients.get("user").is_some());
         assert!(clients.get("test").is_some());
+    }
+
+    #[test]
+    fn parse_ignores_standalone_comments() {
+        let clients = Clients::from_str(
+            r#"
+# primary API client
+name: user
+scheme: https
+host: httpbin.org
+requests:
+  # read request
+  - get:
+      path: /get
+      method: GET
+      # status contract
+      asserts:
+        - status == 200
+"#,
+        )
+        .unwrap();
+
+        let client = clients.get("user").unwrap();
+        assert!(client.request("get").is_some());
     }
 
     #[test]
