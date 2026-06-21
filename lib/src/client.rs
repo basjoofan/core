@@ -149,23 +149,34 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 #[derive(Debug)]
-struct Line {
+struct Line<'a> {
     number: usize,
     indent: usize,
-    raw: String,
-    text: String,
+    raw: &'a str,
+    text: &'a str,
 }
 
-struct Yaml {
-    lines: Vec<Line>,
+struct Yaml<'a> {
+    lines: Vec<Line<'a>>,
     index: usize,
 }
 
-impl Yaml {
-    fn new(input: &str) -> Result<Self, ParseError> {
+impl<'a> Yaml<'a> {
+    fn new(input: &'a str) -> Result<Self, ParseError> {
+        let document_indent = input
+            .lines()
+            .filter_map(|raw| {
+                let line = raw.trim_end();
+                let trimmed = line.trim();
+                (!trimmed.is_empty() && !trimmed.starts_with('#'))
+                    .then(|| count_indent(line))
+                    .flatten()
+            })
+            .min()
+            .unwrap_or(0);
         let mut lines = Vec::new();
         for (index, raw) in input.lines().enumerate() {
-            let line = raw.strip_suffix('\r').unwrap_or(raw).trim_end();
+            let line = raw.trim_end();
             let trimmed = line.trim();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
@@ -173,11 +184,12 @@ impl Yaml {
             let indent = count_indent(line).ok_or_else(|| {
                 ParseError::new(index + 1, "tabs are not allowed for indentation")
             })?;
+            let line = &line[document_indent..];
             lines.push(Line {
                 number: index + 1,
-                indent,
-                raw: line.to_string(),
-                text: line[indent..].trim_end().to_string(),
+                indent: indent - document_indent,
+                raw: line,
+                text: line[indent - document_indent..].trim_end(),
             });
         }
         Ok(Self { lines, index: 0 })
@@ -185,19 +197,22 @@ impl Yaml {
 
     fn parse_clients(mut self) -> Result<Clients, ParseError> {
         let mut clients = Clients::default();
-        self.skip_document_separators();
-        while !self.is_eof() {
-            let start_line = self.current().map(|line| line.number).unwrap_or(1);
-            let client = self.parse_client(start_line)?;
-            if clients.inner.contains_key(&client.name) {
-                return Err(ParseError::new(
-                    start_line,
-                    format!("duplicate client '{}'", client.name),
-                ));
-            }
-            clients.inner.insert(client.name.clone(), client);
-            self.skip_document_separators();
+        if self.is_document_separator() {
+            self.index += 1;
         }
+        if self.is_eof() {
+            return Ok(clients);
+        }
+
+        let start_line = self.current().map(|line| line.number).unwrap_or(1);
+        let client = self.parse_client(start_line)?;
+        if self.is_document_separator() {
+            return Err(ParseError::new(
+                self.current().map(|line| line.number).unwrap_or(start_line),
+                "multiple YAML documents are not supported; split them into separate files",
+            ));
+        }
+        clients.inner.insert(client.name.clone(), client);
         Ok(clients)
     }
 
@@ -287,12 +302,6 @@ impl Yaml {
         parent_indent: usize,
     ) -> Result<HashMap<String, Request>, ParseError> {
         let list_indent = self.expect_child_indent(parent_indent, "request list")?;
-        if list_indent != parent_indent + 2 {
-            return Err(ParseError::new(
-                self.current().map(|line| line.number).unwrap_or(1),
-                format!("invalid indentation, expected {} spaces", parent_indent + 2),
-            ));
-        }
         let mut requests = HashMap::new();
 
         while let Some(line) = self.current() {
@@ -351,12 +360,13 @@ impl Yaml {
         let mut headers = Vec::new();
         let mut body = Body::None;
         let mut asserts = Vec::new();
+        let request_indent = self.child_indent(parent_indent);
 
         while let Some(line) = self.current() {
             if line.indent <= parent_indent || self.is_document_separator() {
                 break;
             }
-            if line.indent != parent_indent + 4 {
+            if Some(line.indent) != request_indent {
                 return Err(ParseError::new(
                     line.number,
                     format!("invalid indentation in request '{request_name}'"),
@@ -602,7 +612,7 @@ impl Yaml {
         })
     }
 
-    fn current(&self) -> Option<&Line> {
+    fn current(&self) -> Option<&Line<'a>> {
         self.lines.get(self.index)
     }
 
@@ -612,13 +622,7 @@ impl Yaml {
 
     fn is_document_separator(&self) -> bool {
         self.current()
-            .is_some_and(|line| line.indent == 0 && line.text == "---")
-    }
-
-    fn skip_document_separators(&mut self) {
-        while self.is_document_separator() {
-            self.index += 1;
-        }
+            .is_some_and(|line| line.indent == 0 && strip_inline_comment(line.text) == "---")
     }
 
     fn previous_line_number(&self) -> usize {
@@ -642,8 +646,8 @@ fn count_indent(line: &str) -> Option<usize> {
     Some(count)
 }
 
-fn parse_key_value<'a>(line: &'a Line, what: &str) -> Result<(&'a str, &'a str), ParseError> {
-    split_key_value(&line.text)
+fn parse_key_value<'a>(line: &'a Line<'_>, what: &str) -> Result<(&'a str, &'a str), ParseError> {
+    split_key_value(strip_inline_comment(line.text))
         .ok_or_else(|| ParseError::new(line.number, format!("{what} must be 'key: value'")))
 }
 
@@ -656,11 +660,46 @@ fn split_key_value(text: &str) -> Option<(&str, &str)> {
     Some((key, value.trim()))
 }
 
-fn list_item<'a>(line: &'a Line, field: &str) -> Result<&'a str, ParseError> {
-    line.text
+fn list_item<'a>(line: &'a Line<'_>, field: &str) -> Result<&'a str, ParseError> {
+    strip_inline_comment(line.text)
         .strip_prefix("- ")
         .map(str::trim)
         .ok_or_else(|| ParseError::new(line.number, format!("{field} entry must start with '- '")))
+}
+
+fn strip_inline_comment(text: &str) -> &str {
+    let mut in_single_quotes = false;
+    let mut in_double_quotes = false;
+    let mut escaped = false;
+    let mut previous = None;
+
+    for (index, character) in text.char_indices() {
+        if in_double_quotes {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_double_quotes = false;
+            }
+        } else if in_single_quotes {
+            if character == '\'' {
+                in_single_quotes = false;
+            }
+        } else {
+            match character {
+                '\'' => in_single_quotes = true,
+                '"' => in_double_quotes = true,
+                '#' if previous.is_some_and(char::is_whitespace) => {
+                    return text[..index].trim_end();
+                }
+                _ => {}
+            }
+        }
+        previous = Some(character);
+    }
+
+    text.trim_end()
 }
 
 fn ensure_inline_value(line: usize, key: &str, value: &str) -> Result<(), ParseError> {
@@ -710,7 +749,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_single_get_request() {
+    fn parse_request_single() {
         let clients = Clients::from_str(
             r#"
 name: user
@@ -757,58 +796,7 @@ requests:
     }
 
     #[test]
-    fn parse_multiple_documents() {
-        let clients = Clients::from_str(
-            r#"
-name: user
-scheme: https
-host: httpbin.org
-requests:
-  - get:
-      path: /get
-      method: GET
----
-name: test
-scheme: https
-host: httpbin.org
-requests:
-  - getIp:
-      path: /ip
-      method: GET
-"#,
-        )
-        .unwrap();
-
-        assert!(clients.get("user").is_some());
-        assert!(clients.get("test").is_some());
-    }
-
-    #[test]
-    fn parse_ignores_standalone_comments() {
-        let clients = Clients::from_str(
-            r#"
-# primary API client
-name: user
-scheme: https
-host: httpbin.org
-requests:
-  # read request
-  - get:
-      path: /get
-      method: GET
-      # status contract
-      asserts:
-        - status == 200
-"#,
-        )
-        .unwrap();
-
-        let client = clients.get("user").unwrap();
-        assert!(client.request("get").is_some());
-    }
-
-    #[test]
-    fn parse_form_body() {
+    fn parse_request_body_form() {
         let clients = Clients::from_str(
             r#"
 name: user
@@ -834,7 +822,7 @@ requests:
     }
 
     #[test]
-    fn parse_multipart_body() {
+    fn parse_request_body_multipart() {
         let clients = Clients::from_str(
             r#"
 name: user
@@ -868,7 +856,7 @@ requests:
     }
 
     #[test]
-    fn parse_inline_json_body_as_text() {
+    fn parse_request_body_json_inline() {
         let clients = Clients::from_str(
             r#"
 name: user
@@ -901,7 +889,7 @@ requests:
     }
 
     #[test]
-    fn parse_literal_json_body_as_text() {
+    fn parse_request_body_json_literal() {
         let clients = Clients::from_str(
             r#"
 name: test
@@ -938,7 +926,72 @@ requests:
     }
 
     #[test]
-    fn unknown_method_reports_line() {
+    fn parse_yaml_flexible_indentation() {
+        let clients = Clients::from_str(
+            r#"
+name: user
+scheme: https
+host: httpbin.org
+requests:
+   - get:
+      path: /get
+      method: GET
+"#,
+        )
+        .unwrap();
+
+        assert!(clients.get("user").unwrap().request("get").is_some());
+    }
+
+    #[test]
+    fn parse_yaml_standalone_comment() {
+        let clients = Clients::from_str(
+            r#"
+# primary api client
+name: user
+scheme: https
+host: httpbin.org
+requests:
+  # read request
+  - get:
+      path: /get
+      method: GET
+      # status contract
+      asserts:
+        - status == 200
+"#,
+        )
+        .unwrap();
+
+        let client = clients.get("user").unwrap();
+        assert!(client.request("get").is_some());
+    }
+
+    #[test]
+    fn parse_yaml_inline_comment() {
+        let clients = Clients::from_str(
+            r#"
+    name: user # This is request name
+    scheme: https # This is request scheme
+    host: httpbin.org # This is request host
+    requests:
+      - get:
+          path: /get # This is request path
+          method: GET # This is request method
+          asserts: # This is request asserts
+            - status == 200 # This is request assert status ok
+    "#,
+        )
+        .unwrap();
+
+        let client = clients.get("user").unwrap();
+        let request = client.request("get").unwrap();
+        assert_eq!("GET", request.method.as_ref());
+        assert_eq!("/get", request.path);
+    }
+
+    #[test]
+    fn parse_error_unknown_method() {
         let error = Clients::from_str(
             r#"
 name: user
@@ -957,7 +1010,7 @@ requests:
     }
 
     #[test]
-    fn missing_host_reports_structure_error() {
+    fn parse_error_missing_host() {
         let error = Clients::from_str(
             r#"
 name: user
@@ -974,7 +1027,34 @@ requests:
     }
 
     #[test]
-    fn headers_reject_non_map_entries() {
+    fn parse_error_multiple_documents() {
+        let error = Clients::from_str(
+            r#"
+name: user
+scheme: https
+host: httpbin.org
+requests:
+  - get:
+      path: /get
+      method: GET
+---
+name: test
+scheme: https
+host: httpbin.org
+requests:
+  - getIp:
+      path: /ip
+      method: GET
+"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(9, error.line);
+        assert!(error.reason.contains("split them into separate files"));
+    }
+
+    #[test]
+    fn parse_error_headers_not_map() {
         let error = Clients::from_str(
             r#"
 name: user
@@ -999,26 +1079,32 @@ requests:
     }
 
     #[test]
-    fn invalid_indentation_reports_line() {
+    fn parse_error_params_not_map() {
         let error = Clients::from_str(
             r#"
 name: user
 scheme: https
 host: httpbin.org
 requests:
-   - get:
+  - get:
       path: /get
       method: GET
+      params:
+        - not-a-map
 "#,
         )
         .unwrap_err();
 
-        assert_eq!(6, error.line);
-        assert!(error.reason.contains("invalid indentation"));
+        assert_eq!(10, error.line);
+        assert!(
+            error
+                .reason
+                .contains("params entry must be a single-key map")
+        );
     }
 
     #[test]
-    fn duplicate_request_reports_line() {
+    fn parse_error_duplicate_request() {
         let error = Clients::from_str(
             r#"
 name: user
@@ -1034,7 +1120,6 @@ requests:
 "#,
         )
         .unwrap_err();
-
         assert_eq!(9, error.line);
         assert!(error.reason.contains("duplicate request 'get'"));
     }

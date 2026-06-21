@@ -398,56 +398,105 @@ impl Source {
         body: &[Expr],
         context: &mut Context,
     ) -> Result<EvalFlow, String> {
-        let items = self.eval_for_items(iterator, context).await?;
+        let iterator = self.eval_expr(iterator, context).await?;
         let mut result = Value::Null;
-        for item in items {
-            context.set(binding.to_owned(), item);
-            match self.eval_block_flow(body, context).await? {
-                EvalFlow::Value(value) => result = value,
-                EvalFlow::Break {
-                    label: target,
-                    value,
-                } => {
-                    if target.is_none() || target == *label {
-                        return Ok(EvalFlow::Value(value));
+        match iterator {
+            Value::Array(items) => {
+                for item in items {
+                    if let Some(flow) = Box::pin(self.eval_for_iteration(
+                        label,
+                        binding,
+                        item,
+                        body,
+                        context,
+                        &mut result,
+                    ))
+                    .await?
+                    {
+                        return Ok(flow);
                     }
-                    return Ok(EvalFlow::Break {
-                        label: target,
-                        value,
-                    });
-                }
-                EvalFlow::Continue { label: target } => {
-                    if target.is_none() || target == *label {
-                        continue;
-                    }
-                    return Ok(EvalFlow::Continue { label: target });
                 }
             }
-        }
-        Ok(EvalFlow::Value(result))
-    }
-
-    async fn eval_for_items(
-        &self,
-        iterator: &Expr,
-        context: &mut Context,
-    ) -> Result<Vec<Value>, String> {
-        match self.eval_expr(iterator, context).await? {
-            Value::Array(items) => Ok(items),
             Value::Range {
                 start: Some(start),
                 end: Some(end),
                 inclusive,
             } => {
-                let values = if inclusive {
-                    (start..=end).map(Value::Integer).collect::<Vec<Value>>()
+                if inclusive {
+                    for integer in start..=end {
+                        if let Some(flow) = Box::pin(self.eval_for_iteration(
+                            label,
+                            binding,
+                            Value::Integer(integer),
+                            body,
+                            context,
+                            &mut result,
+                        ))
+                        .await?
+                        {
+                            return Ok(flow);
+                        }
+                    }
                 } else {
-                    (start..end).map(Value::Integer).collect::<Vec<Value>>()
-                };
-                Ok(values)
+                    for integer in start..end {
+                        if let Some(flow) = Box::pin(self.eval_for_iteration(
+                            label,
+                            binding,
+                            Value::Integer(integer),
+                            body,
+                            context,
+                            &mut result,
+                        ))
+                        .await?
+                        {
+                            return Ok(flow);
+                        }
+                    }
+                }
             }
-            Value::Range { .. } => Err("open-ended range cannot be used in for loop".to_string()),
-            value => Err(format!("for loop iterator not supported: {value:?}")),
+            Value::Range { .. } => {
+                return Err("open-ended range cannot be used in for loop".to_string());
+            }
+            value => return Err(format!("for loop iterator not supported: {value:?}")),
+        }
+        Ok(EvalFlow::Value(result))
+    }
+
+    async fn eval_for_iteration(
+        &self,
+        label: &Option<String>,
+        binding: &String,
+        item: Value,
+        body: &[Expr],
+        context: &mut Context,
+        result: &mut Value,
+    ) -> Result<Option<EvalFlow>, String> {
+        context.set(binding.to_owned(), item);
+        match self.eval_block_flow(body, context).await? {
+            EvalFlow::Value(value) => {
+                *result = value;
+                Ok(None)
+            }
+            EvalFlow::Break {
+                label: target,
+                value,
+            } => {
+                if target.is_none() || target == *label {
+                    Ok(Some(EvalFlow::Value(value)))
+                } else {
+                    Ok(Some(EvalFlow::Break {
+                        label: target,
+                        value,
+                    }))
+                }
+            }
+            EvalFlow::Continue { label: target } => {
+                if target.is_none() || target == *label {
+                    Ok(None)
+                } else {
+                    Ok(Some(EvalFlow::Continue { label: target }))
+                }
+            }
         }
     }
 
@@ -966,6 +1015,20 @@ mod tests {
             ),
         ];
         run_eval_tests(tests).await;
+    }
+
+    #[tokio::test]
+    async fn test_for_range_breaks_without_collecting_entire_range() {
+        let source = Parser::new("for x in 0..=9223372036854775807 { break x }")
+            .parse()
+            .unwrap();
+        let mut context = Context::new();
+        let value = source
+            .eval_block(&source.exprs, &mut context)
+            .await
+            .unwrap();
+
+        assert_eq!(value, Value::Integer(0));
     }
 
     #[tokio::test]
