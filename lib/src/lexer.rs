@@ -86,9 +86,9 @@ pub fn segment(text: &str) -> Vec<Token> {
                         if let Some(peek @ '=') = scanner.peek() {
                             literal.push(peek);
                             scanner.next();
-                            (Kind::DotDotEq, literal)
+                            (Kind::Close, literal)
                         } else {
-                            (Kind::DotDot, literal)
+                            (Kind::Open, literal)
                         }
                     } else {
                         (Kind::Dot, String::from(char))
@@ -102,22 +102,6 @@ pub fn segment(text: &str) -> Vec<Token> {
                 ']' => (Kind::Rs, String::from(char)),
                 '"' => scanner.quoted('"', Kind::String, "string"),
                 '`' => scanner.quoted('`', Kind::Template, "template"),
-                '\'' => {
-                    let mut string = String::new();
-                    while let Some(peek) = scanner.peek() {
-                        if peek.is_ascii_alphanumeric() || peek == '_' {
-                            string.push(peek);
-                            scanner.next();
-                        } else {
-                            break;
-                        }
-                    }
-                    if string.is_empty() {
-                        (Kind::Illegal, String::from(char))
-                    } else {
-                        (Kind::Label, string)
-                    }
-                }
                 '0'..='9' => {
                     let mut string = String::from(char);
                     let mut has_dot = false;
@@ -471,14 +455,11 @@ fn test_invalid_string_escape() {
 
 #[test]
 fn test_segment_loop_tokens() {
-    let text = "'outer: loop { break 'outer 1 } continue while for in 1..2 1.. ..2 1..=2 ..=2";
+    let text = "loop { break 1 } continue while for in 1..2 1.. ..2 1..=2 ..=2";
     let expect = vec![
-        (Kind::Label, "outer"),
-        (Kind::Colon, ":"),
         (Kind::Loop, "loop"),
         (Kind::Lb, "{"),
         (Kind::Break, "break"),
-        (Kind::Label, "outer"),
         (Kind::Integer, "1"),
         (Kind::Rb, "}"),
         (Kind::Continue, "continue"),
@@ -486,16 +467,16 @@ fn test_segment_loop_tokens() {
         (Kind::For, "for"),
         (Kind::In, "in"),
         (Kind::Integer, "1"),
-        (Kind::DotDot, ".."),
+        (Kind::Open, ".."),
         (Kind::Integer, "2"),
         (Kind::Integer, "1"),
-        (Kind::DotDot, ".."),
-        (Kind::DotDot, ".."),
+        (Kind::Open, ".."),
+        (Kind::Open, ".."),
         (Kind::Integer, "2"),
         (Kind::Integer, "1"),
-        (Kind::DotDotEq, "..="),
+        (Kind::Close, "..="),
         (Kind::Integer, "2"),
-        (Kind::DotDotEq, "..="),
+        (Kind::Close, "..="),
         (Kind::Integer, "2"),
         (Kind::Eof, ""),
     ];

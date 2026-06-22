@@ -13,16 +13,16 @@ use std::collections::HashMap;
 
 enum EvalFlow {
     Value(Value),
-    Break { label: Option<String>, value: Value },
-    Continue { label: Option<String> },
+    Break(Value),
+    Continue,
 }
 
 impl Source {
     async fn eval_expr(&self, expr: &Expr, context: &mut Context) -> Result<Value, String> {
         match Box::pin(self.eval_flow(expr, context)).await? {
             EvalFlow::Value(value) => Ok(value),
-            EvalFlow::Break { .. } => Err("break outside loop".to_string()),
-            EvalFlow::Continue { .. } => Err("continue outside loop".to_string()),
+            EvalFlow::Break(_) => Err("break outside loop".to_string()),
+            EvalFlow::Continue => Err("continue outside loop".to_string()),
         }
     }
 
@@ -62,25 +62,20 @@ impl Source {
             Expr::Call(name, arguments) => Ok(EvalFlow::Value(
                 Box::pin(self.eval_call_expr(name, arguments, context)).await?,
             )),
-            Expr::Break(label, value) => {
+            Expr::Break(value) => {
                 let value = match value {
                     Some(value) => Box::pin(self.eval_expr(value, context)).await?,
                     None => Value::Null,
                 };
-                Ok(EvalFlow::Break {
-                    label: label.to_owned(),
-                    value,
-                })
+                Ok(EvalFlow::Break(value))
             }
-            Expr::Continue(label) => Ok(EvalFlow::Continue {
-                label: label.to_owned(),
-            }),
-            Expr::Loop(label, body) => Box::pin(self.eval_loop_expr(label, body, context)).await,
-            Expr::While(label, condition, body) => {
-                Box::pin(self.eval_while_expr(label, condition, body, context)).await
+            Expr::Continue => Ok(EvalFlow::Continue),
+            Expr::Loop(body) => Box::pin(self.eval_loop_expr(body, context)).await,
+            Expr::While(condition, body) => {
+                Box::pin(self.eval_while_expr(condition, body, context)).await
             }
-            Expr::For(label, binding, iterator, body) => {
-                Box::pin(self.eval_for_expr(label, binding, iterator, body, context)).await
+            Expr::Cursor(binding, iterator, body) => {
+                Box::pin(self.eval_for_expr(binding, iterator, body, context)).await
             }
             Expr::Range(start, end, inclusive) => Ok(EvalFlow::Value(
                 Box::pin(self.eval_range_expr(start, end, *inclusive, context)).await?,
@@ -325,38 +320,20 @@ impl Source {
 
     async fn eval_loop_expr(
         &self,
-        label: &Option<String>,
         body: &[Expr],
         context: &mut Context,
     ) -> Result<EvalFlow, String> {
         loop {
             match self.eval_block_flow(body, context).await? {
                 EvalFlow::Value(_) => {}
-                EvalFlow::Break {
-                    label: target,
-                    value,
-                } => {
-                    if target.is_none() || target == *label {
-                        return Ok(EvalFlow::Value(value));
-                    }
-                    return Ok(EvalFlow::Break {
-                        label: target,
-                        value,
-                    });
-                }
-                EvalFlow::Continue { label: target } => {
-                    if target.is_none() || target == *label {
-                        continue;
-                    }
-                    return Ok(EvalFlow::Continue { label: target });
-                }
+                EvalFlow::Break(value) => return Ok(EvalFlow::Value(value)),
+                EvalFlow::Continue => continue,
             }
         }
     }
 
     async fn eval_while_expr(
         &self,
-        label: &Option<String>,
         condition: &Expr,
         body: &[Expr],
         context: &mut Context,
@@ -369,31 +346,14 @@ impl Source {
             }
             match self.eval_block_flow(body, context).await? {
                 EvalFlow::Value(value) => result = value,
-                EvalFlow::Break {
-                    label: target,
-                    value,
-                } => {
-                    if target.is_none() || target == *label {
-                        return Ok(EvalFlow::Value(value));
-                    }
-                    return Ok(EvalFlow::Break {
-                        label: target,
-                        value,
-                    });
-                }
-                EvalFlow::Continue { label: target } => {
-                    if target.is_none() || target == *label {
-                        continue;
-                    }
-                    return Ok(EvalFlow::Continue { label: target });
-                }
+                EvalFlow::Break(value) => return Ok(EvalFlow::Value(value)),
+                EvalFlow::Continue => continue,
             }
         }
     }
 
     async fn eval_for_expr(
         &self,
-        label: &Option<String>,
         binding: &String,
         iterator: &Expr,
         body: &[Expr],
@@ -404,15 +364,9 @@ impl Source {
         match iterator {
             Value::Array(items) => {
                 for item in items {
-                    if let Some(flow) = Box::pin(self.eval_for_iteration(
-                        label,
-                        binding,
-                        item,
-                        body,
-                        context,
-                        &mut result,
-                    ))
-                    .await?
+                    if let Some(flow) =
+                        Box::pin(self.eval_for_iteration(binding, item, body, context, &mut result))
+                            .await?
                     {
                         return Ok(flow);
                     }
@@ -426,7 +380,6 @@ impl Source {
                 if inclusive {
                     for integer in start..=end {
                         if let Some(flow) = Box::pin(self.eval_for_iteration(
-                            label,
                             binding,
                             Value::Integer(integer),
                             body,
@@ -441,7 +394,6 @@ impl Source {
                 } else {
                     for integer in start..end {
                         if let Some(flow) = Box::pin(self.eval_for_iteration(
-                            label,
                             binding,
                             Value::Integer(integer),
                             body,
@@ -465,7 +417,6 @@ impl Source {
 
     async fn eval_for_iteration(
         &self,
-        label: &Option<String>,
         binding: &String,
         item: Value,
         body: &[Expr],
@@ -478,26 +429,8 @@ impl Source {
                 *result = value;
                 Ok(None)
             }
-            EvalFlow::Break {
-                label: target,
-                value,
-            } => {
-                if target.is_none() || target == *label {
-                    Ok(Some(EvalFlow::Value(value)))
-                } else {
-                    Ok(Some(EvalFlow::Break {
-                        label: target,
-                        value,
-                    }))
-                }
-            }
-            EvalFlow::Continue { label: target } => {
-                if target.is_none() || target == *label {
-                    Ok(None)
-                } else {
-                    Ok(Some(EvalFlow::Continue { label: target }))
-                }
-            }
+            EvalFlow::Break(value) => Ok(Some(EvalFlow::Value(value))),
+            EvalFlow::Continue => Ok(None),
         }
     }
 
@@ -802,8 +735,8 @@ impl Source {
     pub async fn eval_block(&self, exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
         match self.eval_block_flow(exprs, context).await? {
             EvalFlow::Value(value) => Ok(value),
-            EvalFlow::Break { .. } => Err("break outside loop".to_string()),
-            EvalFlow::Continue { .. } => Err("continue outside loop".to_string()),
+            EvalFlow::Break(_) => Err("break outside loop".to_string()),
+            EvalFlow::Continue => Err("continue outside loop".to_string()),
         }
     }
 
@@ -816,7 +749,7 @@ impl Source {
         for expr in exprs {
             match Box::pin(self.eval_flow(expr, context)).await? {
                 EvalFlow::Value(value) => result = value,
-                flow @ (EvalFlow::Break { .. } | EvalFlow::Continue { .. }) => return Ok(flow),
+                flow @ (EvalFlow::Break(_) | EvalFlow::Continue) => return Ok(flow),
             }
         }
         Ok(EvalFlow::Value(result))
@@ -1289,15 +1222,6 @@ mod tests {
         let tests = vec![(
             "let sum = 0; for x in 1..=3 { if (x == 2) { continue }; let sum = sum + x }; sum",
             Value::Integer(4),
-        )];
-        run_eval_tests(tests).await;
-    }
-
-    #[tokio::test]
-    async fn test_labeled_break_expr() {
-        let tests = vec![(
-            "'outer: loop { loop { break 'outer 7 }; break 1 }",
-            Value::Integer(7),
         )];
         run_eval_tests(tests).await;
     }

@@ -38,14 +38,13 @@ pub enum Kind {
     Ne,  // !=
 
     // delimiter
-    Assign,   // =
-    Comma,    // ,
-    Semi,     // ;
-    Colon,    // :
-    Dot,      // .
-    DotDot,   // ..
-    DotDotEq, // ..=
-    Label,    // 'label
+    Assign, // =
+    Comma,  // ,
+    Semi,   // ;
+    Colon,  // :
+    Dot,    // .
+    Open,   // ..
+    Close,  // ..=
 
     // couple
     Lp, // (
@@ -99,26 +98,26 @@ impl Token {
 
     pub fn precedence(&self) -> u8 {
         match self.kind {
-            Kind::Lo => 1,       // a || b
-            Kind::DotDot => 1,   // a..b
-            Kind::DotDotEq => 1, // a..=b
-            Kind::La => 2,       // a && b
-            Kind::Bo => 3,       // a | b
-            Kind::Bx => 4,       // a ^ b
-            Kind::Ba => 5,       // a & b
-            Kind::Eq => 6,       // a == b
-            Kind::Ne => 6,       // a != b
-            Kind::Lt => 7,       // a < b
-            Kind::Gt => 7,       // a > b
-            Kind::Le => 7,       // a <= b
-            Kind::Ge => 7,       // a >= b
-            Kind::Sl => 8,       // a << b
-            Kind::Sr => 8,       // a >> b
-            Kind::Add => 9,      // a + b
-            Kind::Sub => 9,      // a - b
-            Kind::Mul => 10,     // a * b
-            Kind::Div => 10,     // a / b
-            Kind::Rem => 10,     // a / b
+            Kind::Lo => 1,    // a || b
+            Kind::Open => 1,  // a..b
+            Kind::Close => 1, // a..=b
+            Kind::La => 2,    // a && b
+            Kind::Bo => 3,    // a | b
+            Kind::Bx => 4,    // a ^ b
+            Kind::Ba => 5,    // a & b
+            Kind::Eq => 6,    // a == b
+            Kind::Ne => 6,    // a != b
+            Kind::Lt => 7,    // a < b
+            Kind::Gt => 7,    // a > b
+            Kind::Le => 7,    // a <= b
+            Kind::Ge => 7,    // a >= b
+            Kind::Sl => 8,    // a << b
+            Kind::Sr => 8,    // a >> b
+            Kind::Add => 9,   // a + b
+            Kind::Sub => 9,   // a - b
+            Kind::Mul => 10,  // a * b
+            Kind::Div => 10,  // a / b
+            Kind::Rem => 10,  // a / b
             // Kind::Sub => 11,  -x unary minus + 2
             Kind::Not => 11, // !x
             Kind::Lp => 12,  // function()
