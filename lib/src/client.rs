@@ -16,15 +16,11 @@ pub struct Clients {
 
 impl Clients {
     pub fn from_str(input: &str) -> Result<Self, ParseError> {
-        Yaml::new(input)?.parse_clients()
+        Ok(Self::from(Client::from_str(input)?))
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, ParseError> {
-        let path = path.as_ref();
-        let input = std::fs::read_to_string(path).map_err(|error| {
-            ParseError::new(0, format!("failed to read {}: {error}", path.display()))
-        })?;
-        Self::from_str(&input)
+        Ok(Self::from(Client::from_path(path)?))
     }
 
     pub fn get(&self, name: &str) -> Option<&Client> {
@@ -46,6 +42,14 @@ impl Clients {
     }
 }
 
+impl From<Client> for Clients {
+    fn from(client: Client) -> Self {
+        let mut inner = HashMap::with_capacity(1);
+        inner.insert(client.name.clone(), client);
+        Self { inner }
+    }
+}
+
 #[derive(Debug)]
 pub struct Client {
     pub name: String,
@@ -56,6 +60,18 @@ pub struct Client {
 }
 
 impl Client {
+    pub fn from_str(input: &str) -> Result<Self, ParseError> {
+        Yaml::new(input)?.parse()
+    }
+
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, ParseError> {
+        let path = path.as_ref();
+        let input = std::fs::read_to_string(path).map_err(|error| {
+            ParseError::new(0, format!("failed to read {}: {error}", path.display()))
+        })?;
+        Self::from_str(&input)
+    }
+
     pub fn request(&self, name: &str) -> Option<&Request> {
         self.requests.get(name)
     }
@@ -163,17 +179,6 @@ struct Yaml<'a> {
 
 impl<'a> Yaml<'a> {
     fn new(input: &'a str) -> Result<Self, ParseError> {
-        let document_indent = input
-            .lines()
-            .filter_map(|raw| {
-                let line = raw.trim_end();
-                let trimmed = line.trim();
-                (!trimmed.is_empty() && !trimmed.starts_with('#'))
-                    .then(|| count_indent(line))
-                    .flatten()
-            })
-            .min()
-            .unwrap_or(0);
         let mut lines = Vec::new();
         for (index, raw) in input.lines().enumerate() {
             let line = raw.trim_end();
@@ -184,27 +189,29 @@ impl<'a> Yaml<'a> {
             let indent = count_indent(line).ok_or_else(|| {
                 ParseError::new(index + 1, "tabs are not allowed for indentation")
             })?;
-            let line = &line[document_indent..];
             lines.push(Line {
                 number: index + 1,
-                indent: indent - document_indent,
+                indent: indent,
                 raw: line,
-                text: line[indent - document_indent..].trim_end(),
+                text: line[indent..].trim_end(),
             });
         }
         Ok(Self { lines, index: 0 })
     }
 
-    fn parse_clients(mut self) -> Result<Clients, ParseError> {
-        let mut clients = Clients::default();
+    fn parse(mut self) -> Result<Client, ParseError> {
         if self.is_document_separator() {
             self.index += 1;
         }
-        if self.is_eof() {
-            return Ok(clients);
-        }
 
         let start_line = self.current().map(|line| line.number).unwrap_or(1);
+        if self.is_document_separator() {
+            return Err(ParseError::new(
+                start_line,
+                "multiple YAML documents are not supported; split them into separate files",
+            ));
+        }
+
         let client = self.parse_client(start_line)?;
         if self.is_document_separator() {
             return Err(ParseError::new(
@@ -212,8 +219,7 @@ impl<'a> Yaml<'a> {
                 "multiple YAML documents are not supported; split them into separate files",
             ));
         }
-        clients.inner.insert(client.name.clone(), client);
-        Ok(clients)
+        Ok(client)
     }
 
     fn parse_client(&mut self, start_line: usize) -> Result<Client, ParseError> {
@@ -408,7 +414,7 @@ impl<'a> Yaml<'a> {
                     let indent = line.indent;
                     let body_value = value.to_string();
                     self.index += 1;
-                    body = self.parse_body(indent, line_number, &body_value)?;
+                    body = self.parse_body(indent, &body_value)?;
                 }
                 "asserts" => {
                     if !value.is_empty() {
@@ -458,15 +464,6 @@ impl<'a> Yaml<'a> {
         let Some(list_indent) = self.child_indent(parent_indent) else {
             return Ok(Vec::new());
         };
-        if list_indent != parent_indent + 2 {
-            return Err(ParseError::new(
-                self.current().map(|line| line.number).unwrap_or(1),
-                format!(
-                    "invalid indentation in {field}, expected {} spaces",
-                    parent_indent + 2
-                ),
-            ));
-        }
         let mut pairs = Vec::new();
         while let Some(line) = self.current() {
             if line.indent <= parent_indent || self.is_document_separator() {
@@ -495,15 +492,6 @@ impl<'a> Yaml<'a> {
         let Some(list_indent) = self.child_indent(parent_indent) else {
             return Ok(Vec::new());
         };
-        if list_indent != parent_indent + 2 {
-            return Err(ParseError::new(
-                self.current().map(|line| line.number).unwrap_or(1),
-                format!(
-                    "invalid indentation in asserts, expected {} spaces",
-                    parent_indent + 2
-                ),
-            ));
-        }
         let mut values = Vec::new();
         while let Some(line) = self.current() {
             if line.indent <= parent_indent || self.is_document_separator() {
@@ -528,12 +516,7 @@ impl<'a> Yaml<'a> {
         Ok(values)
     }
 
-    fn parse_body(
-        &mut self,
-        parent_indent: usize,
-        line_number: usize,
-        value: &str,
-    ) -> Result<Body, ParseError> {
+    fn parse_body(&mut self, parent_indent: usize, value: &str) -> Result<Body, ParseError> {
         if value == "|" {
             return Ok(Body::Text(self.collect_text_block(parent_indent)?));
         }
@@ -551,26 +534,11 @@ impl<'a> Yaml<'a> {
                 self.parse_key_value_list(parent_indent, "body")?,
             ));
         }
-        if line.indent == parent_indent + 2 {
-            return Ok(Body::Text(self.collect_text_block(parent_indent)?));
-        }
-        Err(ParseError::new(
-            line_number,
-            "body must be a nested key-value list or text block",
-        ))
+        Ok(Body::Text(self.collect_text_block(parent_indent)?))
     }
 
     fn collect_text_block(&mut self, parent_indent: usize) -> Result<String, ParseError> {
         let block_indent = self.expect_child_indent(parent_indent, "text block")?;
-        if block_indent != parent_indent + 2 {
-            return Err(ParseError::new(
-                self.current().map(|line| line.number).unwrap_or(1),
-                format!(
-                    "invalid indentation in text block, expected {} spaces",
-                    parent_indent + 2
-                ),
-            ));
-        }
         let mut text = String::new();
         while let Some(line) = self.current() {
             if line.indent <= parent_indent || self.is_document_separator() {
@@ -614,10 +582,6 @@ impl<'a> Yaml<'a> {
 
     fn current(&self) -> Option<&Line<'a>> {
         self.lines.get(self.index)
-    }
-
-    fn is_eof(&self) -> bool {
-        self.index >= self.lines.len()
     }
 
     fn is_document_separator(&self) -> bool {
@@ -971,16 +935,16 @@ requests:
     fn parse_yaml_inline_comment() {
         let clients = Clients::from_str(
             r#"
-    name: user # This is request name
-    scheme: https # This is request scheme
-    host: httpbin.org # This is request host
-    requests:
-      - get:
-          path: /get # This is request path
-          method: GET # This is request method
-          asserts: # This is request asserts
-            - status == 200 # This is request assert status ok
-    "#,
+name: user # This is request name
+scheme: https # This is request scheme
+host: httpbin.org # This is request host
+requests:
+    - get:
+        path: /get # This is request path
+        method: GET # This is request method
+        asserts: # This is request asserts
+         - status == 200 # This is request assert status ok
+"#,
         )
         .unwrap();
 
