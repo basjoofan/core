@@ -4,11 +4,32 @@ use super::Source;
 use super::Token;
 use super::lexer;
 use crate::client::Clients;
-use std::collections::HashMap;
+use crate::client::{Client, Request};
+use crate::http::{Method, Scheme};
+use std::collections::{HashMap, HashSet};
 
 pub struct Parser {
     tokens: Vec<Token>,
     index: usize,
+}
+
+fn normalize_object_keys(expr: Expr) -> Expr {
+    match expr {
+        Expr::Map(pairs) => Expr::Map(
+            pairs
+                .into_iter()
+                .map(|(key, value)| {
+                    let key = match key {
+                        Expr::Ident(name) => Expr::String(name),
+                        key => normalize_object_keys(key),
+                    };
+                    (key, normalize_object_keys(value))
+                })
+                .collect(),
+        ),
+        Expr::Array(values) => Expr::Array(values.into_iter().map(normalize_object_keys).collect()),
+        expr => expr,
+    }
 }
 
 impl Parser {
@@ -69,18 +90,35 @@ impl Parser {
         let mut exprs = Vec::new();
         let mut functions = HashMap::new();
         let mut tests = HashMap::new();
+        let mut clients = Clients::default();
         while self.current_token().kind != Kind::Eof {
             match self.current_token().kind {
+                Kind::Client => {
+                    let client = self
+                        .parse_client_literal()
+                        .map_err(|error| self.locate_error(error))?;
+                    clients
+                        .insert(client)
+                        .map_err(|error| self.locate_error(error))?;
+                }
                 Kind::Function => {
-                    if let Expr::Function(name, params, block) = self.parse_function_literal()? {
+                    if let Expr::Function(name, params, block) = self
+                        .parse_function_literal()
+                        .map_err(|error| self.locate_error(error))?
+                    {
                         functions.insert(name, (params, block));
                     }
                 }
                 Kind::Test => {
-                    let (name, block) = self.parse_test_literal()?;
+                    let (name, block) = self
+                        .parse_test_literal()
+                        .map_err(|error| self.locate_error(error))?;
                     tests.insert(name, block);
                 }
-                _ => exprs.push(self.parse_expr(u8::MIN)?),
+                _ => exprs.push(
+                    self.parse_expr(u8::MIN)
+                        .map_err(|error| self.locate_error(error))?,
+                ),
             }
             if self.peek_token_is(Kind::Semi) {
                 self.next_token();
@@ -91,9 +129,14 @@ impl Parser {
             base: base.to_owned(),
             exprs,
             functions,
-            clients: Clients::default(),
+            clients,
             tests,
         })
+    }
+
+    fn locate_error(&self, error: String) -> String {
+        let token = self.current_token();
+        format!("{}:{}: {error}", token.line, token.column)
     }
 
     fn parse_expr(&mut self, mut precedence: u8) -> Result<Expr, String> {
@@ -434,6 +477,191 @@ impl Parser {
         }
         self.peek_token_expect(Kind::Rb)?;
         Ok(Expr::Map(pairs))
+    }
+
+    fn parse_client_literal(&mut self) -> Result<Client, String> {
+        self.peek_token_expect(Kind::Ident)?;
+        let name = self.parse_current_string();
+        self.peek_token_expect(Kind::Lb)?;
+
+        let mut fields = HashSet::new();
+        let mut scheme = None;
+        let mut host = None;
+        let mut port = None;
+        let mut requests = None;
+
+        while !self.peek_token_is(Kind::Rb) {
+            self.next_token();
+            let field = self.parse_object_field_name("client")?;
+            if !fields.insert(field.clone()) {
+                return Err(format!("duplicate client field '{field}'"));
+            }
+            self.peek_token_expect(Kind::Colon)?;
+            self.next_token();
+            match field.as_str() {
+                "scheme" => {
+                    let value = self.expect_ident("scheme")?;
+                    scheme = Some(match value.as_str() {
+                        "http" | "https" => Scheme::from(value.as_str()),
+                        _ => return Err(format!("unknown scheme '{value}'")),
+                    });
+                }
+                "host" => host = Some(self.parse_expr(u8::MIN)?),
+                "port" => {
+                    let token = self.current_token();
+                    if token.kind != Kind::Integer {
+                        return Err("client port must be an integer".to_string());
+                    }
+                    port = Some(
+                        token
+                            .literal
+                            .parse::<u16>()
+                            .map_err(|_| format!("invalid port '{}'", token.literal))?,
+                    );
+                }
+                "requests" => requests = Some(self.parse_requests_literal()?),
+                _ => return Err(format!("unknown client field '{field}'")),
+            }
+            self.consume_object_separator(Kind::Rb)?;
+        }
+        self.peek_token_expect(Kind::Rb)?;
+
+        let scheme = scheme.ok_or_else(|| "missing required client field 'scheme'".to_string())?;
+        let host = host.ok_or_else(|| "missing required client field 'host'".to_string())?;
+        let requests =
+            requests.ok_or_else(|| "missing required client field 'requests'".to_string())?;
+        if requests.is_empty() {
+            return Err("requests must contain at least one entry".to_string());
+        }
+        Ok(Client {
+            name,
+            scheme,
+            host,
+            port,
+            requests,
+        })
+    }
+
+    fn parse_requests_literal(&mut self) -> Result<HashMap<String, Request>, String> {
+        if self.current_token().kind != Kind::Lb {
+            return Err("requests must be an object".to_string());
+        }
+        let mut requests = HashMap::new();
+        while !self.peek_token_is(Kind::Rb) {
+            self.next_token();
+            let name = self.parse_object_field_name("request")?;
+            if requests.contains_key(&name) {
+                return Err(format!("duplicate request '{name}'"));
+            }
+            self.peek_token_expect(Kind::Colon)?;
+            self.next_token();
+            let request = self.parse_request_literal(&name)?;
+            requests.insert(name, request);
+            self.consume_object_separator(Kind::Rb)?;
+        }
+        self.peek_token_expect(Kind::Rb)?;
+        Ok(requests)
+    }
+
+    fn parse_request_literal(&mut self, request_name: &str) -> Result<Request, String> {
+        if self.current_token().kind != Kind::Lb {
+            return Err(format!("request '{request_name}' must be an object"));
+        }
+        let mut fields = HashSet::new();
+        let mut path = None;
+        let mut method = None;
+        let mut params = Vec::new();
+        let mut headers = Vec::new();
+        let mut body = None;
+        let mut asserts = Vec::new();
+
+        while !self.peek_token_is(Kind::Rb) {
+            self.next_token();
+            let field = self.parse_object_field_name("request")?;
+            if !fields.insert(field.clone()) {
+                return Err(format!(
+                    "duplicate field '{field}' in request '{request_name}'"
+                ));
+            }
+            self.peek_token_expect(Kind::Colon)?;
+            self.next_token();
+            match field.as_str() {
+                "path" => path = Some(self.parse_expr(u8::MIN)?),
+                "method" => {
+                    let value = self.expect_ident("method")?;
+                    method = Some(match value.as_str() {
+                        "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD"
+                        | "TRACE" | "CONNECT" => Method::from(value.as_str()),
+                        _ => return Err(format!("unknown method '{value}'")),
+                    });
+                }
+                "headers" => headers = self.parse_pairs_literal("headers")?,
+                "params" => params = self.parse_pairs_literal("params")?,
+                "body" => body = Some(normalize_object_keys(self.parse_expr(u8::MIN)?)),
+                "asserts" => {
+                    let Expr::Array(values) = self.parse_expr(u8::MIN)? else {
+                        return Err("asserts must be an array".to_string());
+                    };
+                    asserts = values;
+                }
+                _ => return Err(format!("unknown request field '{field}'")),
+            }
+            self.consume_object_separator(Kind::Rb)?;
+        }
+        self.peek_token_expect(Kind::Rb)?;
+
+        Ok(Request {
+            path: path.ok_or_else(|| format!("request '{request_name}' is missing 'path'"))?,
+            method: method
+                .ok_or_else(|| format!("request '{request_name}' is missing 'method'"))?,
+            params,
+            headers,
+            body,
+            asserts,
+        })
+    }
+
+    fn parse_pairs_literal(&mut self, field: &str) -> Result<Vec<(Expr, Expr)>, String> {
+        let Expr::Array(entries) = self.parse_expr(u8::MIN)? else {
+            return Err(format!("{field} must be an array of key-value pairs"));
+        };
+        entries
+            .into_iter()
+            .map(|entry| match entry {
+                Expr::Array(mut pair) if pair.len() == 2 => {
+                    let value = pair.pop().unwrap();
+                    let key = pair.pop().unwrap();
+                    Ok((key, value))
+                }
+                _ => Err(format!(
+                    "each {field} entry must contain exactly two values"
+                )),
+            })
+            .collect()
+    }
+
+    fn parse_object_field_name(&self, object: &str) -> Result<String, String> {
+        match self.current_token().kind {
+            Kind::Ident | Kind::String => Ok(self.parse_current_string()),
+            _ => Err(format!(
+                "{object} field name must be an identifier or string"
+            )),
+        }
+    }
+
+    fn expect_ident(&self, field: &str) -> Result<String, String> {
+        if self.current_token().kind == Kind::Ident {
+            Ok(self.parse_current_string())
+        } else {
+            Err(format!("{field} must be an identifier"))
+        }
+    }
+
+    fn consume_object_separator(&mut self, end: Kind) -> Result<(), String> {
+        if !self.peek_token_is(end) {
+            self.peek_token_expect(Kind::Comma)?;
+        }
+        Ok(())
     }
 
     fn parse_index_expr(&mut self, left: Expr) -> Result<Expr, String> {
@@ -1079,6 +1307,69 @@ fn test_parse_client_request_call_expr() {
         assert!(arguments.is_empty());
     } else {
         unreachable!("client request call expr parse failed")
+    }
+}
+
+#[test]
+fn test_parse_native_client_definition() {
+    let source = Parser::new(
+        r#"
+        client user {
+            scheme: https,
+            host: "example.com",
+            port: 8443,
+            requests: {
+                get: {
+                    path: "/get",
+                    method: GET,
+                    headers: [["a", "b"]],
+                    params: [["tag", "a"], ["tag", "b"]],
+                    asserts: [status == 200],
+                },
+            },
+        }
+        "#,
+    )
+    .parse()
+    .unwrap();
+    let client = source.clients.get("user").unwrap();
+    assert_eq!(client.scheme.as_ref(), "https");
+    assert_eq!(client.port, Some(8443));
+    let request = client.request("get").unwrap();
+    assert_eq!(request.headers.len(), 1);
+    assert_eq!(request.params.len(), 2);
+    assert_eq!(request.asserts.len(), 1);
+}
+
+#[test]
+fn test_native_client_definition_validation() {
+    let cases = [
+        (
+            r#"client user { scheme: ftp, host: "example.com", requests: {} }"#,
+            "unknown scheme 'ftp'",
+        ),
+        (
+            r#"client user { scheme: https, host: "example.com", requests: { get: { path: "/" } } }"#,
+            "request 'get' is missing 'method'",
+        ),
+        (
+            r#"client user { scheme: https, host: "example.com", requests: { get: { path: "/", method: GET, headers: [["a"]] } } }"#,
+            "each headers entry must contain exactly two values",
+        ),
+        (
+            r#"client user { scheme: https, host: "a", requests: { get: { path: "/", method: GET } } } client user { scheme: https, host: "b", requests: { get: { path: "/", method: GET } } }"#,
+            "duplicate client 'user'",
+        ),
+    ];
+    for (input, expected) in cases {
+        let error = match Parser::new(input).parse() {
+            Ok(_) => panic!("expected client definition to fail"),
+            Err(error) => error,
+        };
+        assert!(
+            error.contains(expected),
+            "{error} did not contain {expected}"
+        );
     }
 }
 

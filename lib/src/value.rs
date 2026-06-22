@@ -29,6 +29,73 @@ pub enum Value {
     },
 }
 
+impl Value {
+    pub(crate) fn to_json(&self) -> std::result::Result<String, String> {
+        let mut output = String::new();
+        self.write_json(&mut output)?;
+        Ok(output)
+    }
+
+    fn write_json(&self, output: &mut String) -> std::result::Result<(), String> {
+        match self {
+            Value::Null => output.push_str("null"),
+            Value::Integer(value) => output.push_str(&value.to_string()),
+            Value::Float(value) if value.is_finite() => output.push_str(&value.to_string()),
+            Value::Float(value) => {
+                return Err(format!("cannot encode non-finite float {value} as JSON"));
+            }
+            Value::Boolean(value) => output.push_str(if *value { "true" } else { "false" }),
+            Value::String(value) => write_json_string(value, output),
+            Value::Array(values) => {
+                output.push('[');
+                for (index, value) in values.iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    value.write_json(output)?;
+                }
+                output.push(']');
+            }
+            Value::Map(values) => {
+                output.push('{');
+                for (index, (key, value)) in values.iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    write_json_string(key, output);
+                    output.push(':');
+                    value.write_json(output)?;
+                }
+                output.push('}');
+            }
+            Value::Range { .. } => {
+                return Err("ranges cannot be encoded as JSON".to_string());
+            }
+        }
+        Ok(())
+    }
+}
+
+fn write_json_string(value: &str, output: &mut String) {
+    output.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            '\u{08}' => output.push_str("\\b"),
+            '\u{0c}' => output.push_str("\\f"),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            character if character <= '\u{1f}' => {
+                output.push_str(&format!("\\u{:04x}", character as u32));
+            }
+            character => output.push(character),
+        }
+    }
+    output.push('"');
+}
+
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
@@ -187,5 +254,42 @@ impl PartialOrd for Value {
             (Value::String(left), Value::String(right)) => left.partial_cmp(right),
             (_, _) => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encode_json_values() {
+        let value = Value::Map(HashMap::from([(
+            "data".to_string(),
+            Value::Array(vec![
+                Value::Null,
+                Value::Integer(1),
+                Value::Float(1.5),
+                Value::Boolean(true),
+                Value::String("say \"hi\"\\next\n".to_string()),
+            ]),
+        )]));
+        assert_eq!(
+            value.to_json().unwrap(),
+            r#"{"data":[null,1,1.5,true,"say \"hi\"\\next\n"]}"#
+        );
+    }
+
+    #[test]
+    fn reject_values_that_json_cannot_represent() {
+        assert!(Value::Float(f64::INFINITY).to_json().is_err());
+        assert!(
+            Value::Range {
+                start: Some(1),
+                end: Some(2),
+                inclusive: false,
+            }
+            .to_json()
+            .is_err()
+        );
     }
 }

@@ -2,6 +2,7 @@ use super::Assert;
 use super::Context;
 use super::Expr;
 use super::Kind;
+use super::Parser;
 use super::Record;
 use super::Source;
 use super::Token;
@@ -553,7 +554,9 @@ impl Source {
         }) {
             Some((client, request_definition)) => {
                 let name = format!("{client_name}.{request_name}");
-                let message = client.render(request_definition, context);
+                let message = self
+                    .eval_request_message(client, request_definition, context)
+                    .await?;
                 let client = http::Client::new();
                 let (request, response, time, error) = client.send(message.as_str()).await;
                 let variables = response.to_map();
@@ -603,6 +606,199 @@ impl Source {
         }
     }
 
+    async fn eval_request_message(
+        &self,
+        client: &crate::client::Client,
+        request: &crate::client::Request,
+        context: &mut Context,
+    ) -> Result<String, String> {
+        let host = self
+            .eval_request_string(&client.host, context, "host")
+            .await?;
+        let path = self
+            .eval_request_string(&request.path, context, "path")
+            .await?;
+        let mut url = format!("{}://{host}", client.scheme.as_ref());
+        if let Some(port) = client.port {
+            url.push_str(&format!(":{port}"));
+        }
+        url.push_str(&path);
+
+        if !request.params.is_empty() {
+            let mut serializer = http::Serializer::new();
+            for (key, value) in &request.params {
+                let key = self.eval_request_scalar(key, context, "param key").await?;
+                let value = self
+                    .eval_request_scalar(value, context, "param value")
+                    .await?;
+                serializer.append(&key, &value);
+            }
+            url.push('?');
+            url.push_str(&String::from_utf8_lossy(&serializer.finish()));
+        }
+
+        let mut headers = Vec::new();
+        for (key, value) in &request.headers {
+            headers.push((
+                self.eval_request_scalar(key, context, "header name")
+                    .await?,
+                self.eval_request_scalar(value, context, "header value")
+                    .await?,
+            ));
+        }
+        let content_type = headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+            .map(|(_, value)| value.to_owned());
+
+        let mut body = None;
+        if let Some(expr) = &request.body {
+            let value = self.eval_request_value(expr, context).await?;
+            let media_type = content_type
+                .as_deref()
+                .and_then(|value| value.split(';').next())
+                .map(str::trim)
+                .map(str::to_ascii_lowercase);
+            body = Some(match media_type.as_deref() {
+                Some("application/x-www-form-urlencoded") | Some("multipart/form-data") => {
+                    request_pairs(&value)?
+                        .into_iter()
+                        .map(|(key, value)| format!("{key}: {value}"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                }
+                Some(media_type)
+                    if media_type == "application/json" || media_type.ends_with("+json") =>
+                {
+                    match value {
+                        Value::String(value) => value,
+                        value => value.to_json()?,
+                    }
+                }
+                None => match value {
+                    Value::String(value) => value,
+                    value @ (Value::Map(_) | Value::Array(_)) => {
+                        headers.push(("Content-Type".to_string(), "application/json".to_string()));
+                        value.to_json()?
+                    }
+                    value => {
+                        return Err(format!(
+                            "body without Content-Type must be a string, object, or array, found {value:?}"
+                        ));
+                    }
+                },
+                Some(media_type) => match value {
+                    Value::String(value) => value,
+                    value => {
+                        return Err(format!(
+                            "body for Content-Type '{media_type}' must be a string, found {value:?}"
+                        ));
+                    }
+                },
+            });
+        }
+
+        let mut message = format!("{} {url}\n", request.method.as_ref());
+        for (name, value) in headers {
+            message.push_str(&format!("{name}: {value}\n"));
+        }
+        if let Some(body) = body {
+            message.push('\n');
+            message.push_str(&body);
+        }
+        Ok(message)
+    }
+
+    async fn eval_request_string(
+        &self,
+        expr: &Expr,
+        context: &mut Context,
+        field: &str,
+    ) -> Result<String, String> {
+        match self.eval_request_value(expr, context).await? {
+            Value::String(value) => Ok(value),
+            value => Err(format!(
+                "{field} must evaluate to a string, found {value:?}"
+            )),
+        }
+    }
+
+    async fn eval_request_scalar(
+        &self,
+        expr: &Expr,
+        context: &mut Context,
+        field: &str,
+    ) -> Result<String, String> {
+        match self.eval_request_value(expr, context).await? {
+            Value::String(value) => Ok(value),
+            Value::Integer(value) => Ok(value.to_string()),
+            Value::Float(value) => Ok(value.to_string()),
+            Value::Boolean(value) => Ok(value.to_string()),
+            value => Err(format!(
+                "{field} must evaluate to a scalar, found {value:?}"
+            )),
+        }
+    }
+
+    async fn eval_request_value(
+        &self,
+        expr: &Expr,
+        context: &mut Context,
+    ) -> Result<Value, String> {
+        let value = self.eval_expr(expr, context).await?;
+        Box::pin(self.interpolate_value(value, context)).await
+    }
+
+    async fn interpolate_value(
+        &self,
+        value: Value,
+        context: &mut Context,
+    ) -> Result<Value, String> {
+        match value {
+            Value::String(value) => Ok(Value::String(self.interpolate(&value, context).await?)),
+            Value::Array(values) => {
+                let mut rendered = Vec::with_capacity(values.len());
+                for value in values {
+                    rendered.push(Box::pin(self.interpolate_value(value, context)).await?);
+                }
+                Ok(Value::Array(rendered))
+            }
+            Value::Map(values) => {
+                let mut rendered = HashMap::with_capacity(values.len());
+                for (key, value) in values {
+                    let key = self.interpolate(&key, context).await?;
+                    let value = Box::pin(self.interpolate_value(value, context)).await?;
+                    rendered.insert(key, value);
+                }
+                Ok(Value::Map(rendered))
+            }
+            value => Ok(value),
+        }
+    }
+
+    async fn interpolate(&self, input: &str, context: &mut Context) -> Result<String, String> {
+        let mut output = String::new();
+        let mut cursor = 0;
+        while let Some(relative) = input[cursor..].find("\\(") {
+            let start = cursor + relative;
+            output.push_str(&input[cursor..start]);
+            let expression_start = start + 2;
+            let end = interpolation_end(input, expression_start)?;
+            let expression = &input[expression_start..end];
+            let source = Parser::new(expression)
+                .parse()
+                .map_err(|error| format!("invalid interpolation expression: {error}"))?;
+            if source.exprs.len() != 1 || !source.clients.inner.is_empty() {
+                return Err("interpolation must contain exactly one expression".to_string());
+            }
+            let value = self.eval_expr(&source.exprs[0], context).await?;
+            output.push_str(&value.to_string());
+            cursor = end + 1;
+        }
+        output.push_str(&input[cursor..]);
+        Ok(output)
+    }
+
     pub async fn eval_block(&self, exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
         match self.eval_block_flow(exprs, context).await? {
             EvalFlow::Value(value) => Ok(value),
@@ -635,12 +831,69 @@ impl Source {
     }
 }
 
+fn interpolation_end(input: &str, start: usize) -> Result<usize, String> {
+    let mut depth = 1usize;
+    let mut quote = None;
+    let mut escaped = false;
+    for (offset, character) in input[start..].char_indices() {
+        if let Some(active_quote) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == active_quote {
+                quote = None;
+            }
+            continue;
+        }
+        match character {
+            '"' | '`' => quote = Some(character),
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Ok(start + offset);
+                }
+            }
+            _ => {}
+        }
+    }
+    Err("unterminated interpolation expression".to_string())
+}
+
+fn request_pairs(value: &Value) -> Result<Vec<(String, String)>, String> {
+    let Value::Array(entries) = value else {
+        return Err("form and multipart bodies must be arrays of key-value pairs".to_string());
+    };
+    entries
+        .iter()
+        .map(|entry| {
+            let Value::Array(pair) = entry else {
+                return Err("body entry must be a key-value pair".to_string());
+            };
+            if pair.len() != 2 {
+                return Err("body entry must contain exactly two values".to_string());
+            }
+            Ok((request_scalar(&pair[0])?, request_scalar(&pair[1])?))
+        })
+        .collect()
+}
+
+fn request_scalar(value: &Value) -> Result<String, String> {
+    match value {
+        Value::String(value) => Ok(value.to_owned()),
+        Value::Integer(value) => Ok(value.to_string()),
+        Value::Float(value) => Ok(value.to_string()),
+        Value::Boolean(value) => Ok(value.to_string()),
+        value => Err(format!("pair value must be a scalar, found {value:?}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::Context;
     use super::super::Parser;
     use super::super::Value;
-    use super::super::client::Clients;
     use std::collections::HashMap;
 
     async fn run_eval_tests(tests: Vec<(&str, Value)>) {
@@ -1088,30 +1341,27 @@ mod tests {
     #[tokio::test]
     async fn test_client_request_call() {
         crate::tests::start_server(30006).await;
-        let mut source = Parser::new(
+        let source = Parser::new(
             r#"
+            client user {
+                scheme: http,
+                host: "127.0.0.1",
+                port: 30006,
+                requests: {
+                    getIp: {
+                        path: "/get",
+                        method: GET,
+                        headers: [["Connection", "close"]],
+                        asserts: [status == 200],
+                    },
+                },
+            }
             let host = "127.0.0.1";
             let response = user.getIp();
             response.status
             "#,
         )
         .parse()
-        .unwrap();
-        source.clients = Clients::from_str(
-            r#"
-name: user
-scheme: http
-host: {host}:30006
-requests:
-  - getIp:
-      path: /get
-      method: GET
-      headers:
-        - Connection: close
-      asserts:
-        - status == 200
-"#,
-        )
         .unwrap();
         let mut context = Context::new();
         let value = source
@@ -1127,24 +1377,18 @@ requests:
 
     #[tokio::test]
     async fn test_client_request_call_rejects_arguments() {
-        let mut source = Parser::new(
+        let source = Parser::new(
             r#"
+            client user {
+                scheme: http,
+                host: "localhost",
+                port: 30006,
+                requests: { getIp: { path: "/get", method: GET } },
+            }
             user.getIp(1)
             "#,
         )
         .parse()
-        .unwrap();
-        source.clients = Clients::from_str(
-            r#"
-name: user
-scheme: http
-host: localhost:30006
-requests:
-  - getIp:
-      path: /get
-      method: GET
-"#,
-        )
         .unwrap();
         let mut context = Context::new();
         let error = source
@@ -1152,6 +1396,109 @@ requests:
             .await
             .unwrap_err();
         assert!(error.contains("client request calls do not accept arguments"));
+    }
+
+    #[tokio::test]
+    async fn test_native_client_renders_expression_bodies_and_encodings() {
+        let source = Parser::new(
+            r#"
+            client user {
+                scheme: https,
+                host: "example.com",
+                requests: {
+                    json: {
+                        path: "/users/\(age + 1)",
+                        method: POST,
+                        params: [["tag", "a"], ["tag", "b"]],
+                        body: {
+                            name: "hello \(name)",
+                            age: age + 1,
+                            enabled: enabled,
+                        },
+                    },
+                    jsonCase: {
+                        path: "/json-case",
+                        method: POST,
+                        headers: [["Content-Type", "Application/JSON; Charset=UTF-8"]],
+                        body: {ok: true},
+                    },
+                    form: {
+                        path: "/form",
+                        method: POST,
+                        headers: [["Content-Type", "application/x-www-form-urlencoded"]],
+                        body: [["age", age + 1], ["enabled", enabled]],
+                    },
+                    upload: {
+                        path: "/upload",
+                        method: POST,
+                        headers: [["Content-Type", "multipart/form-data"]],
+                        body: [["file", "@./avatar.png"], ["literal", "value"]],
+                    },
+                },
+            }
+            "#,
+        )
+        .parse()
+        .unwrap();
+        let client = source.clients.get("user").unwrap();
+        let mut context = Context::new();
+        context.set("name".to_string(), Value::String("Tom".to_string()));
+        context.set("age".to_string(), Value::Integer(18));
+        context.set("enabled".to_string(), Value::Boolean(true));
+
+        let json = source
+            .eval_request_message(client, client.request("json").unwrap(), &mut context)
+            .await
+            .unwrap();
+        assert!(json.starts_with("POST https://example.com/users/19?tag=a&tag=b\n"));
+        assert!(json.contains("Content-Type: application/json\n"));
+        let body = json.split_once("\n\n").unwrap().1;
+        let body: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert_eq!(body["name"], "hello Tom");
+        assert_eq!(body["age"], 19);
+        assert_eq!(body["enabled"], true);
+
+        let json_case = source
+            .eval_request_message(client, client.request("jsonCase").unwrap(), &mut context)
+            .await
+            .unwrap();
+        assert!(json_case.contains("Content-Type: Application/JSON; Charset=UTF-8\n"));
+        assert_eq!(json_case.split_once("\n\n").unwrap().1, "{\"ok\":true}");
+
+        let form = source
+            .eval_request_message(client, client.request("form").unwrap(), &mut context)
+            .await
+            .unwrap();
+        assert!(form.ends_with("\nage: 19\nenabled: true"));
+
+        let upload = source
+            .eval_request_message(client, client.request("upload").unwrap(), &mut context)
+            .await
+            .unwrap();
+        assert!(upload.ends_with("\nfile: @./avatar.png\nliteral: value"));
+    }
+
+    #[tokio::test]
+    async fn test_native_client_reports_interpolation_errors() {
+        let source = Parser::new(
+            r#"
+            client user {
+                scheme: https,
+                host: "example.com",
+                requests: {
+                    get: { path: "/\(missing)", method: GET },
+                },
+            }
+            "#,
+        )
+        .parse()
+        .unwrap();
+        let client = source.clients.get("user").unwrap();
+        let error = source
+            .eval_request_message(client, client.request("get").unwrap(), &mut Context::new())
+            .await
+            .unwrap_err();
+        assert!(error.contains("ident: missing not found"));
     }
 
     #[tokio::test]

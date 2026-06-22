@@ -67,17 +67,34 @@ pub enum Kind {
     While,    // while
     For,      // for
     In,       // in
+    Client,   // client
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: Kind,
     pub literal: String,
+    pub line: usize,
+    pub column: usize,
 }
 
 impl Token {
     pub fn new(kind: Kind, literal: String) -> Token {
-        Token { kind, literal }
+        Token {
+            kind,
+            literal,
+            line: 1,
+            column: 1,
+        }
+    }
+
+    pub fn at(kind: Kind, literal: String, line: usize, column: usize) -> Token {
+        Token {
+            kind,
+            literal,
+            line,
+            column,
+        }
     }
 
     pub fn precedence(&self) -> u8 {

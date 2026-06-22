@@ -11,25 +11,25 @@ Basjoofan is a cloud-native interface and performance testing service. It enable
 
 ## 🚀 Start
 Let's start with a simple GET request:
-```yaml
-name: user
-scheme: https
-host: httpbin.org
-requests:
-  - get:
-      path: /get
-      method: GET
-      asserts:
-        - status == 200
-```
-Using YAML to define a client named user and a request named get.
 ```fan
+client user {
+    scheme: https,
+    host: "httpbin.org",
+    requests: {
+        get: {
+            path: "/get",
+            method: GET,
+            asserts: [status == 200],
+        },
+    },
+}
+
 test get {
     let response = user.get();
     response.status
 }
 ```
-Using the test keyword to define a test block that assembles interface logic for executing test cases. The CLI loads .fan and .yaml/.yml files recursively from the test path.
+The `client` declaration defines requests alongside their tests. The CLI recursively loads `.fan` files from the test path.
 
 You can use the CLI tool with basjoofan test get to execute this test case. You can also add load testing parameters for performance testing, e.g., -t 100 -d 1m for 100 concurrent users running for 1 minute.
 ```

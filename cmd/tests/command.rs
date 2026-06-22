@@ -1,10 +1,21 @@
 use assert_fs::prelude::*;
 use axum::Router;
 use axum::routing::get;
+use lib::Parser;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
+
+#[test]
+fn test_native_fixture_contains_all_migrated_requests() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/test.fan");
+    let input = std::fs::read_to_string(path).unwrap();
+    let source = Parser::new(&input).parse().unwrap();
+    assert_eq!(source.clients.inner.len(), 2);
+    assert_eq!(source.clients.get("user").unwrap().requests.len(), 5);
+    assert_eq!(source.clients.get("testApi").unwrap().requests.len(), 2);
+}
 
 #[tokio::test]
 async fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,8 +36,8 @@ async fn test_command_repl() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
-async fn test_command_repl_loads_yaml_then_evaluates_fan() -> Result<(), Box<dyn std::error::Error>>
-{
+async fn test_command_repl_loads_client_then_evaluates_fan()
+-> Result<(), Box<dyn std::error::Error>> {
     let router = Router::new().route("/hello", get(|| async { "Hello, World!" }));
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 8889))
         .await
@@ -42,18 +53,19 @@ async fn test_command_repl_loads_yaml_then_evaluates_fan() -> Result<(), Box<dyn
     if let Some(mut stdin) = child.stdin.take() {
         stdin
             .write_all(
-                r#"name: user
-scheme: http
-host: 127.0.0.1:8889
-requests:
-  - hello:
-      path: /hello
-      method: GET
-      headers:
-        - Connection: close
-      asserts:
-        - status == 200
-
+                r#"client user {
+    scheme: http,
+    host: "127.0.0.1",
+    port: 8889,
+    requests: {
+        hello: {
+            path: "/hello",
+            method: GET,
+            headers: [["Connection", "close"]],
+            asserts: [status == 200],
+        },
+    },
+}
 let response = user.hello(); response.status
 exit"#
                     .as_bytes(),
@@ -62,13 +74,12 @@ exit"#
     }
     let output = child.wait_with_output().await?;
     let stdout = String::from_utf8(output.stdout)?;
-    assert!(stdout.contains("loaded client: user"));
     assert!(stdout.contains("200"));
     Ok(())
 }
 
 #[tokio::test]
-async fn test_command_repl_flushes_yaml_on_exit() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_command_repl_flushes_client_on_exit() -> Result<(), Box<dyn std::error::Error>> {
     let mut command = new_command();
     command.stdout(Stdio::piped());
     command.stdin(Stdio::piped());
@@ -76,20 +87,18 @@ async fn test_command_repl_flushes_yaml_on_exit() -> Result<(), Box<dyn std::err
     if let Some(mut stdin) = child.stdin.take() {
         stdin
             .write_all(
-                r#"name: user
-scheme: http
-host: example.com
-requests:
-  - get:
-      path: /get
-      method: GET
+                r#"client user {
+    scheme: http,
+    host: "example.com",
+    requests: { get: { path: "/get", method: GET } },
+}
 exit"#
                     .as_bytes(),
             )
             .await?;
     }
     let output = child.wait_with_output().await?;
-    assert_eq!(String::from_utf8(output.stdout)?, "loaded client: user\n");
+    assert_eq!(String::from_utf8(output.stdout)?, "null\n");
     Ok(())
 }
 
@@ -123,64 +132,49 @@ async fn test_command_eval() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
-async fn test_command_eval_loads_yaml_client_definition() -> Result<(), Box<dyn std::error::Error>>
+async fn test_command_eval_loads_native_client_definition() -> Result<(), Box<dyn std::error::Error>>
 {
     let mut command = new_command();
     let output = command
         .arg("eval")
         .arg(
-            r#"name: user
-scheme: http
-host: example.com
-requests:
-  - get:
-      path: /get
-      method: GET"#,
+            r#"client user {
+                scheme: http,
+                host: "example.com",
+                requests: { get: { path: "/get", method: GET } },
+            }"#,
         )
         .output()
         .await?;
     assert!(output.status.success());
-    assert_eq!(String::from_utf8(output.stdout)?, "loaded client: user\n");
+    assert_eq!(String::from_utf8(output.stdout)?, "null\n");
     Ok(())
 }
 
 #[tokio::test]
-async fn test_command_eval_reports_invalid_yaml_shape() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_command_eval_reports_invalid_client_shape() -> Result<(), Box<dyn std::error::Error>>
+{
     let mut command = new_command();
     let output = command
         .arg("eval")
-        .arg(
-            r#"name: user
-scheme: http
-host: example.com
-requests:"#,
-        )
+        .arg(r#"client user { scheme: http, host: "example.com" }"#)
         .output()
         .await?;
     assert!(output.status.success());
-    assert!(String::from_utf8(output.stdout)?.contains("request list"));
+    assert!(String::from_utf8(output.stdout)?.contains("missing required client field 'requests'"));
     Ok(())
 }
 
 #[tokio::test]
-async fn test_command_eval_rejects_mixed_yaml_and_fan() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_command_eval_rejects_nested_client() -> Result<(), Box<dyn std::error::Error>> {
     let mut command = new_command();
     let output = command
         .arg("eval")
-        .arg(
-            r#"name: user
-scheme: http
-host: example.com
-requests:
-  - get:
-      path: /get
-      method: GET
-let response = user.get();"#,
-        )
+        .arg(r#"test nested { client user { scheme: http, host: "example.com", requests: {} } }"#)
         .output()
         .await?;
     assert!(output.status.success());
-    assert!(String::from_utf8(output.stdout)?.contains("must be submitted separately"));
+    assert!(String::from_utf8(output.stdout)?.contains("parse expr error: client"));
     Ok(())
 }
 
@@ -196,26 +190,23 @@ async fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
     let temp = assert_fs::TempDir::new().unwrap();
     let file = temp.child("request.fan");
     let text = r#"
+    client user {
+        scheme: http,
+        host: "localhost",
+        port: 8888,
+        requests: {
+            hello: {
+                path: "/hello",
+                method: GET,
+                headers: [["Connection", "close"]],
+                asserts: [status == 200],
+            },
+        },
+    }
     test call {
-        let host = "localhost:8888";
         let response = user.hello();
         response.status
     }
-    "#;
-    file.write_str(text)?;
-    let file = temp.child("client.yaml");
-    let text = r#"
-name: user
-scheme: http
-host: {host}
-requests:
-  - hello:
-      path: /hello
-      method: GET
-      headers:
-        - Connection: close
-      asserts:
-        - status == 200
     "#;
     file.write_str(text)?;
     // command test
