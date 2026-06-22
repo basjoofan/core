@@ -9,7 +9,7 @@ use tokio::io::split;
 
 impl Client {
     /// Send this request and wait for the record.
-    pub async fn send(&self, message: &str) -> (Request, Response, Time, String) {
+    pub(crate) async fn send_message(&self, message: &str) -> (Request, Response, Time, String) {
         let mut time = Time::default();
         let (mut request, content) = match Request::from(message).await {
             Ok((request, content)) => (request, content),
@@ -63,7 +63,7 @@ pub mod tests {
     GET http://127.0.0.1:30001/get
     Host: 127.0.0.1"#;
         let client = Client::new();
-        let (request, response, time, error) = client.send(message).await;
+        let (request, response, time, error) = client.send_message(message).await;
         assert_eq!("GET", request.method.as_ref());
         assert_eq!(200, response.status);
         assert_eq!(
@@ -83,7 +83,7 @@ pub mod tests {
     Host: 127.0.0.1
     Accept-Encoding: gzip, deflate"#;
         let client = Client::new();
-        let (request, response, time, error) = client.send(message).await;
+        let (request, response, time, error) = client.send_message(message).await;
         println!("error: {error}");
         println!("request: {request:?}");
         assert_eq!("POST", request.method.as_ref());
@@ -106,7 +106,7 @@ pub mod tests {
 
     a: b"#;
         let client = Client::new();
-        let (request, response, time, error) = client.send(message).await;
+        let (request, response, time, error) = client.send_message(message).await;
         println!("error: {error}");
         println!("request: {request:?}");
         assert_eq!("POST", request.method.as_ref());
@@ -130,7 +130,7 @@ pub mod tests {
     a: b
     f: @src/lib.rs"#;
         let client = Client::new();
-        let (request, response, time, error) = client.send(message).await;
+        let (request, response, time, error) = client.send_message(message).await;
         println!("error: {error}");
         println!("request: {request:?}");
         println!("response: {response:?}");
@@ -166,7 +166,7 @@ pub mod tests {
     }
     "#;
         let client = Client::new();
-        let (request, response, time, error) = client.send(message).await;
+        let (request, response, time, error) = client.send_message(message).await;
         println!("error: {error}");
         assert_eq!("POST", request.method.as_ref());
         assert_eq!(200, response.status);

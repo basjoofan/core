@@ -1,4 +1,4 @@
-use super::Record;
+use lib::Record;
 use std::fmt::Write;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
@@ -55,11 +55,7 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
             let _ = write!(buffer, r#""request_name": "{}", "#, record.name);
             let _ = write!(buffer, r#""request_method": "{}", "#, record.request.method);
             let _ = write!(buffer, r#""request_url": "{}", "#, record.request.url);
-            let _ = write!(
-                buffer,
-                r#""request_version": "{}", "#,
-                record.request.version
-            );
+            let _ = write!(buffer, r#""request_version": "{}", "#, "HTTP/1.1");
             let _ = write!(buffer, r#""request_headers": ["#);
             let mut headers = record.request.headers.iter().peekable();
             while let Some(header) = headers.next() {
@@ -69,7 +65,11 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
                 }
             }
             let _ = write!(buffer, r#"], "#);
-            let _ = write!(buffer, r#""request_body": "{}", "#, record.request.body);
+            let _ = write!(
+                buffer,
+                r#""request_body": "{}", "#,
+                record.request.body.as_deref().unwrap_or_default()
+            );
             let _ = write!(
                 buffer,
                 r#""response_version": "{}", "#,
@@ -115,17 +115,17 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
 
 #[cfg(test)]
 pub mod tests {
-    use super::Record;
     use super::Writer;
+    use lib::{HttpHeader, HttpRequest, HttpResponse, HttpTiming, Record};
 
     #[tokio::test]
     async fn test_writer() {
         let mut writer = Writer::new(Vec::new());
         let record = Record {
             name: "test".to_string(),
-            time: crate::http::Time::default(),
-            request: crate::http::Request::default(),
-            response: crate::http::Response::default(),
+            time: HttpTiming::default(),
+            request: HttpRequest::default(),
+            response: HttpResponse::default(),
             asserts: Vec::new(),
             error: String::default(),
         };
@@ -138,24 +138,40 @@ pub mod tests {
         assert_eq!(record["request_headers"].as_array().unwrap().len(), 0);
 
         let mut writer = Writer::new(Vec::new());
-        let mut request_headers = crate::http::Headers::default();
-        request_headers.insert(String::from("a"), String::from("b"));
-        request_headers.insert(String::from("a"), String::from("c"));
-        let mut response_headers = crate::http::Headers::default();
-        response_headers.insert(String::from("d"), String::from("e"));
-        response_headers.insert(String::from("d"), String::from("f"));
-        response_headers.insert(String::from("g"), String::from("h"));
+        let request_headers = vec![
+            HttpHeader {
+                name: "a".into(),
+                value: "b".into(),
+            },
+            HttpHeader {
+                name: "a".into(),
+                value: "c".into(),
+            },
+        ];
+        let response_headers = vec![
+            HttpHeader {
+                name: "d".into(),
+                value: "e".into(),
+            },
+            HttpHeader {
+                name: "d".into(),
+                value: "f".into(),
+            },
+            HttpHeader {
+                name: "g".into(),
+                value: "h".into(),
+            },
+        ];
         let record = Record {
             name: "test".to_string(),
-            time: crate::http::Time::default(),
-            request: crate::http::Request {
-                method: crate::http::Method::Get,
-                url: crate::http::Url::from("http://localhost:8080"),
-                version: crate::http::Version::Http11,
+            time: HttpTiming::default(),
+            request: HttpRequest {
+                method: "GET".into(),
+                url: "http://localhost:8080".into(),
                 headers: request_headers,
-                body: String::default(),
+                body: None,
             },
-            response: crate::http::Response {
+            response: HttpResponse {
                 version: String::from("HTTP/1.1"),
                 status: 200,
                 reason: String::from("OK"),

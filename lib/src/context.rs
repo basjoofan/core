@@ -1,7 +1,8 @@
+use super::HttpRequest;
+use super::HttpResponse;
+use super::HttpResult;
+use super::HttpTiming;
 use super::Value;
-use super::http::Request;
-use super::http::Response;
-use super::http::Time;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -11,6 +12,9 @@ use std::fmt::Result;
 pub struct Context {
     variables: HashMap<String, Value>,
     records: Vec<Record>,
+    responses: Vec<HttpResult>,
+    request_cursor: usize,
+    pending_request: Option<HttpRequest>,
 }
 
 impl Context {
@@ -18,6 +22,9 @@ impl Context {
         Self {
             variables: HashMap::new(),
             records: Vec::new(),
+            responses: Vec::new(),
+            request_cursor: 0,
+            pending_request: None,
         }
     }
 
@@ -25,6 +32,9 @@ impl Context {
         Self {
             variables,
             records: Vec::new(),
+            responses: Vec::new(),
+            request_cursor: 0,
+            pending_request: None,
         }
     }
 
@@ -47,6 +57,36 @@ impl Context {
     pub fn records(&mut self) -> Vec<Record> {
         std::mem::take(&mut self.records)
     }
+
+    pub(crate) fn prepare_replay(&mut self, responses: Vec<HttpResult>) {
+        self.responses = responses;
+        self.request_cursor = 0;
+        self.pending_request = None;
+    }
+
+    pub(crate) fn clone_for_replay(&self) -> Self {
+        Self {
+            variables: self.variables.clone(),
+            records: self.records.clone(),
+            responses: Vec::new(),
+            request_cursor: 0,
+            pending_request: None,
+        }
+    }
+
+    pub(crate) fn response_for(&mut self, request: HttpRequest) -> Option<HttpResult> {
+        let response = self.responses.get(self.request_cursor).cloned();
+        if response.is_some() {
+            self.request_cursor += 1;
+        } else {
+            self.pending_request = Some(request);
+        }
+        response
+    }
+
+    pub(crate) fn take_pending_request(&mut self) -> Option<HttpRequest> {
+        self.pending_request.take()
+    }
 }
 
 impl Clone for Context {
@@ -54,19 +94,24 @@ impl Clone for Context {
         Self {
             variables: self.variables.to_owned(),
             records: Vec::new(),
+            responses: Vec::new(),
+            request_cursor: 0,
+            pending_request: None,
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Record {
     pub name: String,
-    pub time: Time,
-    pub request: Request,
-    pub response: Response,
+    pub time: HttpTiming,
+    pub request: HttpRequest,
+    pub response: HttpResponse,
     pub asserts: Vec<Assert>,
     pub error: String,
 }
 
+#[derive(Clone)]
 pub struct Assert {
     pub expr: String,
     pub left: String,

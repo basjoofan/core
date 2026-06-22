@@ -5,7 +5,7 @@ use super::Token;
 use super::lexer;
 use crate::client::Clients;
 use crate::client::{Client, Request};
-use crate::http::{Method, Scheme};
+use crate::client::{Method, Scheme};
 use std::collections::{HashMap, HashSet};
 
 pub struct Parser {

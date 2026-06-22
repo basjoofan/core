@@ -97,15 +97,6 @@ Access-Control-Allow-Credentials: true
         assert_eq!(200, response.status);
         assert_eq!(7, response.headers.len());
         assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
-        assert_eq!(
-            Some(&crate::Value::Map(std::collections::HashMap::from_iter(
-                vec![(
-                    String::from("origin"),
-                    crate::Value::String(String::from("122.9.3.166"))
-                )]
-            ))),
-            response.to_map().get("json")
-        )
     }
 
     #[tokio::test]
@@ -131,14 +122,5 @@ Access-Control-Allow-Credentials: true
         assert_eq!(200, response.status);
         assert_eq!(7, response.headers.len());
         assert_eq!("{\n  \"origin\": \"122.9.3.166\"\n}\n", response.body);
-        assert_eq!(
-            Some(&crate::Value::Map(std::collections::HashMap::from_iter(
-                vec![(
-                    String::from("origin"),
-                    crate::Value::String(String::from("122.9.3.166"))
-                )]
-            ))),
-            response.to_map().get("json")
-        )
     }
 }

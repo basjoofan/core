@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "lib",
+  "http",
   "cmd",
 ]
 
@@ -16,6 +17,7 @@ edition = "2024"
 [workspace.dependencies]
 # cmd
 lib = { path = "lib" }
+http = { path = "http" }
 clap = "4.6.1"
 # lib
 regex = "1.12.3"

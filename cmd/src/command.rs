@@ -1,8 +1,11 @@
+use crate::writer::Writer;
 use lib::Context;
+use lib::ExecutionStep;
+use lib::Expr;
 use lib::Parser;
 use lib::Source;
 use lib::Stats;
-use lib::Writer;
+use lib::Value;
 use std::env::current_dir;
 use std::env::var;
 use std::ffi::OsStr;
@@ -68,8 +71,9 @@ pub async fn eval(text: String, source: &mut Source, context: Option<Context>) -
             }
             let index = source.extend(s);
             let exprs = &source.exprs[index..];
-            match source.eval_block(exprs, &mut context).await {
-                Ok(value) => {
+            match execute(source, exprs, context.clone()).await {
+                Ok((value, next)) => {
+                    context = next;
                     println!("{value}");
                 }
                 Err(error) => println!("{error}"),
@@ -145,7 +149,7 @@ pub async fn test(
     };
     let mut context = Context::new();
     let source = Arc::new(match Parser::new(&text).parse() {
-        Ok(source) => match source.eval_block(&source.exprs, &mut context).await {
+        Ok(source) => match source.eval_block(&source.exprs, &mut context) {
             Ok(_) => source,
             Err(error) => {
                 println!("{error}");
@@ -176,8 +180,8 @@ pub async fn test(
                         set.spawn(async move {
                             let mut number = u32::default();
                             while continuous.load(Ordering::Relaxed) && number < maximun {
-                                match source.eval_block(&test, &mut context).await {
-                                    Ok(_) => {}
+                                match execute(&source, &test, context.clone()).await {
+                                    Ok((_, next)) => context = next,
                                     Err(error) => {
                                         println!("{error}");
                                         break;
@@ -216,8 +220,8 @@ pub async fn test(
                 let source = source.to_owned();
                 let mut context = context.to_owned();
                 set.spawn(async move {
-                    match &source.eval_block(test.as_ref(), &mut context).await {
-                        Ok(_) => {}
+                    match execute(&source, test.as_ref(), context.clone()).await {
+                        Ok((_, next)) => context = next,
                         Err(error) => {
                             println!("{error}");
                         }
@@ -248,6 +252,28 @@ pub async fn test(
     while let Some(result) = set.join_next().await {
         if let Err(error) = result {
             println!("Task error: {error}");
+        }
+    }
+}
+
+async fn execute(
+    source: &Source,
+    exprs: &[Expr],
+    context: Context,
+) -> Result<(Value, Context), String> {
+    let mut execution = source.start(exprs, context);
+    let mut step = execution.run();
+    loop {
+        match step {
+            ExecutionStep::Pending(pending) => {
+                let id = pending.id;
+                let result = http::send(pending.request).await;
+                step = execution.resume(id, result);
+            }
+            ExecutionStep::Complete(value) => {
+                return Ok((value, execution.into_context()));
+            }
+            ExecutionStep::Error(error) => return Err(error),
         }
     }
 }

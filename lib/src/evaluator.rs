@@ -1,15 +1,21 @@
 use super::Assert;
 use super::Context;
 use super::Expr;
+use super::HttpHeader;
+use super::HttpRequest;
+use super::HttpResponse;
+use super::HttpResult;
 use super::Kind;
 use super::Parser;
 use super::Record;
 use super::Source;
 use super::Token;
 use super::Value;
-use super::http;
 use super::native;
+use crate::transport::form_urlencode;
 use std::collections::HashMap;
+
+const PENDING_REQUEST: &str = "__basjoofan_pending_http_request__";
 
 enum EvalFlow {
     Value(Value),
@@ -18,67 +24,59 @@ enum EvalFlow {
 }
 
 impl Source {
-    async fn eval_expr(&self, expr: &Expr, context: &mut Context) -> Result<Value, String> {
-        match Box::pin(self.eval_flow(expr, context)).await? {
+    fn eval_expr(&self, expr: &Expr, context: &mut Context) -> Result<Value, String> {
+        match self.eval_flow(expr, context)? {
             EvalFlow::Value(value) => Ok(value),
             EvalFlow::Break(_) => Err("break outside loop".to_string()),
             EvalFlow::Continue => Err("continue outside loop".to_string()),
         }
     }
 
-    async fn eval_flow(&self, expr: &Expr, context: &mut Context) -> Result<EvalFlow, String> {
+    fn eval_flow(&self, expr: &Expr, context: &mut Context) -> Result<EvalFlow, String> {
         match expr {
             Expr::Integer(integer) => Ok(EvalFlow::Value(self.eval_integer_literal(integer)?)),
             Expr::Float(float) => Ok(EvalFlow::Value(self.eval_float_literal(float)?)),
             Expr::Boolean(boolean) => Ok(EvalFlow::Value(self.eval_boolean_literal(boolean)?)),
             Expr::String(string) => Ok(EvalFlow::Value(self.eval_string_literal(string)?)),
-            Expr::Array(items) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_array_literal(items, context)).await?,
-            )),
-            Expr::Map(pairs) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_map_literal(pairs, context)).await?,
-            )),
+            Expr::Array(items) => Ok(EvalFlow::Value(self.eval_array_literal(items, context)?)),
+            Expr::Map(pairs) => Ok(EvalFlow::Value(self.eval_map_literal(pairs, context)?)),
             Expr::Index(value, index) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_index_expr(value, index, context)).await?,
+                self.eval_index_expr(value, index, context)?,
             )),
-            Expr::Field(map, field) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_field_expr(map, field, context)).await?,
-            )),
+            Expr::Field(map, field) => {
+                Ok(EvalFlow::Value(self.eval_field_expr(map, field, context)?))
+            }
             Expr::Ident(ident) => Ok(EvalFlow::Value(self.eval_ident_expr(ident, context)?)),
-            Expr::Let(name, expr) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_let_expr(name, expr, context)).await?,
-            )),
+            Expr::Let(name, expr) => Ok(EvalFlow::Value(self.eval_let_expr(name, expr, context)?)),
             Expr::Unary(token, right) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_unary_expr(token, right, context)).await?,
+                self.eval_unary_expr(token, right, context)?,
             )),
             Expr::Binary(token, left, right) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_binary_expr(token, left, right, context)).await?,
+                self.eval_binary_expr(token, left, right, context)?,
             )),
-            Expr::Paren(expr) => Box::pin(self.eval_flow(expr, context)).await,
+            Expr::Paren(expr) => self.eval_flow(expr, context),
             Expr::If(condition, consequence, alternative) => {
-                Box::pin(self.eval_if_expr(condition, consequence, alternative, context)).await
+                self.eval_if_expr(condition, consequence, alternative, context)
             }
             Expr::Function(_, _, _) => Ok(EvalFlow::Value(Value::Null)),
             Expr::Call(name, arguments) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_call_expr(name, arguments, context)).await?,
+                self.eval_call_expr(name, arguments, context)?,
             )),
             Expr::Break(value) => {
                 let value = match value {
-                    Some(value) => Box::pin(self.eval_expr(value, context)).await?,
+                    Some(value) => self.eval_expr(value, context)?,
                     None => Value::Null,
                 };
                 Ok(EvalFlow::Break(value))
             }
             Expr::Continue => Ok(EvalFlow::Continue),
-            Expr::Loop(body) => Box::pin(self.eval_loop_expr(body, context)).await,
-            Expr::While(condition, body) => {
-                Box::pin(self.eval_while_expr(condition, body, context)).await
-            }
+            Expr::Loop(body) => self.eval_loop_expr(body, context),
+            Expr::While(condition, body) => self.eval_while_expr(condition, body, context),
             Expr::Cursor(binding, iterator, body) => {
-                Box::pin(self.eval_for_expr(binding, iterator, body, context)).await
+                self.eval_for_expr(binding, iterator, body, context)
             }
             Expr::Range(start, end, inclusive) => Ok(EvalFlow::Value(
-                Box::pin(self.eval_range_expr(start, end, *inclusive, context)).await?,
+                self.eval_range_expr(start, end, *inclusive, context)?,
             )),
         }
     }
@@ -99,37 +97,33 @@ impl Source {
         Ok(Value::String(string.to_owned()))
     }
 
-    async fn eval_array_literal(
-        &self,
-        items: &[Expr],
-        context: &mut Context,
-    ) -> Result<Value, String> {
-        Ok(Value::Array(self.eval_list(items, context).await?))
+    fn eval_array_literal(&self, items: &[Expr], context: &mut Context) -> Result<Value, String> {
+        Ok(Value::Array(self.eval_list(items, context)?))
     }
 
-    async fn eval_map_literal(
+    fn eval_map_literal(
         &self,
         pairs: &Vec<(Expr, Expr)>,
         context: &mut Context,
     ) -> Result<Value, String> {
         let mut map = HashMap::new();
         for (key, value) in pairs {
-            let key = self.eval_expr(key, context).await?;
-            let value = self.eval_expr(value, context).await?;
+            let key = self.eval_expr(key, context)?;
+            let value = self.eval_expr(value, context)?;
             map.insert(key.to_string(), value);
         }
         Ok(Value::Map(map))
     }
 
-    async fn eval_index_expr(
+    fn eval_index_expr(
         &self,
         value: &Expr,
         index: &Expr,
         context: &mut Context,
     ) -> Result<Value, String> {
         // TODO enhance indent expr get variable use reference
-        let value = self.eval_expr(value, context).await?;
-        let index = self.eval_expr(index, context).await?;
+        let value = self.eval_expr(value, context)?;
+        let index = self.eval_expr(index, context)?;
         match (value, index) {
             (Value::Array(mut items), Value::Integer(index)) => {
                 let index = index as usize;
@@ -151,14 +145,14 @@ impl Source {
         }
     }
 
-    async fn eval_field_expr(
+    fn eval_field_expr(
         &self,
         map: &Expr,
         field: &String,
         context: &mut Context,
     ) -> Result<Value, String> {
         // TODO enhance indent expr get variable use reference
-        match self.eval_expr(map, context).await? {
+        match self.eval_expr(map, context)? {
             Value::Map(mut pairs) => {
                 let value = pairs.remove(field);
                 Ok(match value {
@@ -177,24 +171,24 @@ impl Source {
         }
     }
 
-    async fn eval_let_expr(
+    fn eval_let_expr(
         &self,
         name: &String,
         expr: &Expr,
         context: &mut Context,
     ) -> Result<Value, String> {
-        let value = self.eval_expr(expr, context).await?;
+        let value = self.eval_expr(expr, context)?;
         context.set(name.to_owned(), value.to_owned());
         Ok(value)
     }
 
-    async fn eval_unary_expr(
+    fn eval_unary_expr(
         &self,
         token: &Token,
         right: &Expr,
         context: &mut Context,
     ) -> Result<Value, String> {
-        let right = self.eval_expr(right, context).await?;
+        let right = self.eval_expr(right, context)?;
         match (&token.kind, right) {
             (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => {
                 Ok(Value::Boolean(true))
@@ -207,7 +201,7 @@ impl Source {
         }
     }
 
-    async fn eval_binary_expr(
+    fn eval_binary_expr(
         &self,
         token: &Token,
         left: &Expr,
@@ -215,81 +209,61 @@ impl Source {
         context: &mut Context,
     ) -> Result<Value, String> {
         match token.kind {
-            Kind::Add => {
-                self.eval_expr(left, context).await? + self.eval_expr(right, context).await?
-            }
-            Kind::Sub => {
-                self.eval_expr(left, context).await? - self.eval_expr(right, context).await?
-            }
-            Kind::Mul => {
-                self.eval_expr(left, context).await? * self.eval_expr(right, context).await?
-            }
-            Kind::Div => {
-                self.eval_expr(left, context).await? / self.eval_expr(right, context).await?
-            }
-            Kind::Rem => {
-                self.eval_expr(left, context).await? % self.eval_expr(right, context).await?
-            }
-            Kind::Bx => {
-                self.eval_expr(left, context).await? ^ self.eval_expr(right, context).await?
-            }
-            Kind::Bo => {
-                self.eval_expr(left, context).await? | self.eval_expr(right, context).await?
-            }
-            Kind::Ba => {
-                self.eval_expr(left, context).await? & self.eval_expr(right, context).await?
-            }
-            Kind::Sl => {
-                self.eval_expr(left, context).await? << self.eval_expr(right, context).await?
-            }
-            Kind::Sr => {
-                self.eval_expr(left, context).await? >> self.eval_expr(right, context).await?
-            }
-            Kind::Lo => match self.eval_expr(left, context).await? {
-                Value::Boolean(false) | Value::Null => self.eval_expr(right, context).await,
+            Kind::Add => self.eval_expr(left, context)? + self.eval_expr(right, context)?,
+            Kind::Sub => self.eval_expr(left, context)? - self.eval_expr(right, context)?,
+            Kind::Mul => self.eval_expr(left, context)? * self.eval_expr(right, context)?,
+            Kind::Div => self.eval_expr(left, context)? / self.eval_expr(right, context)?,
+            Kind::Rem => self.eval_expr(left, context)? % self.eval_expr(right, context)?,
+            Kind::Bx => self.eval_expr(left, context)? ^ self.eval_expr(right, context)?,
+            Kind::Bo => self.eval_expr(left, context)? | self.eval_expr(right, context)?,
+            Kind::Ba => self.eval_expr(left, context)? & self.eval_expr(right, context)?,
+            Kind::Sl => self.eval_expr(left, context)? << self.eval_expr(right, context)?,
+            Kind::Sr => self.eval_expr(left, context)? >> self.eval_expr(right, context)?,
+            Kind::Lo => match self.eval_expr(left, context)? {
+                Value::Boolean(false) | Value::Null => self.eval_expr(right, context),
                 left => Ok(left),
             },
-            Kind::La => match self.eval_expr(left, context).await? {
+            Kind::La => match self.eval_expr(left, context)? {
                 left @ (Value::Boolean(false) | Value::Null) => Ok(left),
-                _ => self.eval_expr(right, context).await,
+                _ => self.eval_expr(right, context),
             },
             Kind::Lt => Ok(Value::Boolean(
-                self.eval_expr(left, context).await? < self.eval_expr(right, context).await?,
+                self.eval_expr(left, context)? < self.eval_expr(right, context)?,
             )),
             Kind::Gt => Ok(Value::Boolean(
-                self.eval_expr(left, context).await? > self.eval_expr(right, context).await?,
+                self.eval_expr(left, context)? > self.eval_expr(right, context)?,
             )),
             Kind::Le => Ok(Value::Boolean(
-                self.eval_expr(left, context).await? <= self.eval_expr(right, context).await?,
+                self.eval_expr(left, context)? <= self.eval_expr(right, context)?,
             )),
             Kind::Ge => Ok(Value::Boolean(
-                self.eval_expr(left, context).await? >= self.eval_expr(right, context).await?,
+                self.eval_expr(left, context)? >= self.eval_expr(right, context)?,
             )),
             Kind::Eq => Ok(Value::Boolean(
-                self.eval_expr(left, context).await? == self.eval_expr(right, context).await?,
+                self.eval_expr(left, context)? == self.eval_expr(right, context)?,
             )),
             Kind::Ne => Ok(Value::Boolean(
-                self.eval_expr(left, context).await? != self.eval_expr(right, context).await?,
+                self.eval_expr(left, context)? != self.eval_expr(right, context)?,
             )),
             _ => Err(format!("not support operator: {left} {token} {right}")),
         }
     }
 
-    async fn eval_if_expr(
+    fn eval_if_expr(
         &self,
         condition: &Expr,
         consequence: &[Expr],
         alternative: &[Expr],
         context: &mut Context,
     ) -> Result<EvalFlow, String> {
-        let condition = self.eval_expr(condition, context).await?;
+        let condition = self.eval_expr(condition, context)?;
         match condition {
-            Value::Boolean(false) | Value::Null => self.eval_block_flow(alternative, context).await,
-            _ => self.eval_block_flow(consequence, context).await,
+            Value::Boolean(false) | Value::Null => self.eval_block_flow(alternative, context),
+            _ => self.eval_block_flow(consequence, context),
         }
     }
 
-    async fn eval_range_expr(
+    fn eval_range_expr(
         &self,
         start: &Option<Box<Expr>>,
         end: &Option<Box<Expr>>,
@@ -297,11 +271,11 @@ impl Source {
         context: &mut Context,
     ) -> Result<Value, String> {
         let start = match start {
-            Some(start) => Some(self.eval_range_endpoint(start, context).await?),
+            Some(start) => Some(self.eval_range_endpoint(start, context)?),
             None => None,
         };
         let end = match end {
-            Some(end) => Some(self.eval_range_endpoint(end, context).await?),
+            Some(end) => Some(self.eval_range_endpoint(end, context)?),
             None => None,
         };
         Ok(Value::Range {
@@ -311,20 +285,16 @@ impl Source {
         })
     }
 
-    async fn eval_range_endpoint(&self, expr: &Expr, context: &mut Context) -> Result<i64, String> {
-        match self.eval_expr(expr, context).await? {
+    fn eval_range_endpoint(&self, expr: &Expr, context: &mut Context) -> Result<i64, String> {
+        match self.eval_expr(expr, context)? {
             Value::Integer(integer) => Ok(integer),
             value => Err(format!("range endpoint must be integer: {value:?}")),
         }
     }
 
-    async fn eval_loop_expr(
-        &self,
-        body: &[Expr],
-        context: &mut Context,
-    ) -> Result<EvalFlow, String> {
+    fn eval_loop_expr(&self, body: &[Expr], context: &mut Context) -> Result<EvalFlow, String> {
         loop {
-            match self.eval_block_flow(body, context).await? {
+            match self.eval_block_flow(body, context)? {
                 EvalFlow::Value(_) => {}
                 EvalFlow::Break(value) => return Ok(EvalFlow::Value(value)),
                 EvalFlow::Continue => continue,
@@ -332,7 +302,7 @@ impl Source {
         }
     }
 
-    async fn eval_while_expr(
+    fn eval_while_expr(
         &self,
         condition: &Expr,
         body: &[Expr],
@@ -340,11 +310,11 @@ impl Source {
     ) -> Result<EvalFlow, String> {
         let mut result = Value::Null;
         loop {
-            match self.eval_expr(condition, context).await? {
+            match self.eval_expr(condition, context)? {
                 Value::Boolean(false) | Value::Null => return Ok(EvalFlow::Value(result)),
                 _ => {}
             }
-            match self.eval_block_flow(body, context).await? {
+            match self.eval_block_flow(body, context)? {
                 EvalFlow::Value(value) => result = value,
                 EvalFlow::Break(value) => return Ok(EvalFlow::Value(value)),
                 EvalFlow::Continue => continue,
@@ -352,21 +322,20 @@ impl Source {
         }
     }
 
-    async fn eval_for_expr(
+    fn eval_for_expr(
         &self,
         binding: &String,
         iterator: &Expr,
         body: &[Expr],
         context: &mut Context,
     ) -> Result<EvalFlow, String> {
-        let iterator = self.eval_expr(iterator, context).await?;
+        let iterator = self.eval_expr(iterator, context)?;
         let mut result = Value::Null;
         match iterator {
             Value::Array(items) => {
                 for item in items {
                     if let Some(flow) =
-                        Box::pin(self.eval_for_iteration(binding, item, body, context, &mut result))
-                            .await?
+                        self.eval_for_iteration(binding, item, body, context, &mut result)?
                     {
                         return Ok(flow);
                     }
@@ -379,29 +348,25 @@ impl Source {
             } => {
                 if inclusive {
                     for integer in start..=end {
-                        if let Some(flow) = Box::pin(self.eval_for_iteration(
+                        if let Some(flow) = self.eval_for_iteration(
                             binding,
                             Value::Integer(integer),
                             body,
                             context,
                             &mut result,
-                        ))
-                        .await?
-                        {
+                        )? {
                             return Ok(flow);
                         }
                     }
                 } else {
                     for integer in start..end {
-                        if let Some(flow) = Box::pin(self.eval_for_iteration(
+                        if let Some(flow) = self.eval_for_iteration(
                             binding,
                             Value::Integer(integer),
                             body,
                             context,
                             &mut result,
-                        ))
-                        .await?
-                        {
+                        )? {
                             return Ok(flow);
                         }
                     }
@@ -415,7 +380,7 @@ impl Source {
         Ok(EvalFlow::Value(result))
     }
 
-    async fn eval_for_iteration(
+    fn eval_for_iteration(
         &self,
         binding: &String,
         item: Value,
@@ -424,7 +389,7 @@ impl Source {
         result: &mut Value,
     ) -> Result<Option<EvalFlow>, String> {
         context.set(binding.to_owned(), item);
-        match self.eval_block_flow(body, context).await? {
+        match self.eval_block_flow(body, context)? {
             EvalFlow::Value(value) => {
                 *result = value;
                 Ok(None)
@@ -434,7 +399,7 @@ impl Source {
         }
     }
 
-    async fn eval_call_expr(
+    fn eval_call_expr(
         &self,
         function: &Expr,
         arguments: &[Expr],
@@ -446,13 +411,12 @@ impl Source {
             if !arguments.is_empty() {
                 return Err("client request calls do not accept arguments".to_string());
             }
-            return Box::pin(self.eval_client_request_call(client_name, request_name, context))
-                .await;
+            return self.eval_client_request_call(client_name, request_name, context);
         }
         let Expr::Ident(name) = function else {
             return Err(format!("function {function} not found"));
         };
-        let arguments = self.eval_list(arguments, context).await?;
+        let arguments = self.eval_list(arguments, context)?;
         match self.function(name) {
             Some((params, body)) => {
                 let variables = params
@@ -461,7 +425,7 @@ impl Source {
                     .map(|(p, a)| (p.to_owned(), a))
                     .collect::<HashMap<String, Value>>();
                 let mut local = Context::from(variables);
-                self.eval_block(body, &mut local).await
+                self.eval_block(body, &mut local)
             }
             None => match name.as_str() {
                 "println" => Ok(native::println(arguments, context)?),
@@ -474,7 +438,7 @@ impl Source {
         }
     }
 
-    async fn eval_client_request_call(
+    fn eval_client_request_call(
         &self,
         client_name: &str,
         request_name: &str,
@@ -487,25 +451,18 @@ impl Source {
         }) {
             Some((client, request_definition)) => {
                 let name = format!("{client_name}.{request_name}");
-                let message = self
-                    .eval_request_message(client, request_definition, context)
-                    .await?;
-                let client = http::Client::new();
-                let (request, response, time, error) = client.send(message.as_str()).await;
-                let variables = response.to_map();
+                let request = self.eval_request_message(client, request_definition, context)?;
+                let Some(result) = context.response_for(request) else {
+                    return Err(PENDING_REQUEST.to_string());
+                };
+                let variables = response_to_map(&result.response);
                 let mut local = Context::from(variables);
                 let mut asserts = Vec::new();
                 for assert in &request_definition.asserts {
                     if let Expr::Binary(token, left, right) = assert {
                         let expr = format!("{left} {token} {right}");
-                        let left = self
-                            .eval_expr(left, &mut local)
-                            .await
-                            .unwrap_or(Value::Null);
-                        let right = self
-                            .eval_expr(right, &mut local)
-                            .await
-                            .unwrap_or(Value::Null);
+                        let left = self.eval_expr(left, &mut local).unwrap_or(Value::Null);
+                        let right = self.eval_expr(right, &mut local).unwrap_or(Value::Null);
                         if let Some(result) = match token.kind {
                             Kind::Lt => Some(left < right),
                             Kind::Gt => Some(left > right),
@@ -527,10 +484,10 @@ impl Source {
                 }
                 context.push(Record {
                     name,
-                    request,
-                    response,
-                    time,
-                    error,
+                    request: result.request,
+                    response: result.response,
+                    time: result.timing,
+                    error: result.error,
                     asserts,
                 });
                 Ok(Value::Map(local.into_map()))
@@ -539,18 +496,14 @@ impl Source {
         }
     }
 
-    async fn eval_request_message(
+    fn eval_request_message(
         &self,
         client: &crate::client::Client,
         request: &crate::client::Request,
         context: &mut Context,
-    ) -> Result<String, String> {
-        let host = self
-            .eval_request_string(&client.host, context, "host")
-            .await?;
-        let path = self
-            .eval_request_string(&request.path, context, "path")
-            .await?;
+    ) -> Result<HttpRequest, String> {
+        let host = self.eval_request_string(&client.host, context, "host")?;
+        let path = self.eval_request_string(&request.path, context, "path")?;
         let mut url = format!("{}://{host}", client.scheme.as_ref());
         if let Some(port) = client.port {
             url.push_str(&format!(":{port}"));
@@ -558,25 +511,21 @@ impl Source {
         url.push_str(&path);
 
         if !request.params.is_empty() {
-            let mut serializer = http::Serializer::new();
+            let mut params = Vec::new();
             for (key, value) in &request.params {
-                let key = self.eval_request_scalar(key, context, "param key").await?;
-                let value = self
-                    .eval_request_scalar(value, context, "param value")
-                    .await?;
-                serializer.append(&key, &value);
+                let key = self.eval_request_scalar(key, context, "param key")?;
+                let value = self.eval_request_scalar(value, context, "param value")?;
+                params.push((key, value));
             }
             url.push('?');
-            url.push_str(&String::from_utf8_lossy(&serializer.finish()));
+            url.push_str(&form_urlencode(&params));
         }
 
         let mut headers = Vec::new();
         for (key, value) in &request.headers {
             headers.push((
-                self.eval_request_scalar(key, context, "header name")
-                    .await?,
-                self.eval_request_scalar(value, context, "header value")
-                    .await?,
+                self.eval_request_scalar(key, context, "header name")?,
+                self.eval_request_scalar(value, context, "header value")?,
             ));
         }
         let content_type = headers
@@ -586,7 +535,7 @@ impl Source {
 
         let mut body = None;
         if let Some(expr) = &request.body {
-            let value = self.eval_request_value(expr, context).await?;
+            let value = self.eval_request_value(expr, context)?;
             let media_type = content_type
                 .as_deref()
                 .and_then(|value| value.split(';').next())
@@ -631,24 +580,24 @@ impl Source {
             });
         }
 
-        let mut message = format!("{} {url}\n", request.method.as_ref());
-        for (name, value) in headers {
-            message.push_str(&format!("{name}: {value}\n"));
-        }
-        if let Some(body) = body {
-            message.push('\n');
-            message.push_str(&body);
-        }
-        Ok(message)
+        Ok(HttpRequest {
+            method: request.method.as_ref().to_string(),
+            url,
+            headers: headers
+                .into_iter()
+                .map(|(name, value)| HttpHeader { name, value })
+                .collect(),
+            body,
+        })
     }
 
-    async fn eval_request_string(
+    fn eval_request_string(
         &self,
         expr: &Expr,
         context: &mut Context,
         field: &str,
     ) -> Result<String, String> {
-        match self.eval_request_value(expr, context).await? {
+        match self.eval_request_value(expr, context)? {
             Value::String(value) => Ok(value),
             value => Err(format!(
                 "{field} must evaluate to a string, found {value:?}"
@@ -656,13 +605,13 @@ impl Source {
         }
     }
 
-    async fn eval_request_scalar(
+    fn eval_request_scalar(
         &self,
         expr: &Expr,
         context: &mut Context,
         field: &str,
     ) -> Result<String, String> {
-        match self.eval_request_value(expr, context).await? {
+        match self.eval_request_value(expr, context)? {
             Value::String(value) => Ok(value),
             Value::Integer(value) => Ok(value.to_string()),
             Value::Float(value) => Ok(value.to_string()),
@@ -673,34 +622,26 @@ impl Source {
         }
     }
 
-    async fn eval_request_value(
-        &self,
-        expr: &Expr,
-        context: &mut Context,
-    ) -> Result<Value, String> {
-        let value = self.eval_expr(expr, context).await?;
-        Box::pin(self.interpolate_value(value, context)).await
+    fn eval_request_value(&self, expr: &Expr, context: &mut Context) -> Result<Value, String> {
+        let value = self.eval_expr(expr, context)?;
+        self.interpolate_value(value, context)
     }
 
-    async fn interpolate_value(
-        &self,
-        value: Value,
-        context: &mut Context,
-    ) -> Result<Value, String> {
+    fn interpolate_value(&self, value: Value, context: &mut Context) -> Result<Value, String> {
         match value {
-            Value::String(value) => Ok(Value::String(self.interpolate(&value, context).await?)),
+            Value::String(value) => Ok(Value::String(self.interpolate(&value, context)?)),
             Value::Array(values) => {
                 let mut rendered = Vec::with_capacity(values.len());
                 for value in values {
-                    rendered.push(Box::pin(self.interpolate_value(value, context)).await?);
+                    rendered.push(self.interpolate_value(value, context)?);
                 }
                 Ok(Value::Array(rendered))
             }
             Value::Map(values) => {
                 let mut rendered = HashMap::with_capacity(values.len());
                 for (key, value) in values {
-                    let key = self.interpolate(&key, context).await?;
-                    let value = Box::pin(self.interpolate_value(value, context)).await?;
+                    let key = self.interpolate(&key, context)?;
+                    let value = self.interpolate_value(value, context)?;
                     rendered.insert(key, value);
                 }
                 Ok(Value::Map(rendered))
@@ -709,7 +650,7 @@ impl Source {
         }
     }
 
-    async fn interpolate(&self, input: &str, context: &mut Context) -> Result<String, String> {
+    fn interpolate(&self, input: &str, context: &mut Context) -> Result<String, String> {
         let mut output = String::new();
         let mut cursor = 0;
         while let Some(relative) = input[cursor..].find("\\(") {
@@ -724,7 +665,7 @@ impl Source {
             if source.exprs.len() != 1 || !source.clients.inner.is_empty() {
                 return Err("interpolation must contain exactly one expression".to_string());
             }
-            let value = self.eval_expr(&source.exprs[0], context).await?;
+            let value = self.eval_expr(&source.exprs[0], context)?;
             output.push_str(&value.to_string());
             cursor = end + 1;
         }
@@ -732,22 +673,18 @@ impl Source {
         Ok(output)
     }
 
-    pub async fn eval_block(&self, exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
-        match self.eval_block_flow(exprs, context).await? {
+    pub fn eval_block(&self, exprs: &[Expr], context: &mut Context) -> Result<Value, String> {
+        match self.eval_block_flow(exprs, context)? {
             EvalFlow::Value(value) => Ok(value),
             EvalFlow::Break(_) => Err("break outside loop".to_string()),
             EvalFlow::Continue => Err("continue outside loop".to_string()),
         }
     }
 
-    async fn eval_block_flow(
-        &self,
-        exprs: &[Expr],
-        context: &mut Context,
-    ) -> Result<EvalFlow, String> {
+    fn eval_block_flow(&self, exprs: &[Expr], context: &mut Context) -> Result<EvalFlow, String> {
         let mut result = Value::Null;
         for expr in exprs {
-            match Box::pin(self.eval_flow(expr, context)).await? {
+            match self.eval_flow(expr, context)? {
                 EvalFlow::Value(value) => result = value,
                 flow @ (EvalFlow::Break(_) | EvalFlow::Continue) => return Ok(flow),
             }
@@ -755,13 +692,130 @@ impl Source {
         Ok(EvalFlow::Value(result))
     }
 
-    async fn eval_list(&self, items: &[Expr], context: &mut Context) -> Result<Vec<Value>, String> {
+    fn eval_list(&self, items: &[Expr], context: &mut Context) -> Result<Vec<Value>, String> {
         let mut values = Vec::with_capacity(items.len());
         for item in items {
-            values.push(self.eval_expr(item, context).await?);
+            values.push(self.eval_expr(item, context)?);
         }
         Ok(values)
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ExecutionStep {
+    Pending(super::PendingRequest),
+    Complete(Value),
+    Error(String),
+}
+
+pub struct Execution<'a> {
+    source: &'a Source,
+    exprs: &'a [Expr],
+    initial: Context,
+    context: Option<Context>,
+    responses: Vec<HttpResult>,
+    pending: Option<super::PendingRequest>,
+}
+
+impl Source {
+    pub fn start<'a>(&'a self, exprs: &'a [Expr], context: Context) -> Execution<'a> {
+        Execution {
+            source: self,
+            exprs,
+            initial: context,
+            context: None,
+            responses: Vec::new(),
+            pending: None,
+        }
+    }
+}
+
+impl Execution<'_> {
+    pub fn run(&mut self) -> ExecutionStep {
+        if let Some(pending) = &self.pending {
+            return ExecutionStep::Pending(pending.clone());
+        }
+
+        let mut context = self.initial.clone_for_replay();
+        context.prepare_replay(self.responses.clone());
+        match self.source.eval_block(self.exprs, &mut context) {
+            Ok(value) => {
+                self.context = Some(context);
+                ExecutionStep::Complete(value)
+            }
+            Err(error) if error == PENDING_REQUEST => {
+                let request = context
+                    .take_pending_request()
+                    .expect("pending evaluation must contain an HTTP request");
+                let pending = super::PendingRequest {
+                    id: self.responses.len() as u64,
+                    request,
+                };
+                self.pending = Some(pending.clone());
+                ExecutionStep::Pending(pending)
+            }
+            Err(error) => ExecutionStep::Error(error),
+        }
+    }
+
+    pub fn resume(&mut self, id: u64, result: HttpResult) -> ExecutionStep {
+        let Some(pending) = self.pending.take() else {
+            return ExecutionStep::Error("no HTTP request is pending".to_string());
+        };
+        if pending.id != id {
+            self.pending = Some(pending);
+            return ExecutionStep::Error(format!(
+                "stale HTTP response id {id}; expected {}",
+                self.pending.as_ref().unwrap().id
+            ));
+        }
+        if result.request != pending.request {
+            self.pending = Some(pending);
+            return ExecutionStep::Error(
+                "HTTP response does not match the pending request".to_string(),
+            );
+        }
+        self.responses.push(result);
+        self.run()
+    }
+
+    pub fn context(&self) -> Option<&Context> {
+        self.context.as_ref()
+    }
+
+    pub fn into_context(self) -> Context {
+        self.context.unwrap_or(self.initial)
+    }
+}
+
+fn response_to_map(response: &HttpResponse) -> HashMap<String, Value> {
+    let mut map = HashMap::new();
+    map.insert(
+        "version".to_string(),
+        Value::String(response.version.clone()),
+    );
+    map.insert("status".to_string(), Value::Integer(response.status as i64));
+    map.insert("reason".to_string(), Value::String(response.reason.clone()));
+    let mut headers = HashMap::new();
+    for header in &response.headers {
+        match headers.get_mut(&header.name) {
+            Some(Value::Array(values)) => values.push(Value::String(header.value.clone())),
+            _ => {
+                headers.insert(
+                    header.name.clone(),
+                    Value::Array(vec![Value::String(header.value.clone())]),
+                );
+            }
+        }
+    }
+    map.insert("headers".to_string(), Value::Map(headers));
+    map.insert("body".to_string(), Value::String(response.body.clone()));
+    if let Ok(Source { exprs, .. }) = Parser::new(&response.body).parse()
+        && let Some(expr) = exprs.first()
+    {
+        map.insert("json".to_string(), expr.eval());
+    }
+    map
 }
 
 fn interpolation_end(input: &str, start: usize) -> Result<usize, String> {
@@ -825,16 +879,19 @@ fn request_scalar(value: &Value) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::super::Context;
+    use super::super::HttpResponse;
+    use super::super::HttpResult;
     use super::super::Parser;
     use super::super::Value;
+    use super::ExecutionStep;
     use std::collections::HashMap;
 
-    async fn run_eval_tests(tests: Vec<(&str, Value)>) {
+    fn run_eval_tests(tests: Vec<(&str, Value)>) {
         for (text, expect) in tests {
             let source = Parser::new(text).parse().unwrap();
             let mut context = Context::new();
             let exprs = &source.exprs;
-            match source.eval_block(exprs, &mut context).await {
+            match source.eval_block(exprs, &mut context) {
                 Ok(value) => {
                     println!("{exprs:?} => {value} = {expect}");
                     assert_eq!(value, expect);
@@ -844,8 +901,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_integer_arithmetic() {
+    #[test]
+    fn test_integer_arithmetic() {
         let tests = vec![
             ("1", Value::Integer(1)),
             ("2", Value::Integer(2)),
@@ -875,11 +932,11 @@ mod tests {
             ("5 >> 2", Value::Integer(1)),
             ("-5 >> 2", Value::Integer(-2)),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_float_arithmetic() {
+    #[test]
+    fn test_float_arithmetic() {
         let tests = vec![
             ("1.0", Value::Float(1.0)),
             ("0.2", Value::Float(0.2)),
@@ -906,11 +963,11 @@ mod tests {
                 Value::Float(1.6),
             ),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_boolean_arithmetic() {
+    #[test]
+    fn test_boolean_arithmetic() {
         let tests = vec![
             ("true", Value::Boolean(true)),
             ("false", Value::Boolean(false)),
@@ -941,11 +998,11 @@ mod tests {
             ("!!false", Value::Boolean(false)),
             ("!(if (false) { 5; })", Value::Boolean(true)),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_string_literal() {
+    #[test]
+    fn test_string_literal() {
         let tests = vec![
             (
                 r#""hello world""#,
@@ -960,11 +1017,11 @@ mod tests {
                 Value::String(String::from("hello world!")),
             ),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_logical_expr() {
+    #[test]
+    fn test_logical_expr() {
         let tests = vec![
             ("true || true", Value::Boolean(true)),
             ("true || false", Value::Boolean(true)),
@@ -991,11 +1048,11 @@ mod tests {
             ("true && false && 1 == 1", Value::Boolean(false)),
             ("let flag = true && false && 1 == 1;", Value::Boolean(false)),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_array_literal() {
+    #[test]
+    fn test_array_literal() {
         let tests = vec![
             ("[]", Value::Array(vec![])),
             (
@@ -1015,11 +1072,11 @@ mod tests {
                 ]),
             ),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_map_literal() {
+    #[test]
+    fn test_map_literal() {
         let tests = vec![
             ("{}", Value::Map(HashMap::new())),
             (
@@ -1037,11 +1094,11 @@ mod tests {
                 ])),
             ),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_index_expr() {
+    #[test]
+    fn test_index_expr() {
         let tests = vec![
             ("[1, 2, 3][1]", Value::Integer(2)),
             ("[1, 2, 3][0 + 2]", Value::Integer(3)),
@@ -1054,17 +1111,17 @@ mod tests {
             ("{1: 1}[0]", Value::Null),
             ("{}[0]", Value::Null),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_field_expr() {
+    #[test]
+    fn test_field_expr() {
         let tests = vec![("{\"a\": 2}.a", Value::Integer(2))];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_let_expr() {
+    #[test]
+    fn test_let_expr() {
         let tests = vec![
             ("let one = 1; one", Value::Integer(1)),
             ("let one = 1; let two = 2; one + two", Value::Integer(3)),
@@ -1082,11 +1139,11 @@ mod tests {
             ("let one = 1;let one = 2;one", Value::Integer(2)),
             ("let one = 1;let two = 2;let one = 3;one", Value::Integer(3)),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_if_expr() {
+    #[test]
+    fn test_if_expr() {
         let tests = vec![
             ("if (true) { 10 }", Value::Integer(10)),
             ("if (true) { 10 } else { 20 }", Value::Integer(10)),
@@ -1104,11 +1161,11 @@ mod tests {
             ("if (true) {} else { 10 }", Value::Null),
             ("if (true) { 1; 2 } else { 3 }", Value::Integer(2)),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_call_native() {
+    #[test]
+    fn test_call_native() {
         let tests = vec![
             ("length(\"\")", Value::Integer(0)),
             ("length(\"two\")", Value::Integer(3)),
@@ -1116,11 +1173,11 @@ mod tests {
             ("length([])", Value::Integer(0)),
             ("length([1, 2, 3])", Value::Integer(3)),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_call_function() {
+    #[test]
+    fn test_call_function() {
         let tests = vec![
             ("fn identity(x) { x; }; identity(5);", Value::Integer(5)),
             // ("fn identity(x) { return x; }; identity(5);", Value::Integer(5)),
@@ -1137,11 +1194,11 @@ mod tests {
             ("fn x(x) { x; }; x(5)", Value::Integer(5)),
             ("fn len(x) { x; }; len(10)", Value::Integer(10)),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_call_fibonacci() {
+    #[test]
+    fn test_call_fibonacci() {
         let tests = vec![(
             r#"
     fn fibonacci(x) {
@@ -1159,11 +1216,11 @@ mod tests {
     "#,
             Value::Integer(17711),
         )];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_loop_expr() {
+    #[test]
+    fn test_loop_expr() {
         let tests = vec![
             ("loop { break 5 }", Value::Integer(5)),
             ("loop { break }", Value::Null),
@@ -1172,20 +1229,20 @@ mod tests {
                 Value::Integer(3),
             ),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_while_expr() {
+    #[test]
+    fn test_while_expr() {
         let tests = vec![(
             "let i = 0; while (i < 3) { let i = i + 1; i }",
             Value::Integer(3),
         )];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_for_expr() {
+    #[test]
+    fn test_for_expr() {
         let tests = vec![
             (
                 "let sum = 0; for x in [1, 2, 3] { let sum = sum + x }; sum",
@@ -1200,34 +1257,31 @@ mod tests {
                 Value::Integer(6),
             ),
         ];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_for_range_breaks_without_collecting_entire_range() {
+    #[test]
+    fn test_for_range_breaks_without_collecting_entire_range() {
         let source = Parser::new("for x in 0..=9223372036854775807 { break x }")
             .parse()
             .unwrap();
         let mut context = Context::new();
-        let value = source
-            .eval_block(&source.exprs, &mut context)
-            .await
-            .unwrap();
+        let value = source.eval_block(&source.exprs, &mut context).unwrap();
 
         assert_eq!(value, Value::Integer(0));
     }
 
-    #[tokio::test]
-    async fn test_continue_expr() {
+    #[test]
+    fn test_continue_expr() {
         let tests = vec![(
             "let sum = 0; for x in 1..=3 { if (x == 2) { continue }; let sum = sum + x }; sum",
             Value::Integer(4),
         )];
-        run_eval_tests(tests).await;
+        run_eval_tests(tests);
     }
 
-    #[tokio::test]
-    async fn test_loop_control_errors() {
+    #[test]
+    fn test_loop_control_errors() {
         let tests = vec![
             ("break", "break outside loop"),
             ("continue", "continue outside loop"),
@@ -1239,10 +1293,7 @@ mod tests {
         for (text, expected) in tests {
             let source = Parser::new(text).parse().unwrap();
             let mut context = Context::new();
-            let error = source
-                .eval_block(&source.exprs, &mut context)
-                .await
-                .unwrap_err();
+            let error = source.eval_block(&source.exprs, &mut context).unwrap_err();
             assert!(
                 error.contains(expected),
                 "{error} did not contain {expected}"
@@ -1262,9 +1313,8 @@ mod tests {
         println!("fibonacci(22):{}", fibonacci(22));
     }
 
-    #[tokio::test]
-    async fn test_client_request_call() {
-        crate::tests::start_server(30006).await;
+    #[test]
+    fn test_client_request_call() {
         let source = Parser::new(
             r#"
             client user {
@@ -1287,20 +1337,94 @@ mod tests {
         )
         .parse()
         .unwrap();
-        let mut context = Context::new();
-        let value = source
-            .eval_block(&source.exprs, &mut context)
-            .await
-            .unwrap();
+        let mut execution = source.start(&source.exprs, Context::new());
+        let ExecutionStep::Pending(pending) = execution.run() else {
+            panic!("expected a pending HTTP request");
+        };
+        assert_eq!(pending.id, 0);
+        assert_eq!(pending.request.method, "GET");
+        let result = HttpResult {
+            request: pending.request,
+            response: HttpResponse {
+                version: "HTTP/1.1".to_string(),
+                status: 200,
+                reason: "OK".to_string(),
+                ..HttpResponse::default()
+            },
+            ..HttpResult::default()
+        };
+        let ExecutionStep::Complete(value) = execution.resume(pending.id, result) else {
+            panic!("expected evaluation to complete");
+        };
         assert_eq!(value, Value::Integer(200));
+        let mut context = execution.into_context();
         let records = context.records();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].name, "user.getIp");
         assert!(records[0].asserts.iter().all(|assert| assert.result));
     }
 
-    #[tokio::test]
-    async fn test_client_request_call_rejects_arguments() {
+    #[test]
+    fn execution_resumes_multiple_requests_and_rejects_stale_ids() {
+        let source = Parser::new(
+            r#"
+            client api {
+                scheme: https,
+                host: "example.com",
+                requests: {
+                    first: { path: "/first", method: GET },
+                    second: { path: "/second", method: GET },
+                },
+            }
+            let first = api.first();
+            let second = api.second();
+            first.status + second.status
+            "#,
+        )
+        .parse()
+        .unwrap();
+        let mut execution = source.start(&source.exprs, Context::new());
+        let ExecutionStep::Pending(first) = execution.run() else {
+            panic!("expected first request");
+        };
+        let stale = HttpResult {
+            request: first.request.clone(),
+            ..HttpResult::default()
+        };
+        assert!(matches!(
+            execution.resume(first.id + 1, stale),
+            ExecutionStep::Error(error) if error.contains("stale HTTP response id")
+        ));
+
+        let first_result = HttpResult {
+            request: first.request,
+            response: HttpResponse {
+                status: 200,
+                ..HttpResponse::default()
+            },
+            ..HttpResult::default()
+        };
+        let ExecutionStep::Pending(second) = execution.resume(first.id, first_result) else {
+            panic!("expected second request");
+        };
+        assert_eq!(second.id, 1);
+        assert!(second.request.url.ends_with("/second"));
+        let second_result = HttpResult {
+            request: second.request,
+            response: HttpResponse {
+                status: 201,
+                ..HttpResponse::default()
+            },
+            ..HttpResult::default()
+        };
+        assert_eq!(
+            execution.resume(second.id, second_result),
+            ExecutionStep::Complete(Value::Integer(401))
+        );
+    }
+
+    #[test]
+    fn test_client_request_call_rejects_arguments() {
         let source = Parser::new(
             r#"
             client user {
@@ -1315,15 +1439,12 @@ mod tests {
         .parse()
         .unwrap();
         let mut context = Context::new();
-        let error = source
-            .eval_block(&source.exprs, &mut context)
-            .await
-            .unwrap_err();
+        let error = source.eval_block(&source.exprs, &mut context).unwrap_err();
         assert!(error.contains("client request calls do not accept arguments"));
     }
 
-    #[tokio::test]
-    async fn test_native_client_renders_expression_bodies_and_encodings() {
+    #[test]
+    fn test_native_client_renders_expression_bodies_and_encodings() {
         let source = Parser::new(
             r#"
             client user {
@@ -1372,38 +1493,41 @@ mod tests {
 
         let json = source
             .eval_request_message(client, client.request("json").unwrap(), &mut context)
-            .await
             .unwrap();
-        assert!(json.starts_with("POST https://example.com/users/19?tag=a&tag=b\n"));
-        assert!(json.contains("Content-Type: application/json\n"));
-        let body = json.split_once("\n\n").unwrap().1;
-        let body: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert_eq!(json.method, "POST");
+        assert_eq!(json.url, "https://example.com/users/19?tag=a&tag=b");
+        assert!(json.headers.iter().any(|header| {
+            header.name.eq_ignore_ascii_case("content-type") && header.value == "application/json"
+        }));
+        let body: serde_json::Value = serde_json::from_str(json.body.as_deref().unwrap()).unwrap();
         assert_eq!(body["name"], "hello Tom");
         assert_eq!(body["age"], 19);
         assert_eq!(body["enabled"], true);
 
         let json_case = source
             .eval_request_message(client, client.request("jsonCase").unwrap(), &mut context)
-            .await
             .unwrap();
-        assert!(json_case.contains("Content-Type: Application/JSON; Charset=UTF-8\n"));
-        assert_eq!(json_case.split_once("\n\n").unwrap().1, "{\"ok\":true}");
+        assert!(json_case.headers.iter().any(|header| {
+            header.name == "Content-Type" && header.value == "Application/JSON; Charset=UTF-8"
+        }));
+        assert_eq!(json_case.body.as_deref(), Some("{\"ok\":true}"));
 
         let form = source
             .eval_request_message(client, client.request("form").unwrap(), &mut context)
-            .await
             .unwrap();
-        assert!(form.ends_with("\nage: 19\nenabled: true"));
+        assert_eq!(form.body.as_deref(), Some("age: 19\nenabled: true"));
 
         let upload = source
             .eval_request_message(client, client.request("upload").unwrap(), &mut context)
-            .await
             .unwrap();
-        assert!(upload.ends_with("\nfile: @./avatar.png\nliteral: value"));
+        assert_eq!(
+            upload.body.as_deref(),
+            Some("file: @./avatar.png\nliteral: value")
+        );
     }
 
-    #[tokio::test]
-    async fn test_native_client_reports_interpolation_errors() {
+    #[test]
+    fn test_native_client_reports_interpolation_errors() {
         let source = Parser::new(
             r#"
             client user {
@@ -1420,19 +1544,15 @@ mod tests {
         let client = source.clients.get("user").unwrap();
         let error = source
             .eval_request_message(client, client.request("get").unwrap(), &mut Context::new())
-            .await
             .unwrap_err();
         assert!(error.contains("ident: missing not found"));
     }
 
-    #[tokio::test]
-    async fn test_unknown_client_request_reports_error() {
+    #[test]
+    fn test_unknown_client_request_reports_error() {
         let source = Parser::new("user.missing();").parse().unwrap();
         let mut context = Context::new();
-        let error = source
-            .eval_block(&source.exprs, &mut context)
-            .await
-            .unwrap_err();
+        let error = source.eval_block(&source.exprs, &mut context).unwrap_err();
         assert!(error.contains("request user.missing not found"));
     }
 }

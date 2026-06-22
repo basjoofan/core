@@ -163,7 +163,7 @@ impl Debug for Expr {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Source {
     pub base: String,
     pub exprs: Vec<Expr>,

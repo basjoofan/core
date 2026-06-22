@@ -1,4 +1,5 @@
 mod command;
+mod writer;
 use clap::{Parser, Subcommand};
 use lib::Source;
 use std::{path::PathBuf, time::Duration};

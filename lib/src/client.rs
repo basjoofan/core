@@ -1,8 +1,7 @@
 use super::Expr;
-use super::http::{Method, Scheme};
 use std::collections::HashMap;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Clients {
     pub inner: HashMap<String, Client>,
 }
@@ -25,7 +24,7 @@ impl Clients {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Client {
     pub name: String,
     pub scheme: Scheme,
@@ -40,7 +39,7 @@ impl Client {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Request {
     pub path: Expr,
     pub method: Method,
@@ -49,3 +48,47 @@ pub struct Request {
     pub body: Option<Expr>,
     pub asserts: Vec<Expr>,
 }
+
+macro_rules! protocol_type {
+    ($type: ident, $default: ident => $default_value: literal, $($name: ident => $value: literal),+ $(,)?) => {
+        #[derive(Clone, Debug, Default, Eq, PartialEq)]
+        pub enum $type {
+            #[default]
+            $default,
+            $($name),+
+        }
+
+        impl From<&str> for $type {
+            fn from(value: &str) -> Self {
+                match value {
+                    $default_value => Self::$default,
+                    $($value => Self::$name,)+
+                    _ => Self::default(),
+                }
+            }
+        }
+
+        impl AsRef<str> for $type {
+            fn as_ref(&self) -> &str {
+                match self {
+                    Self::$default => $default_value,
+                    $(Self::$name => $value,)+
+                }
+            }
+        }
+    };
+}
+
+protocol_type!(Scheme, Http => "http", Https => "https");
+protocol_type!(
+    Method,
+    Get => "GET",
+    Post => "POST",
+    Put => "PUT",
+    Patch => "PATCH",
+    Delete => "DELETE",
+    Options => "OPTIONS",
+    Head => "HEAD",
+    Trace => "TRACE",
+    Connect => "CONNECT",
+);
