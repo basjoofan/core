@@ -103,7 +103,7 @@ fn source_state(text: &str) -> State {
             continue;
         }
         match character {
-            '"' | '`' => quote = Some(character),
+            '"' => quote = Some(character),
             '{' | '[' | '(' => stack.push(character),
             '}' => match stack.pop() {
                 Some('{') => {}

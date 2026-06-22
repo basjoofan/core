@@ -2,19 +2,18 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
-    Illegal, // illegal token
-    Eof,     // end of file
+    Illegal(String), // illegal token
+    Eof,             // end of file
 
     // ident + literal
-    Ident,    // add, foobar, x, y, ...
-    Integer,  // 56789
-    Float,    // 3.14159265358979323846264338327950288
-    True,     // true
-    False,    // false
-    String,   // "foobar"
-    Template, // `GET http://example.com`
+    Ident(String),   // add, foobar, x, y, ...
+    Integer(String), // 56789
+    Float(String),   // 3.14159265358979323846264338327950288
+    True,            // true
+    False,           // false
+    String(String),  // "foobar"
 
     // operator
     Add, // +
@@ -72,28 +71,13 @@ pub enum Kind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: Kind,
-    pub literal: String,
     pub line: usize,
     pub column: usize,
 }
 
 impl Token {
-    pub fn new(kind: Kind, literal: String) -> Token {
-        Token {
-            kind,
-            literal,
-            line: 1,
-            column: 1,
-        }
-    }
-
-    pub fn at(kind: Kind, literal: String, line: usize, column: usize) -> Token {
-        Token {
-            kind,
-            literal,
-            line,
-            column,
-        }
+    pub fn new(kind: Kind, line: usize, column: usize) -> Token {
+        Token { kind, line, column }
     }
 
     pub fn precedence(&self) -> u8 {
@@ -128,8 +112,71 @@ impl Token {
     }
 }
 
+impl Kind {
+    pub fn same(&self, other: &Kind) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+
+    pub fn literal(&self) -> &str {
+        match self {
+            Kind::Illegal(literal)
+            | Kind::Ident(literal)
+            | Kind::Integer(literal)
+            | Kind::Float(literal)
+            | Kind::String(literal) => literal,
+            Kind::Eof => "💥",
+            Kind::True => "true",
+            Kind::False => "false",
+            Kind::Add => "+",
+            Kind::Sub => "-",
+            Kind::Mul => "*",
+            Kind::Div => "/",
+            Kind::Rem => "%",
+            Kind::Not => "!",
+            Kind::Bx => "^",
+            Kind::Bo => "|",
+            Kind::Ba => "&",
+            Kind::Sl => "<<",
+            Kind::Sr => ">>",
+            Kind::Lo => "||",
+            Kind::La => "&&",
+            Kind::Lt => "<",
+            Kind::Gt => ">",
+            Kind::Le => "<=",
+            Kind::Ge => ">=",
+            Kind::Eq => "==",
+            Kind::Ne => "!=",
+            Kind::Assign => "=",
+            Kind::Comma => ",",
+            Kind::Semi => ";",
+            Kind::Colon => ":",
+            Kind::Dot => ".",
+            Kind::Open => "..",
+            Kind::Close => "..=",
+            Kind::Lp => "(",
+            Kind::Rp => ")",
+            Kind::Lb => "{",
+            Kind::Rb => "}",
+            Kind::Ls => "[",
+            Kind::Rs => "]",
+            Kind::Function => "fn",
+            Kind::Let => "let",
+            Kind::If => "if",
+            Kind::Else => "else",
+            Kind::Test => "test",
+            Kind::Break => "break",
+            Kind::Continue => "continue",
+            Kind::Loop => "loop",
+            Kind::While => "while",
+            Kind::For => "for",
+            Kind::In => "in",
+            Kind::Client => "client",
+        }
+    }
+}
+
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.literal)
+        write!(f, "{}", self.kind.literal())
     }
 }

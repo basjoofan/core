@@ -195,7 +195,7 @@ impl Source {
         context: &mut Context,
     ) -> Result<Value, String> {
         let right = self.eval_expr(right, context).await?;
-        match (token.kind, right) {
+        match (&token.kind, right) {
             (Kind::Not, Value::Boolean(false)) | (Kind::Not, Value::Null) => {
                 Ok(Value::Boolean(true))
             }
@@ -780,7 +780,7 @@ fn interpolation_end(input: &str, start: usize) -> Result<usize, String> {
             continue;
         }
         match character {
-            '"' | '`' => quote = Some(character),
+            '"' => quote = Some(character),
             '(' => depth += 1,
             ')' => {
                 depth -= 1;

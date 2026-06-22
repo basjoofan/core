@@ -32,6 +32,33 @@ fn normalize_object_keys(expr: Expr) -> Expr {
     }
 }
 
+fn decode_string(literal: &str) -> String {
+    let mut decoded = String::with_capacity(literal.len());
+    let mut chars = literal.chars();
+    while let Some(character) = chars.next() {
+        if character != '\\' {
+            decoded.push(character);
+            continue;
+        }
+        match chars.next() {
+            Some('"') => decoded.push('"'),
+            Some('\\') => decoded.push('\\'),
+            Some('b') => decoded.push('\u{08}'),
+            Some('f') => decoded.push('\u{0c}'),
+            Some('n') => decoded.push('\n'),
+            Some('r') => decoded.push('\r'),
+            Some('t') => decoded.push('\t'),
+            Some('(') => decoded.push_str("\\("),
+            Some(escaped) => {
+                decoded.push('\\');
+                decoded.push(escaped);
+            }
+            None => decoded.push('\\'),
+        }
+    }
+    decoded
+}
+
 impl Parser {
     pub fn new(text: &str) -> Parser {
         Parser {
@@ -54,12 +81,12 @@ impl Parser {
     }
 
     fn peek_token_is(&self, kind: Kind) -> bool {
-        matches!(self.peek_token(), Some(peek) if kind == peek.kind)
+        matches!(self.peek_token(), Some(peek) if kind.same(&peek.kind))
     }
 
     fn peek_token_expect(&mut self, kind: Kind) -> Result<(), String> {
         if let Some(peek) = self.peek_token() {
-            if kind == peek.kind {
+            if kind.same(&peek.kind) {
                 self.next_token();
                 Ok(())
             } else {
@@ -141,11 +168,11 @@ impl Parser {
 
     fn parse_expr(&mut self, mut precedence: u8) -> Result<Expr, String> {
         let mut left = match self.current_token().kind {
-            Kind::Ident => self.parse_ident_expr(),
-            Kind::Integer => self.parse_integer_literal()?,
-            Kind::Float => self.parse_float_literal()?,
+            Kind::Ident(_) => self.parse_ident_expr(),
+            Kind::Integer(_) => self.parse_integer_literal()?,
+            Kind::Float(_) => self.parse_float_literal()?,
             Kind::True | Kind::False => self.parse_boolean_literal()?,
-            Kind::String => self.parse_string_literal(),
+            Kind::String(_) => self.parse_string_literal(),
             Kind::Let => {
                 precedence = u8::MAX;
                 self.parse_let_expr()?
@@ -230,12 +257,17 @@ impl Parser {
     }
 
     fn parse_current_string(&self) -> String {
-        self.current_token().literal.to_owned()
+        let token = self.current_token();
+        match &token.kind {
+            Kind::String(literal) => decode_string(literal),
+            Kind::Ident(literal) => literal.to_owned(),
+            _ => token.kind.literal().to_owned(),
+        }
     }
 
     fn parse_integer_literal(&self) -> Result<Expr, String> {
         let token = self.current_token();
-        match token.literal.parse::<i64>() {
+        match token.kind.literal().parse::<i64>() {
             Ok(integer) => Ok(Expr::Integer(integer)),
             Err(_) => Err(format!("parse integer error: {token}")),
         }
@@ -243,7 +275,7 @@ impl Parser {
 
     fn parse_float_literal(&self) -> Result<Expr, String> {
         let token = self.current_token();
-        match token.literal.parse::<f64>() {
+        match token.kind.literal().parse::<f64>() {
             Ok(float) => Ok(Expr::Float(float)),
             Err(_) => Err(format!("parse float error: {token}")),
         }
@@ -251,7 +283,7 @@ impl Parser {
 
     fn parse_boolean_literal(&self) -> Result<Expr, String> {
         let token = self.current_token();
-        match token.literal.parse::<bool>() {
+        match token.kind.literal().parse::<bool>() {
             Ok(boolean) => Ok(Expr::Boolean(boolean)),
             Err(_) => Err(format!("parse boolean error: {token}")),
         }
@@ -262,7 +294,7 @@ impl Parser {
     }
 
     fn parse_let_expr(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident("".to_owned()))?;
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Assign)?;
         self.next_token();
@@ -274,7 +306,7 @@ impl Parser {
     }
 
     fn parse_unary_expr(&mut self) -> Result<Expr, String> {
-        let token = self.current_token().to_owned();
+        let token = self.current_token().clone();
         let mut precedence = self.current_precedence();
         (token.kind == Kind::Sub).then(|| {
             precedence += 2;
@@ -285,7 +317,7 @@ impl Parser {
     }
 
     fn parse_binary_expr(&mut self, left: Expr) -> Result<Expr, String> {
-        let token = self.current_token().to_owned();
+        let token = self.current_token().clone();
         let precedence = self.current_precedence();
         self.next_token();
         let right = self.parse_expr(precedence)?;
@@ -342,7 +374,7 @@ impl Parser {
     }
 
     fn parse_for_expr(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident("".to_owned()))?;
         let binding = self.parse_current_string();
         self.peek_token_expect(Kind::In)?;
         self.next_token();
@@ -376,14 +408,14 @@ impl Parser {
 
     fn peek_starts_expr(&self) -> bool {
         matches!(
-            self.peek_token().map(|token| token.kind),
+            self.peek_token().map(|token| &token.kind),
             Some(
-                Kind::Ident
-                    | Kind::Integer
-                    | Kind::Float
+                Kind::Ident(_)
+                    | Kind::Integer(_)
+                    | Kind::Float(_)
                     | Kind::True
                     | Kind::False
-                    | Kind::String
+                    | Kind::String(_)
                     | Kind::Let
                     | Kind::Not
                     | Kind::Sub
@@ -413,10 +445,10 @@ impl Parser {
 
     fn parse_expr_list(&mut self, end: Kind) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
-        while !self.peek_token_is(end) {
+        while !self.peek_token_is(end.clone()) {
             self.next_token();
             exprs.push(self.parse_expr(u8::MIN)?);
-            if !self.peek_token_is(end) {
+            if !self.peek_token_is(end.clone()) {
                 self.peek_token_expect(Kind::Comma)?;
             }
         }
@@ -447,7 +479,7 @@ impl Parser {
     }
 
     fn parse_client_literal(&mut self) -> Result<Client, String> {
-        self.peek_token_expect(Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident("".to_owned()))?;
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Lb)?;
 
@@ -476,14 +508,15 @@ impl Parser {
                 "host" => host = Some(self.parse_expr(u8::MIN)?),
                 "port" => {
                     let token = self.current_token();
-                    if token.kind != Kind::Integer {
+                    if !token.kind.same(&Kind::Integer(String::new())) {
                         return Err("client port must be an integer".to_string());
                     }
                     port = Some(
                         token
-                            .literal
+                            .kind
+                            .literal()
                             .parse::<u16>()
-                            .map_err(|_| format!("invalid port '{}'", token.literal))?,
+                            .map_err(|_| format!("invalid port '{}'", token.kind.literal()))?,
                     );
                 }
                 "requests" => requests = Some(self.parse_requests_literal()?),
@@ -609,7 +642,7 @@ impl Parser {
 
     fn parse_object_field_name(&self, object: &str) -> Result<String, String> {
         match self.current_token().kind {
-            Kind::Ident | Kind::String => Ok(self.parse_current_string()),
+            Kind::Ident(_) | Kind::String(_) => Ok(self.parse_current_string()),
             _ => Err(format!(
                 "{object} field name must be an identifier or string"
             )),
@@ -617,7 +650,7 @@ impl Parser {
     }
 
     fn expect_ident(&self, field: &str) -> Result<String, String> {
-        if self.current_token().kind == Kind::Ident {
+        if self.current_token().kind.same(&Kind::Ident(String::new())) {
             Ok(self.parse_current_string())
         } else {
             Err(format!("{field} must be an identifier"))
@@ -639,7 +672,7 @@ impl Parser {
     }
 
     fn parse_field_expr(&mut self, left: Expr) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident("".to_owned()))?;
         let field = self.parse_current_string();
         Ok(Expr::Field(Box::new(left), field))
     }
@@ -659,12 +692,12 @@ impl Parser {
     }
 
     fn parse_function_literal(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident("".to_owned()))?;
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Lp)?;
         let mut params = Vec::new();
         while !self.peek_token_is(Kind::Rp) {
-            self.peek_token_expect(Kind::Ident)?;
+            self.peek_token_expect(Kind::Ident("".to_owned()))?;
             params.push(self.parse_current_string());
             if !self.peek_token_is(Kind::Rp) {
                 self.peek_token_expect(Kind::Comma)?;
@@ -676,7 +709,7 @@ impl Parser {
     }
 
     fn parse_test_literal(&mut self) -> Result<(String, Vec<Expr>), String> {
-        self.peek_token_expect(Kind::Ident)?;
+        self.peek_token_expect(Kind::Ident("".to_owned()))?;
         let name = self.parse_current_string();
         let block = self.parse_block_expr()?;
         Ok((name, block))
