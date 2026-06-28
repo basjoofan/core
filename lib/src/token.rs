@@ -6,15 +6,34 @@ use std::fmt::Result;
 pub enum Kind {
     Illegal(String), // illegal token
     Eof,             // end of file
-
-    // ident + literal
-    Ident(String),   // add, foobar, x, y, ...
-    Integer(String), // 56789
+    // literal
+    Ident(String),   // add, x, y ...
+    Integer(String), // 123456789
     Float(String),   // 3.14159265358979323846264338327950288
     True,            // true
     False,           // false
-    String(String),  // "foobar"
-
+    String(String),  // "Hello world!"
+    // keyword
+    Function, // fn
+    Let,      // let
+    If,       // if
+    Else,     // else
+    Test,     // test
+    Break,    // break
+    Continue, // continue
+    Loop,     // loop
+    While,    // while
+    For,      // for
+    In,       // in
+    Client,   // client
+    // delimiter
+    Assign, // =
+    Comma,  // ,
+    Semi,   // ;
+    Colon,  // :
+    Dot,    // .
+    Open,   // ..
+    Close,  // ..=
     // operator
     Add, // +
     Sub, // -
@@ -35,16 +54,6 @@ pub enum Kind {
     Ge,  // >=
     Eq,  // ==
     Ne,  // !=
-
-    // delimiter
-    Assign, // =
-    Comma,  // ,
-    Semi,   // ;
-    Colon,  // :
-    Dot,    // .
-    Open,   // ..
-    Close,  // ..=
-
     // couple
     Lp, // (
     Rp, // )
@@ -52,32 +61,23 @@ pub enum Kind {
     Rb, // }
     Ls, // [
     Rs, // ]
+}
 
-    // keyword
-    Function, // fn
-    Let,      // let
-    If,       // if
-    Else,     // else
-    Test,     // test
-    Break,    // break
-    Continue, // continue
-    Loop,     // loop
-    While,    // while
-    For,      // for
-    In,       // in
-    Client,   // client
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: Kind,
-    pub line: usize,
-    pub column: usize,
+    pub span: Span,
 }
 
 impl Token {
-    pub fn new(kind: Kind, line: usize, column: usize) -> Token {
-        Token { kind, line, column }
+    pub fn new(kind: Kind, span: Span) -> Token {
+        Token { kind, span }
     }
 
     pub fn precedence(&self) -> u8 {
@@ -172,6 +172,12 @@ impl Kind {
             Kind::In => "in",
             Kind::Client => "client",
         }
+    }
+}
+
+impl Display for Kind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.kind.literal())
     }
 }
 

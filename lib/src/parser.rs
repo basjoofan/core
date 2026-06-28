@@ -2,7 +2,7 @@ use super::Expr;
 use super::Kind;
 use super::Source;
 use super::Token;
-use super::lexer;
+use super::lexer::Lexer;
 use crate::client::Clients;
 use crate::client::{Client, Request};
 use crate::client::{Method, Scheme};
@@ -62,7 +62,7 @@ fn decode_string(literal: &str) -> String {
 impl Parser {
     pub fn new(text: &str) -> Parser {
         Parser {
-            tokens: lexer::segment(text),
+            tokens: Lexer::new().segment(text),
             index: usize::MIN,
         }
     }
@@ -94,6 +94,19 @@ impl Parser {
             }
         } else {
             Err(format!("token expect {kind:?} but found none"))
+        }
+    }
+
+    fn peek_token_expect_ident(&mut self) -> Result<(), String> {
+        if let Some(peek) = self.peek_token() {
+            if matches!(&peek.kind, Kind::Ident(_)) {
+                self.next_token();
+                Ok(())
+            } else {
+                Err(format!("token expect ident but found {:?}", peek.kind))
+            }
+        } else {
+            Err("token expect ident but found none".to_string())
         }
     }
 
@@ -163,7 +176,7 @@ impl Parser {
 
     fn locate_error(&self, error: String) -> String {
         let token = self.current_token();
-        format!("{}:{}: {error}", token.line, token.column)
+        format!("{}:{}: {error}", token.span.start, token.span.end)
     }
 
     fn parse_expr(&mut self, mut precedence: u8) -> Result<Expr, String> {
@@ -294,7 +307,7 @@ impl Parser {
     }
 
     fn parse_let_expr(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Ident("".to_owned()))?;
+        self.peek_token_expect_ident()?;
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Assign)?;
         self.next_token();
@@ -374,7 +387,7 @@ impl Parser {
     }
 
     fn parse_for_expr(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Ident("".to_owned()))?;
+        self.peek_token_expect_ident()?;
         let binding = self.parse_current_string();
         self.peek_token_expect(Kind::In)?;
         self.next_token();
@@ -479,7 +492,7 @@ impl Parser {
     }
 
     fn parse_client_literal(&mut self) -> Result<Client, String> {
-        self.peek_token_expect(Kind::Ident("".to_owned()))?;
+        self.peek_token_expect_ident()?;
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Lb)?;
 
@@ -508,7 +521,7 @@ impl Parser {
                 "host" => host = Some(self.parse_expr(u8::MIN)?),
                 "port" => {
                     let token = self.current_token();
-                    if !token.kind.same(&Kind::Integer(String::new())) {
+                    if !matches!(&token.kind, Kind::Integer(_)) {
                         return Err("client port must be an integer".to_string());
                     }
                     port = Some(
@@ -650,7 +663,7 @@ impl Parser {
     }
 
     fn expect_ident(&self, field: &str) -> Result<String, String> {
-        if self.current_token().kind.same(&Kind::Ident(String::new())) {
+        if matches!(&self.current_token().kind, Kind::Ident(_)) {
             Ok(self.parse_current_string())
         } else {
             Err(format!("{field} must be an identifier"))
@@ -672,7 +685,7 @@ impl Parser {
     }
 
     fn parse_field_expr(&mut self, left: Expr) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Ident("".to_owned()))?;
+        self.peek_token_expect_ident()?;
         let field = self.parse_current_string();
         Ok(Expr::Field(Box::new(left), field))
     }
@@ -692,12 +705,12 @@ impl Parser {
     }
 
     fn parse_function_literal(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Ident("".to_owned()))?;
+        self.peek_token_expect_ident()?;
         let name = self.parse_current_string();
         self.peek_token_expect(Kind::Lp)?;
         let mut params = Vec::new();
         while !self.peek_token_is(Kind::Rp) {
-            self.peek_token_expect(Kind::Ident("".to_owned()))?;
+            self.peek_token_expect_ident()?;
             params.push(self.parse_current_string());
             if !self.peek_token_is(Kind::Rp) {
                 self.peek_token_expect(Kind::Comma)?;
@@ -709,7 +722,7 @@ impl Parser {
     }
 
     fn parse_test_literal(&mut self) -> Result<(String, Vec<Expr>), String> {
-        self.peek_token_expect(Kind::Ident("".to_owned()))?;
+        self.peek_token_expect_ident()?;
         let name = self.parse_current_string();
         let block = self.parse_block_expr()?;
         Ok((name, block))

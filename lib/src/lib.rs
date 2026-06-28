@@ -13,6 +13,7 @@ mod value;
 use context::Assert;
 pub use syntax::Expr;
 use token::Kind;
+use token::Span;
 use token::Token;
 pub use value::Value;
 
