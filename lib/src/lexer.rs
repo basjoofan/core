@@ -11,167 +11,194 @@ impl Lexer {
 
     pub fn segment(&mut self, text: &str) -> Vec<Token> {
         let mut tokens = Vec::new();
-        let mut chars = text.char_indices().peekable();
-        while let Some((index, char)) = chars.next() {
-            if !char.is_whitespace() {
+        let bytes = text.as_bytes();
+        let mut index = 0;
+        while index < bytes.len() {
+            let mut peek = index + 1;
+            let byte = bytes[index];
+            if !byte.is_ascii_whitespace() {
                 let start = index;
-                let kind = match char {
-                    '=' => {
-                        if let Some((_, '=')) = chars.peek() {
-                            chars.next();
-                            Kind::Eq
+                let (kind, end) = match byte {
+                    b'=' => {
+                        if let Some(b'=') = bytes.get(peek) {
+                            (Kind::Eq, peek)
                         } else {
-                            Kind::Assign
+                            (Kind::Assign, index)
                         }
                     }
-                    '!' => {
-                        if let Some((_, '=')) = chars.peek() {
-                            chars.next();
-                            Kind::Ne
+                    b'!' => {
+                        if let Some(b'=') = bytes.get(peek) {
+                            (Kind::Ne, peek)
                         } else {
-                            Kind::Not
+                            (Kind::Not, index)
                         }
                     }
-                    '+' => Kind::Add,
-                    '-' => Kind::Sub,
-                    '*' => Kind::Mul,
-                    '/' => Kind::Div,
-                    '%' => Kind::Rem,
-                    '^' => Kind::Bx,
-                    '|' => {
-                        if let Some((_, '|')) = chars.peek() {
-                            chars.next();
-                            Kind::Lo
+                    b'+' => (Kind::Add, index),
+                    b'-' => (Kind::Sub, index),
+                    b'*' => (Kind::Mul, index),
+                    b'/' => (Kind::Div, index),
+                    b'%' => (Kind::Rem, index),
+                    b'^' => (Kind::Bx, index),
+                    b'|' => {
+                        if let Some(b'|') = bytes.get(peek) {
+                            (Kind::Lo, peek)
                         } else {
-                            Kind::Bo
+                            (Kind::Bo, index)
                         }
                     }
-                    '&' => {
-                        if let Some((_, '&')) = chars.peek() {
-                            chars.next();
-                            Kind::La
+                    b'&' => {
+                        if let Some(b'&') = bytes.get(peek) {
+                            (Kind::La, peek)
                         } else {
-                            Kind::Ba
+                            (Kind::Ba, index)
                         }
                     }
-                    '<' => {
-                        if let Some((_, '=')) = chars.peek() {
-                            chars.next();
-                            Kind::Le
-                        } else if let Some((_, '<')) = chars.peek() {
-                            chars.next();
-                            Kind::Sl
+                    b'<' => {
+                        if let Some(b'=') = bytes.get(peek) {
+                            (Kind::Le, peek)
+                        } else if let Some(b'<') = bytes.get(peek) {
+                            (Kind::Sl, peek)
                         } else {
-                            Kind::Lt
+                            (Kind::Lt, index)
                         }
                     }
-                    '>' => {
-                        if let Some((_, '=')) = chars.peek() {
-                            chars.next();
-                            Kind::Ge
-                        } else if let Some((_, '>')) = chars.peek() {
-                            chars.next();
-                            Kind::Sr
+                    b'>' => {
+                        if let Some(b'=') = bytes.get(peek) {
+                            (Kind::Ge, peek)
+                        } else if let Some(b'>') = bytes.get(peek) {
+                            (Kind::Sr, peek)
                         } else {
-                            Kind::Gt
+                            (Kind::Gt, index)
                         }
                     }
-                    ',' => Kind::Comma,
-                    ';' => Kind::Semi,
-                    ':' => Kind::Colon,
-                    '.' => {
-                        if let Some((_, '.')) = chars.peek() {
-                            chars.next();
-                            if let Some((_, '=')) = chars.peek() {
-                                chars.next();
-                                Kind::Close
+                    b',' => (Kind::Comma, index),
+                    b';' => (Kind::Semi, index),
+                    b':' => (Kind::Colon, index),
+                    b'.' => {
+                        if let Some(b'.') = bytes.get(peek) {
+                            if let Some(b'=') = bytes.get(peek + 1) {
+                                (Kind::Close, peek + 1)
                             } else {
-                                Kind::Open
+                                (Kind::Open, peek)
                             }
                         } else {
-                            Kind::Dot
+                            (Kind::Dot, index)
                         }
                     }
-                    '(' => Kind::Lp,
-                    ')' => Kind::Rp,
-                    '{' => Kind::Lb,
-                    '}' => Kind::Rb,
-                    '[' => Kind::Ls,
-                    ']' => Kind::Rs,
-                    '"' => {
-                        let mut string = String::new();
-                        while let Some((_, peek)) = chars.peek() {
-                            if peek == &'"' {
-                                chars.next();
+                    b'(' => (Kind::Lp, index),
+                    b')' => (Kind::Rp, index),
+                    b'{' => (Kind::Lb, index),
+                    b'}' => (Kind::Rb, index),
+                    b'[' => (Kind::Ls, index),
+                    b']' => (Kind::Rs, index),
+                    b'"' => {
+                        let mut string = Vec::new();
+                        let mut valid = false;
+                        while let Some(byte) = bytes.get(peek) {
+                            if byte == &b'\\' {
+                                peek += 1;
+                                if let Some(byte) = bytes.get(peek) {
+                                    peek += 1;
+                                    match byte {
+                                        b'"' => string.push(b'"'),
+                                        b'\\' => string.push(b'\\'),
+                                        b'n' => string.push(b'\n'),
+                                        b'r' => string.push(b'\r'),
+                                        b't' => string.push(b'\t'),
+                                        b'0' => string.push(b'\0'),
+                                        byte => {
+                                            string.push(b'\\');
+                                            string.push(*byte);
+                                        }
+                                    }
+                                } else {
+                                    break;
+                                }
+                            } else if byte == &b'"' {
+                                valid = true;
                                 break;
                             } else {
-                                string.push(*peek);
-                                chars.next();
+                                string.push(*byte);
+                                peek += 1;
                             }
                         }
-                        Kind::String(string)
+                        if valid {
+                            match String::from_utf8(string) {
+                                Ok(string) => (Kind::String(string), peek),
+                                Err(error) => (Kind::Illegal(error.to_string()), peek),
+                            }
+                        } else {
+                            (Kind::Illegal(text[index + 1..peek].to_owned()), peek)
+                        }
                     }
-                    '0'..='9' => {
-                        //let mut number = String::from(char);
+                    b'0'..=b'9' => {
                         let mut point = false;
-                        let mut end = start;
-                        while let Some((index, peek)) = chars.peek() {
-                            if peek.is_ascii_digit() {
-                                //number.push(*peek);
-                                chars.next();
-                            } else if peek == &'.' {
-                                if text.chars().nth(*index + 1) == Some('.') {
+                        while let Some(byte) = bytes.get(peek) {
+                            if byte.is_ascii_digit() {
+                                peek += 1;
+                            } else if byte == &b'.' {
+                                if bytes.get(peek + 1) == Some(&b'.') {
                                     break;
                                 }
                                 point = true;
-                                //number.push(*peek);
-                                chars.next();
+                                peek += 1;
                             } else {
-                                end = *index;
                                 break;
                             }
                         }
-                        let number = text[start..end].to_owned();
+                        let number = text[index..peek].to_owned();
                         if point {
-                            Kind::Float(number)
+                            (Kind::Float(number), peek - 1)
                         } else {
-                            Kind::Integer(number)
+                            (Kind::Integer(number), peek - 1)
                         }
                     }
-                    'A'..='Z' | 'a'..='z' | '_' => {
-                        let mut end = start;
-                        while let Some((index, peek)) = chars.peek() {
-                            if peek.is_ascii_alphanumeric() || peek == &'_' {
-                                chars.next();
+                    b'A'..=b'Z' | b'a'..=b'z' | b'_' => {
+                        while let Some(byte) = bytes.get(peek) {
+                            if byte.is_ascii_alphanumeric() || byte == &b'_' {
+                                peek += 1;
                             } else {
-                                end = *index;
                                 break;
                             }
                         }
-                        match &text[start..end] {
-                            "true" => Kind::True,
-                            "false" => Kind::False,
-                            "fn" => Kind::Function,
-                            "let" => Kind::Let,
-                            "if" => Kind::If,
-                            "else" => Kind::Else,
-                            "test" => Kind::Test,
-                            "break" => Kind::Break,
-                            "continue" => Kind::Continue,
-                            "loop" => Kind::Loop,
-                            "while" => Kind::While,
-                            "for" => Kind::For,
-                            "in" => Kind::In,
-                            "client" => Kind::Client,
-                            literal => Kind::Ident(literal.to_owned()),
+                        (
+                            match &text[index..peek] {
+                                "true" => Kind::True,
+                                "false" => Kind::False,
+                                "fn" => Kind::Function,
+                                "let" => Kind::Let,
+                                "if" => Kind::If,
+                                "else" => Kind::Else,
+                                "test" => Kind::Test,
+                                "break" => Kind::Break,
+                                "continue" => Kind::Continue,
+                                "loop" => Kind::Loop,
+                                "while" => Kind::While,
+                                "for" => Kind::For,
+                                "in" => Kind::In,
+                                "client" => Kind::Client,
+                                literal => Kind::Ident(literal.to_owned()),
+                            },
+                            peek - 1,
+                        )
+                    }
+                    _ => {
+                        let rear = &text[index..];
+                        if let Some(char) = rear.chars().next() {
+                            let length = char.len_utf8();
+                            let end = index + length - 1;
+                            (Kind::Illegal(char.to_string()), end)
+                        } else {
+                            let end = index + rear.len() - 1;
+                            (Kind::Illegal(rear.to_string()), end)
                         }
                     }
-                    _ => Kind::Illegal(text[start..start + 1].to_owned()),
                 };
-                let end = start + kind.literal().len();
+                peek = end + 1;
                 let span = Span { start, end };
                 tokens.push(Token { kind, span });
             }
+            index = peek;
         }
         tokens.push(Token::new(
             Kind::Eof,
@@ -207,10 +234,10 @@ fn test_segment_base_tokens() {
 
             10 == 10;
             10 != 9;
-            "foobar"
-            "foo bar"
+            "hello"
+            "hello world"
             [1, 2];
-            {"foo": "bar"};
+            {"key": "value"};
             _a2
             left.field
             test expectStatusOk {
@@ -304,8 +331,8 @@ fn test_segment_base_tokens() {
         (Kind::Ne, "!="),
         (Kind::Integer("9".to_owned()), "9"),
         (Kind::Semi, ";"),
-        (Kind::String("foobar".to_owned()), "foobar"),
-        (Kind::String("foo bar".to_owned()), "foo bar"),
+        (Kind::String("hello".to_owned()), "hello"),
+        (Kind::String("hello world".to_owned()), "hello world"),
         (Kind::Ls, "["),
         (Kind::Integer("1".to_owned()), "1"),
         (Kind::Comma, ","),
@@ -313,9 +340,9 @@ fn test_segment_base_tokens() {
         (Kind::Rs, "]"),
         (Kind::Semi, ";"),
         (Kind::Lb, "{"),
-        (Kind::String("foo".to_owned()), "foo"),
+        (Kind::String("key".to_owned()), "key"),
         (Kind::Colon, ":"),
-        (Kind::String("bar".to_owned()), "bar"),
+        (Kind::String("value".to_owned()), "value"),
         (Kind::Rb, "}"),
         (Kind::Semi, ";"),
         (Kind::Ident("_a2".to_owned()), "_a2"),
@@ -389,37 +416,49 @@ fn test_segment_control_flow() {
         (Kind::Eof, "💥"),
     ];
     let tokens = Lexer::new().segment(text);
-    //assert_eq!(expect.len(), tokens.len());
+    assert_eq!(expect.len(), tokens.len());
     for (i, (kind, literal)) in expect.into_iter().enumerate() {
         let token = tokens.get(i).unwrap();
-        println!("{}, {}, {}", i, kind, literal);
+        println!("{}, {:?}, {} | {}", i, kind, literal, token.kind.literal());
         assert_eq!(kind, token.kind);
         assert_eq!(literal, token.kind.literal());
     }
 }
 
 #[test]
-fn test_segment_string_escapes() {
-    let tokens = Lexer::new().segment(r#""say \"hi\"\\path\n\t\(name)""#);
-    assert_eq!(
-        tokens[0].kind,
-        Kind::String(r#"say \"hi\"\\path\n\t\(name)"#.to_owned())
-    );
-    assert_eq!(tokens[0].kind.literal(), r#"say \"hi\"\\path\n\t\(name)"#);
+fn test_segment_token_locations() {
+    let text = "let x = 1;\n  test call {}";
+    let tokens = Lexer::new().segment(text);
+    assert_eq!((tokens[0].span.start, tokens[0].span.end), (0, 2));
+    assert_eq!(tokens[0].kind.literal(), &text[0..=2]);
+    assert_eq!((tokens[5].span.start, tokens[5].span.end), (13, 16));
+    assert_eq!(tokens[5].kind.literal(), &text[13..=16]);
 }
 
 #[test]
-fn test_segment_token_locations() {
-    let tokens = Lexer::new().segment("let x = 1;\n  test call {}");
-    assert_eq!((tokens[0].span.start, tokens[0].span.end), (0, 3));
-    assert_eq!((tokens[5].span.start, tokens[5].span.end), (13, 17));
+fn test_segment_string_escapes() {
+    let tokens = Lexer::new().segment(r#""say \"hi\"\\path\n\t\(name)""#);
+    let string = "say \"hi\"\\path\n\t\\(name)";
+    assert_eq!(tokens[0].kind.literal(), string);
+    assert_eq!(tokens[0].kind, Kind::String(string.to_string()));
+}
+
+#[test]
+fn test_segment_string_half() {
+    let tokens = Lexer::new().segment(r#"let string = "This is half; let x = 2;"#);
+    assert_eq!(
+        tokens[3].kind,
+        Kind::Illegal(r#"This is half; let x = 2;"#.to_owned())
+    );
 }
 
 #[test]
 fn test_segment_string_invalid() {
-    let tokens = Lexer::new().segment(r#""invalid\q""#);
-    assert_eq!(tokens[0].kind, Kind::Illegal(r#"invalid\q"#.to_owned()));
-    assert_eq!(tokens[0].kind.literal(), r#"invalid\q"#);
+    let string = r#"invalid\qline"#;
+    let text = format!("\"{}\"", string);
+    let tokens = Lexer::new().segment(text.as_str());
+    assert_eq!(tokens[0].kind, Kind::String(string.to_owned()));
+    assert_eq!(tokens[0].kind.literal(), string);
 }
 
 #[test]

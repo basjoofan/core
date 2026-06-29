@@ -55,7 +55,7 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
             let _ = write!(buffer, r#""request_name": "{}", "#, record.name);
             let _ = write!(buffer, r#""request_method": "{}", "#, record.request.method);
             let _ = write!(buffer, r#""request_url": "{}", "#, record.request.url);
-            let _ = write!(buffer, r#""request_version": "{}", "#, "HTTP/1.1");
+            let _ = write!(buffer, r#""request_version": "HTTP/1.1", "#);
             let _ = write!(buffer, r#""request_headers": ["#);
             let mut headers = record.request.headers.iter().peekable();
             while let Some(header) = headers.next() {

@@ -298,18 +298,15 @@ async fn read_source_bytes(path: PathBuf, text: &mut Vec<u8>) -> Result<(), Stri
         {
             Box::pin(read_source_bytes(entry.path(), text)).await?;
         }
-    } else if path.is_file() {
-        match path.extension().and_then(OsStr::to_str) {
-            Some("fan") => {
-                text.append(
-                    &mut read(&path)
-                        .await
-                        .map_err(|error| format!("Could not read {}: {error}", path.display()))?,
-                );
-                text.push(b'\n');
-            }
-            _ => {}
-        }
+    } else if path.is_file()
+        && let Some("fan") = path.extension().and_then(OsStr::to_str)
+    {
+        text.append(
+            &mut read(&path)
+                .await
+                .map_err(|error| format!("Could not read {}: {error}", path.display()))?,
+        );
+        text.push(b'\n');
     }
     Ok(())
 }

@@ -175,12 +175,6 @@ impl Kind {
     }
 }
 
-impl Display for Kind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.kind.literal())
-    }
-}
-
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.kind.literal())

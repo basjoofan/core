@@ -18,6 +18,7 @@ pub use time::Time;
 pub use url::Serializer;
 pub use url::Url;
 
+#[derive(Default)]
 pub struct Client {
     connect_tiomeout: std::time::Duration,
     // TODO read_tiomeout: Option<std::time::Duration>,
