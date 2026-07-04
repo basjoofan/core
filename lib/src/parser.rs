@@ -32,33 +32,6 @@ fn normalize_object_keys(expr: Expr) -> Expr {
     }
 }
 
-fn decode_string(literal: &str) -> String {
-    let mut decoded = String::with_capacity(literal.len());
-    let mut chars = literal.chars();
-    while let Some(character) = chars.next() {
-        if character != '\\' {
-            decoded.push(character);
-            continue;
-        }
-        match chars.next() {
-            Some('"') => decoded.push('"'),
-            Some('\\') => decoded.push('\\'),
-            Some('b') => decoded.push('\u{08}'),
-            Some('f') => decoded.push('\u{0c}'),
-            Some('n') => decoded.push('\n'),
-            Some('r') => decoded.push('\r'),
-            Some('t') => decoded.push('\t'),
-            Some('(') => decoded.push_str("\\("),
-            Some(escaped) => {
-                decoded.push('\\');
-                decoded.push(escaped);
-            }
-            None => decoded.push('\\'),
-        }
-    }
-    decoded
-}
-
 impl Parser {
     pub fn new(text: &str) -> Parser {
         Parser {
@@ -67,27 +40,27 @@ impl Parser {
         }
     }
 
-    fn next_token(&mut self) {
+    fn next(&mut self) {
         let index = self.index + 1;
         (index < self.tokens.len()).then(|| self.index = index);
     }
 
-    fn current_token(&self) -> &Token {
+    fn current(&self) -> &Token {
         &self.tokens[self.index]
     }
 
-    fn peek_token(&self) -> Option<&Token> {
+    fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.index + 1)
     }
 
-    fn peek_token_is(&self, kind: Kind) -> bool {
-        matches!(self.peek_token(), Some(peek) if peek.kind == kind)
+    fn peek_is(&self, kind: Kind) -> bool {
+        matches!(self.peek(), Some(peek) if peek.kind == kind)
     }
 
-    fn peek_token_expect(&mut self, kind: Kind) -> Result<(), String> {
-        if let Some(peek) = self.peek_token() {
+    fn peek_expect(&mut self, kind: Kind) -> Result<(), String> {
+        if let Some(peek) = self.peek() {
             if peek.kind == kind {
-                self.next_token();
+                self.next();
                 Ok(())
             } else {
                 Err(format!("token expect {:?} but found {:?}", kind, peek.kind))
@@ -97,25 +70,20 @@ impl Parser {
         }
     }
 
-    fn peek_token_expect_ident(&mut self) -> Result<(), String> {
-        if let Some(peek) = self.peek_token() {
-            if matches!(&peek.kind, Kind::Ident) {
-                self.next_token();
-                Ok(())
-            } else {
-                Err(format!("token expect ident but found {:?}", peek.kind))
-            }
+    fn current_expect_ident(&self, field: &str) -> Result<String, String> {
+        if matches!(&self.current().kind, Kind::Ident) {
+            Ok(self.parse_current_string())
         } else {
-            Err("token expect ident but found none".to_string())
+            Err(format!("{field} must be an identifier"))
         }
     }
 
-    fn current_precedence(&self) -> u8 {
-        self.current_token().rule()
+    fn current_rule(&self) -> u8 {
+        self.current().rule()
     }
 
-    fn peek_precedence(&self) -> u8 {
-        if let Some(peek) = self.peek_token() {
+    fn peek_rule(&self) -> u8 {
+        if let Some(peek) = self.peek() {
             peek.rule()
         } else {
             u8::MIN
@@ -131,8 +99,8 @@ impl Parser {
         let mut functions = HashMap::new();
         let mut tests = HashMap::new();
         let mut clients = Clients::default();
-        while self.current_token().kind != Kind::Eof {
-            match self.current_token().kind {
+        while self.current().kind != Kind::Eof {
+            match self.current().kind {
                 Kind::Client => {
                     let client = self
                         .parse_client_literal()
@@ -160,10 +128,10 @@ impl Parser {
                         .map_err(|error| self.locate_error(error))?,
                 ),
             }
-            if self.peek_token_is(Kind::Semi) {
-                self.next_token();
+            if self.peek_is(Kind::Semi) {
+                self.next();
             }
-            self.next_token();
+            self.next();
         }
         Ok(Source {
             base: base.to_owned(),
@@ -175,19 +143,19 @@ impl Parser {
     }
 
     fn locate_error(&self, error: String) -> String {
-        let token = self.current_token();
+        let token = self.current();
         format!("{}:{}: {error}", token.span.start, token.span.end)
     }
 
-    fn parse_expr(&mut self, mut precedence: u8) -> Result<Expr, String> {
-        let mut left = match self.current_token().kind {
+    fn parse_expr(&mut self, mut rule: u8) -> Result<Expr, String> {
+        let mut left = match self.current().kind {
             Kind::Ident => self.parse_ident_expr(),
             Kind::Integer => self.parse_integer_literal()?,
             Kind::Float => self.parse_float_literal()?,
             Kind::True | Kind::False => self.parse_boolean_literal()?,
             Kind::String => self.parse_string_literal(),
             Kind::Let => {
-                precedence = u8::MAX;
+                rule = u8::MAX;
                 self.parse_let_expr()?
             }
             Kind::Not | Kind::Sub => self.parse_unary_expr()?,
@@ -201,10 +169,10 @@ impl Parser {
             Kind::Open | Kind::Close => self.parse_prefix_range_expr()?,
             Kind::Ls => self.parse_array_literal()?,
             Kind::Lb => self.parse_map_literal()?,
-            _ => Err(format!("parse expr error: {}", self.current_token()))?,
+            _ => Err(format!("parse expr error: {}", self.current()))?,
         };
-        while !self.peek_token_is(Kind::Semi) && precedence < self.peek_precedence() {
-            left = match self.peek_token() {
+        while !self.peek_is(Kind::Semi) && rule < self.peek_rule() {
+            left = match self.peek() {
                 Some(Token {
                     kind: Kind::Add, ..
                 })
@@ -233,7 +201,7 @@ impl Parser {
                 | Some(Token { kind: Kind::Ge, .. })
                 | Some(Token { kind: Kind::Eq, .. })
                 | Some(Token { kind: Kind::Ne, .. }) => {
-                    self.next_token();
+                    self.next();
                     self.parse_binary_expr(left)?
                 }
                 Some(Token {
@@ -242,21 +210,21 @@ impl Parser {
                 | Some(Token {
                     kind: Kind::Close, ..
                 }) => {
-                    self.next_token();
+                    self.next();
                     self.parse_infix_range_expr(left)?
                 }
                 Some(Token { kind: Kind::Lp, .. }) => {
-                    self.next_token();
+                    self.next();
                     self.parse_call_expr(left)?
                 }
                 Some(Token { kind: Kind::Ls, .. }) => {
-                    self.next_token();
+                    self.next();
                     self.parse_index_expr(left)?
                 }
                 Some(Token {
                     kind: Kind::Dot, ..
                 }) => {
-                    self.next_token();
+                    self.next();
                     self.parse_field_expr(left)?
                 }
                 _ => left,
@@ -270,15 +238,11 @@ impl Parser {
     }
 
     fn parse_current_string(&self) -> String {
-        let token = self.current_token();
-        match &token.kind {
-            Kind::String => decode_string(&token.lite),
-            _ => token.lite.to_owned(),
-        }
+        self.current().lite.to_owned()
     }
 
     fn parse_integer_literal(&self) -> Result<Expr, String> {
-        let token = self.current_token();
+        let token = self.current();
         match token.lite.parse::<i64>() {
             Ok(integer) => Ok(Expr::Integer(integer)),
             Err(_) => Err(format!("parse integer error: {token}")),
@@ -286,7 +250,7 @@ impl Parser {
     }
 
     fn parse_float_literal(&self) -> Result<Expr, String> {
-        let token = self.current_token();
+        let token = self.current();
         match token.lite.parse::<f64>() {
             Ok(float) => Ok(Expr::Float(float)),
             Err(_) => Err(format!("parse float error: {token}")),
@@ -294,7 +258,7 @@ impl Parser {
     }
 
     fn parse_boolean_literal(&self) -> Result<Expr, String> {
-        let token = self.current_token();
+        let token = self.current();
         match token.kind {
             Kind::True => Ok(Expr::Boolean(true)),
             Kind::False => Ok(Expr::Boolean(false)),
@@ -307,52 +271,52 @@ impl Parser {
     }
 
     fn parse_let_expr(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect_ident()?;
+        self.peek_expect(Kind::Ident)?;
         let name = self.parse_current_string();
-        self.peek_token_expect(Kind::Assign)?;
-        self.next_token();
+        self.peek_expect(Kind::Assign)?;
+        self.next();
         let value = self.parse_expr(u8::MIN)?;
-        if self.peek_token_is(Kind::Semi) {
-            self.next_token();
+        if self.peek_is(Kind::Semi) {
+            self.next();
         }
         Ok(Expr::Let(name, Box::new(value)))
     }
 
     fn parse_unary_expr(&mut self) -> Result<Expr, String> {
-        let token = self.current_token().clone();
-        let mut precedence = self.current_precedence();
+        let token = self.current().clone();
+        let mut rule = self.current_rule();
         (token.kind == Kind::Sub).then(|| {
-            precedence += 2;
+            rule += 2;
         });
-        self.next_token();
-        let right = self.parse_expr(precedence)?;
+        self.next();
+        let right = self.parse_expr(rule)?;
         Ok(Expr::Unary(token, Box::new(right)))
     }
 
     fn parse_binary_expr(&mut self, left: Expr) -> Result<Expr, String> {
-        let token = self.current_token().clone();
-        let precedence = self.current_precedence();
-        self.next_token();
-        let right = self.parse_expr(precedence)?;
+        let token = self.current().clone();
+        let rule = self.current_rule();
+        self.next();
+        let right = self.parse_expr(rule)?;
         Ok(Expr::Binary(token, Box::new(left), Box::new(right)))
     }
 
     fn parse_paren_expr(&mut self) -> Result<Expr, String> {
-        self.next_token();
+        self.next();
         let expr = self.parse_expr(u8::MIN)?;
-        self.peek_token_expect(Kind::Rp)?;
+        self.peek_expect(Kind::Rp)?;
         Ok(Expr::Paren(Box::new(expr)))
     }
 
     fn parse_if_expr(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Lp)?;
-        self.next_token();
+        self.peek_expect(Kind::Lp)?;
+        self.next();
         let condition = self.parse_expr(u8::MIN)?;
-        self.peek_token_expect(Kind::Rp)?;
+        self.peek_expect(Kind::Rp)?;
         let consequence = self.parse_block_expr()?;
         let mut alternative = Vec::new();
-        if self.peek_token_is(Kind::Else) {
-            self.next_token();
+        if self.peek_is(Kind::Else) {
+            self.next();
             alternative = self.parse_block_expr()?;
         }
         Ok(Expr::If(Box::new(condition), consequence, alternative))
@@ -360,7 +324,7 @@ impl Parser {
 
     fn parse_break_expr(&mut self) -> Result<Expr, String> {
         let value = if self.peek_starts_expr() {
-            self.next_token();
+            self.next();
             Some(Box::new(self.parse_expr(u8::MIN)?))
         } else {
             None
@@ -378,29 +342,29 @@ impl Parser {
     }
 
     fn parse_while_expr(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect(Kind::Lp)?;
-        self.next_token();
+        self.peek_expect(Kind::Lp)?;
+        self.next();
         let condition = self.parse_expr(u8::MIN)?;
-        self.peek_token_expect(Kind::Rp)?;
+        self.peek_expect(Kind::Rp)?;
         let body = self.parse_block_expr()?;
         Ok(Expr::While(Box::new(condition), body))
     }
 
     fn parse_for_expr(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect_ident()?;
+        self.peek_expect(Kind::Ident)?;
         let binding = self.parse_current_string();
-        self.peek_token_expect(Kind::In)?;
-        self.next_token();
+        self.peek_expect(Kind::In)?;
+        self.next();
         let iterator = self.parse_expr(u8::MIN)?;
         let body = self.parse_block_expr()?;
         Ok(Expr::Cursor(binding, Box::new(iterator), body))
     }
 
     fn parse_prefix_range_expr(&mut self) -> Result<Expr, String> {
-        let inclusive = self.current_token().kind == Kind::Close;
+        let inclusive = self.current().kind == Kind::Close;
         let end = if self.peek_starts_range_end() {
-            self.next_token();
-            Some(Box::new(self.parse_expr(self.current_precedence())?))
+            self.next();
+            Some(Box::new(self.parse_expr(self.current_rule())?))
         } else {
             None
         };
@@ -408,11 +372,11 @@ impl Parser {
     }
 
     fn parse_infix_range_expr(&mut self, left: Expr) -> Result<Expr, String> {
-        let inclusive = self.current_token().kind == Kind::Close;
+        let inclusive = self.current().kind == Kind::Close;
         let end = if self.peek_starts_range_end() {
-            let precedence = self.current_precedence();
-            self.next_token();
-            Some(Box::new(self.parse_expr(precedence)?))
+            let rule = self.current_rule();
+            self.next();
+            Some(Box::new(self.parse_expr(rule)?))
         } else {
             None
         };
@@ -421,7 +385,7 @@ impl Parser {
 
     fn peek_starts_expr(&self) -> bool {
         matches!(
-            self.peek_token().map(|token| &token.kind),
+            self.peek().map(|token| &token.kind),
             Some(
                 Kind::Ident
                     | Kind::Integer
@@ -448,7 +412,7 @@ impl Parser {
     }
 
     fn peek_starts_range_end(&self) -> bool {
-        self.peek_starts_expr() && !self.peek_token_is(Kind::Lb)
+        self.peek_starts_expr() && !self.peek_is(Kind::Lb)
     }
 
     fn parse_call_expr(&mut self, function: Expr) -> Result<Expr, String> {
@@ -458,14 +422,14 @@ impl Parser {
 
     fn parse_expr_list(&mut self, end: Kind) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
-        while !self.peek_token_is(end.clone()) {
-            self.next_token();
+        while !self.peek_is(end.clone()) {
+            self.next();
             exprs.push(self.parse_expr(u8::MIN)?);
-            if !self.peek_token_is(end.clone()) {
-                self.peek_token_expect(Kind::Comma)?;
+            if !self.peek_is(end.clone()) {
+                self.peek_expect(Kind::Comma)?;
             }
         }
-        self.peek_token_expect(end)?;
+        self.peek_expect(end)?;
         Ok(exprs)
     }
 
@@ -476,25 +440,25 @@ impl Parser {
 
     fn parse_map_literal(&mut self) -> Result<Expr, String> {
         let mut pairs = Vec::new();
-        while !self.peek_token_is(Kind::Rb) {
-            self.next_token();
+        while !self.peek_is(Kind::Rb) {
+            self.next();
             let key = self.parse_expr(u8::MIN)?;
-            self.peek_token_expect(Kind::Colon)?;
-            self.next_token();
+            self.peek_expect(Kind::Colon)?;
+            self.next();
             let value = self.parse_expr(u8::MIN)?;
             pairs.push((key, value));
-            if !self.peek_token_is(Kind::Rb) {
-                self.peek_token_expect(Kind::Comma)?;
+            if !self.peek_is(Kind::Rb) {
+                self.peek_expect(Kind::Comma)?;
             }
         }
-        self.peek_token_expect(Kind::Rb)?;
+        self.peek_expect(Kind::Rb)?;
         Ok(Expr::Map(pairs))
     }
 
     fn parse_client_literal(&mut self) -> Result<Client, String> {
-        self.peek_token_expect_ident()?;
+        self.peek_expect(Kind::Ident)?;
         let name = self.parse_current_string();
-        self.peek_token_expect(Kind::Lb)?;
+        self.peek_expect(Kind::Lb)?;
 
         let mut fields = HashSet::new();
         let mut scheme = None;
@@ -502,17 +466,17 @@ impl Parser {
         let mut port = None;
         let mut requests = None;
 
-        while !self.peek_token_is(Kind::Rb) {
-            self.next_token();
+        while !self.peek_is(Kind::Rb) {
+            self.next();
             let field = self.parse_object_field_name("client")?;
             if !fields.insert(field.clone()) {
                 return Err(format!("duplicate client field '{field}'"));
             }
-            self.peek_token_expect(Kind::Colon)?;
-            self.next_token();
+            self.peek_expect(Kind::Colon)?;
+            self.next();
             match field.as_str() {
                 "scheme" => {
-                    let value = self.expect_ident("scheme")?;
+                    let value = self.current_expect_ident("scheme")?;
                     scheme = Some(match value.as_str() {
                         "http" | "https" => Scheme::from(value.as_str()),
                         _ => return Err(format!("unknown scheme '{value}'")),
@@ -520,7 +484,7 @@ impl Parser {
                 }
                 "host" => host = Some(self.parse_expr(u8::MIN)?),
                 "port" => {
-                    let token = self.current_token();
+                    let token = self.current();
                     if !matches!(&token.kind, Kind::Integer) {
                         return Err("client port must be an integer".to_string());
                     }
@@ -536,7 +500,7 @@ impl Parser {
             }
             self.consume_object_separator(Kind::Rb)?;
         }
-        self.peek_token_expect(Kind::Rb)?;
+        self.peek_expect(Kind::Rb)?;
 
         let scheme = scheme.ok_or_else(|| "missing required client field 'scheme'".to_string())?;
         let host = host.ok_or_else(|| "missing required client field 'host'".to_string())?;
@@ -555,28 +519,28 @@ impl Parser {
     }
 
     fn parse_requests_literal(&mut self) -> Result<HashMap<String, Request>, String> {
-        if self.current_token().kind != Kind::Lb {
+        if self.current().kind != Kind::Lb {
             return Err("requests must be an object".to_string());
         }
         let mut requests = HashMap::new();
-        while !self.peek_token_is(Kind::Rb) {
-            self.next_token();
+        while !self.peek_is(Kind::Rb) {
+            self.next();
             let name = self.parse_object_field_name("request")?;
             if requests.contains_key(&name) {
                 return Err(format!("duplicate request '{name}'"));
             }
-            self.peek_token_expect(Kind::Colon)?;
-            self.next_token();
+            self.peek_expect(Kind::Colon)?;
+            self.next();
             let request = self.parse_request_literal(&name)?;
             requests.insert(name, request);
             self.consume_object_separator(Kind::Rb)?;
         }
-        self.peek_token_expect(Kind::Rb)?;
+        self.peek_expect(Kind::Rb)?;
         Ok(requests)
     }
 
     fn parse_request_literal(&mut self, request_name: &str) -> Result<Request, String> {
-        if self.current_token().kind != Kind::Lb {
+        if self.current().kind != Kind::Lb {
             return Err(format!("request '{request_name}' must be an object"));
         }
         let mut fields = HashSet::new();
@@ -587,20 +551,20 @@ impl Parser {
         let mut body = None;
         let mut asserts = Vec::new();
 
-        while !self.peek_token_is(Kind::Rb) {
-            self.next_token();
+        while !self.peek_is(Kind::Rb) {
+            self.next();
             let field = self.parse_object_field_name("request")?;
             if !fields.insert(field.clone()) {
                 return Err(format!(
                     "duplicate field '{field}' in request '{request_name}'"
                 ));
             }
-            self.peek_token_expect(Kind::Colon)?;
-            self.next_token();
+            self.peek_expect(Kind::Colon)?;
+            self.next();
             match field.as_str() {
                 "path" => path = Some(self.parse_expr(u8::MIN)?),
                 "method" => {
-                    let value = self.expect_ident("method")?;
+                    let value = self.current_expect_ident("method")?;
                     method = Some(match value.as_str() {
                         "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD"
                         | "TRACE" | "CONNECT" => Method::from(value.as_str()),
@@ -620,7 +584,7 @@ impl Parser {
             }
             self.consume_object_separator(Kind::Rb)?;
         }
-        self.peek_token_expect(Kind::Rb)?;
+        self.peek_expect(Kind::Rb)?;
 
         Ok(Request {
             path: path.ok_or_else(|| format!("request '{request_name}' is missing 'path'"))?,
@@ -653,7 +617,7 @@ impl Parser {
     }
 
     fn parse_object_field_name(&self, object: &str) -> Result<String, String> {
-        match self.current_token().kind {
+        match self.current().kind {
             Kind::Ident | Kind::String => Ok(self.parse_current_string()),
             _ => Err(format!(
                 "{object} field name must be an identifier or string"
@@ -661,67 +625,59 @@ impl Parser {
         }
     }
 
-    fn expect_ident(&self, field: &str) -> Result<String, String> {
-        if matches!(&self.current_token().kind, Kind::Ident) {
-            Ok(self.parse_current_string())
-        } else {
-            Err(format!("{field} must be an identifier"))
-        }
-    }
-
     fn consume_object_separator(&mut self, end: Kind) -> Result<(), String> {
-        if !self.peek_token_is(end) {
-            self.peek_token_expect(Kind::Comma)?;
+        if !self.peek_is(end) {
+            self.peek_expect(Kind::Comma)?;
         }
         Ok(())
     }
 
     fn parse_index_expr(&mut self, left: Expr) -> Result<Expr, String> {
-        self.next_token();
+        self.next();
         let index = self.parse_expr(u8::MIN)?;
-        self.peek_token_expect(Kind::Rs)?;
+        self.peek_expect(Kind::Rs)?;
         Ok(Expr::Index(Box::new(left), Box::new(index)))
     }
 
     fn parse_field_expr(&mut self, left: Expr) -> Result<Expr, String> {
-        self.peek_token_expect_ident()?;
+        self.peek_expect(Kind::Ident)?;
         let field = self.parse_current_string();
         Ok(Expr::Field(Box::new(left), field))
     }
 
     fn parse_block_expr(&mut self) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
-        self.peek_token_expect(Kind::Lb)?;
-        while !self.peek_token_is(Kind::Rb) {
-            self.next_token();
+        self.peek_expect(Kind::Lb)?;
+        while !self.peek_is(Kind::Rb) {
+            self.next();
             exprs.push(self.parse_expr(u8::MIN)?);
-            if self.peek_token_is(Kind::Semi) {
-                self.next_token();
+            if self.peek_is(Kind::Semi) {
+                self.next();
             }
         }
-        self.peek_token_expect(Kind::Rb)?;
+        self.peek_expect(Kind::Rb)?;
         Ok(exprs)
     }
 
     fn parse_function_literal(&mut self) -> Result<Expr, String> {
-        self.peek_token_expect_ident()?;
+        self.peek_expect(Kind::Ident)?;
         let name = self.parse_current_string();
-        self.peek_token_expect(Kind::Lp)?;
+        self.peek_expect(Kind::Lp)?;
         let mut params = Vec::new();
-        while !self.peek_token_is(Kind::Rp) {
-            self.peek_token_expect_ident()?;
+        while !self.peek_is(Kind::Rp) {
+            self.peek_expect(Kind::Ident)?;
             params.push(self.parse_current_string());
-            if !self.peek_token_is(Kind::Rp) {
-                self.peek_token_expect(Kind::Comma)?;
+            if !self.peek_is(Kind::Rp) {
+                self.peek_expect(Kind::Comma)?;
             }
         }
-        self.peek_token_expect(Kind::Rp)?;
+        self.peek_expect(Kind::Rp)?;
         let block = self.parse_block_expr()?;
         Ok(Expr::Function(name, params, block))
     }
 
     fn parse_test_literal(&mut self) -> Result<(String, Vec<Expr>), String> {
-        self.peek_token_expect_ident()?;
+        self.peek_expect(Kind::Ident)?;
         let name = self.parse_current_string();
         let block = self.parse_block_expr()?;
         Ok((name, block))
@@ -940,7 +896,7 @@ fn test_parse_binary_expr() {
 }
 
 #[test]
-fn test_parse_operator_precedence() {
+fn test_parse_operator_rule() {
     let tests = vec![
         ("-a * b", "((-a) * b)"),
         ("!-a", "(!(-a))"),
