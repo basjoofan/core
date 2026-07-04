@@ -1,3 +1,9 @@
+macro_rules! string {
+    ($text:expr, $range:expr) => {
+        $text[$range].to_owned()
+    };
+}
+
 pub mod client;
 mod context;
 mod evaluator;

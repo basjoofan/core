@@ -4,15 +4,15 @@ use std::fmt::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
-    Illegal(String), // illegal token
-    Eof,             // end of file
+    Illegal, // illegal token
+    Eof,     // end of file
     // literal
-    Ident(String),   // add, x, y ...
-    Integer(String), // 123456789
-    Float(String),   // 3.14159265358979323846264338327950288
-    True,            // true
-    False,           // false
-    String(String),  // "Hello world!"
+    Ident,   // add, x, y ...
+    Integer, // 123456789
+    Float,   // 3.14159265358979323846264338327950288
+    True,    // true
+    False,   // false
+    String,  // "Hello world!"
     // keyword
     Function, // fn
     Let,      // let
@@ -73,14 +73,23 @@ pub struct Span {
 pub struct Token {
     pub kind: Kind,
     pub span: Span,
+    pub lite: String,
 }
 
 impl Token {
-    pub fn new(kind: Kind, span: Span) -> Token {
-        Token { kind, span }
+    pub fn new(kind: Kind, span: Span, lite: String) -> Token {
+        Token {
+            kind,
+            span,
+            lite,
+        }
     }
 
-    pub fn precedence(&self) -> u8 {
+    pub fn lite(&self) -> &str {
+        self.lite.as_str()
+    }
+
+    pub fn rule(&self) -> u8 {
         match self.kind {
             Kind::Lo => 1,    // a || b
             Kind::Open => 1,  // a..b
@@ -112,71 +121,8 @@ impl Token {
     }
 }
 
-impl Kind {
-    pub fn same(&self, other: &Kind) -> bool {
-        std::mem::discriminant(self) == std::mem::discriminant(other)
-    }
-
-    pub fn literal(&self) -> &str {
-        match self {
-            Kind::Illegal(literal)
-            | Kind::Ident(literal)
-            | Kind::Integer(literal)
-            | Kind::Float(literal)
-            | Kind::String(literal) => literal,
-            Kind::Eof => "💥",
-            Kind::True => "true",
-            Kind::False => "false",
-            Kind::Add => "+",
-            Kind::Sub => "-",
-            Kind::Mul => "*",
-            Kind::Div => "/",
-            Kind::Rem => "%",
-            Kind::Not => "!",
-            Kind::Bx => "^",
-            Kind::Bo => "|",
-            Kind::Ba => "&",
-            Kind::Sl => "<<",
-            Kind::Sr => ">>",
-            Kind::Lo => "||",
-            Kind::La => "&&",
-            Kind::Lt => "<",
-            Kind::Gt => ">",
-            Kind::Le => "<=",
-            Kind::Ge => ">=",
-            Kind::Eq => "==",
-            Kind::Ne => "!=",
-            Kind::Assign => "=",
-            Kind::Comma => ",",
-            Kind::Semi => ";",
-            Kind::Colon => ":",
-            Kind::Dot => ".",
-            Kind::Open => "..",
-            Kind::Close => "..=",
-            Kind::Lp => "(",
-            Kind::Rp => ")",
-            Kind::Lb => "{",
-            Kind::Rb => "}",
-            Kind::Ls => "[",
-            Kind::Rs => "]",
-            Kind::Function => "fn",
-            Kind::Let => "let",
-            Kind::If => "if",
-            Kind::Else => "else",
-            Kind::Test => "test",
-            Kind::Break => "break",
-            Kind::Continue => "continue",
-            Kind::Loop => "loop",
-            Kind::While => "while",
-            Kind::For => "for",
-            Kind::In => "in",
-            Kind::Client => "client",
-        }
-    }
-}
-
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.kind.literal())
+        write!(f, "{}", self.lite())
     }
 }
