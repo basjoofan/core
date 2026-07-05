@@ -158,7 +158,7 @@ impl Parser {
             Kind::Loop => self.parse_loop_expr()?,
             Kind::While => self.parse_while_expr()?,
             Kind::For => self.parse_for_expr()?,
-            Kind::Open | Kind::Close => self.parse_prefix_range_expr()?,
+            Kind::Open | Kind::Close => self.parse_range_expr(None)?,
             Kind::Ls => self.parse_array_literal()?,
             Kind::Lb => self.parse_map_literal()?,
             _ => Err(format!("parse expr error: {}", self.current()))?,
@@ -203,7 +203,7 @@ impl Parser {
                     kind: Kind::Close, ..
                 }) => {
                     self.next();
-                    self.parse_infix_range_expr(left)?
+                    self.parse_range_expr(Some(left))?
                 }
                 Some(Token { kind: Kind::Lp, .. }) => {
                     self.next();
@@ -352,18 +352,7 @@ impl Parser {
         Ok(Expr::Cursor(binding, Box::new(iterator), body))
     }
 
-    fn parse_prefix_range_expr(&mut self) -> Result<Expr, String> {
-        let inclusive = self.current().kind == Kind::Close;
-        let end = if self.peek_starts_range_end() {
-            self.next();
-            Some(Box::new(self.parse_expr(self.current_rule())?))
-        } else {
-            None
-        };
-        Ok(Expr::Range(None, end, inclusive))
-    }
-
-    fn parse_infix_range_expr(&mut self, left: Expr) -> Result<Expr, String> {
+    fn parse_range_expr(&mut self, start: Option<Expr>) -> Result<Expr, String> {
         let inclusive = self.current().kind == Kind::Close;
         let end = if self.peek_starts_range_end() {
             let rule = self.current_rule();
@@ -372,7 +361,7 @@ impl Parser {
         } else {
             None
         };
-        Ok(Expr::Range(Some(Box::new(left)), end, inclusive))
+        Ok(Expr::Range(start.map(Box::new), end, inclusive))
     }
 
     fn peek_starts_expr(&self) -> bool {
