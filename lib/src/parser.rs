@@ -41,8 +41,7 @@ impl Parser {
     }
 
     fn next(&mut self) {
-        let index = self.index + 1;
-        (index < self.tokens.len()).then(|| self.index = index);
+        self.index += 1;
     }
 
     fn current(&self) -> &Token {
@@ -99,8 +98,8 @@ impl Parser {
         let mut exprs = Vec::new();
         let mut functions = HashMap::new();
         let mut tests = HashMap::new();
-        let mut clients = Clients::default();
-        while self.current().kind != Kind::Eof {
+        let mut clients = Clients::new();
+        while self.index < self.tokens.len() {
             match self.current().kind {
                 Kind::Client => {
                     let client = self

@@ -5,7 +5,6 @@ use std::fmt::Result;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
     Illegal, // illegal token
-    Eof,     // end of file
     // literal
     Ident,   // add, x, y ...
     Integer, // 123456789

@@ -199,14 +199,6 @@ impl Lexer {
             }
             index = peek;
         }
-        tokens.push(Token::new(
-            Kind::Eof,
-            Span {
-                start: text.len(),
-                end: text.len(),
-            },
-            "💥".to_owned(),
-        ));
         tokens
     }
 }
@@ -374,7 +366,6 @@ fn test_segment_base_tokens() {
         (Kind::False, "false"),
         (Kind::Lo, "||"),
         (Kind::True, "true"),
-        (Kind::Eof, "💥"),
     ];
     let tokens = Lexer::new().segment(text);
     assert_eq!(expect.len(), tokens.len());
@@ -411,7 +402,6 @@ fn test_segment_control_flow() {
         (Kind::Integer, "2"),
         (Kind::Close, "..="),
         (Kind::Integer, "2"),
-        (Kind::Eof, "💥"),
     ];
     let tokens = Lexer::new().segment(text);
     assert_eq!(expect.len(), tokens.len());
