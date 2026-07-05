@@ -53,7 +53,7 @@ impl Parser {
         self.tokens.get(self.index + 1)
     }
 
-    fn peek_is(&self, kind: Kind) -> bool {
+    fn peek_equal(&self, kind: Kind) -> bool {
         matches!(self.peek(), Some(peek) if peek.kind == kind)
     }
 
@@ -90,11 +90,12 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Source, String> {
-        self.parse_with_base("./")
+    fn error(&self, error: String) -> String {
+        let token = self.current();
+        format!("{}:{}: {error}", token.span.start, token.span.end)
     }
 
-    pub fn parse_with_base(&mut self, base: &str) -> Result<Source, String> {
+    pub fn parse(&mut self) -> Result<Source, String> {
         let mut exprs = Vec::new();
         let mut functions = HashMap::new();
         let mut tests = HashMap::new();
@@ -104,15 +105,13 @@ impl Parser {
                 Kind::Client => {
                     let client = self
                         .parse_client_literal()
-                        .map_err(|error| self.locate_error(error))?;
-                    clients
-                        .insert(client)
-                        .map_err(|error| self.locate_error(error))?;
+                        .map_err(|error| self.error(error))?;
+                    clients.insert(client).map_err(|error| self.error(error))?;
                 }
                 Kind::Function => {
                     if let Expr::Function(name, params, block) = self
                         .parse_function_literal()
-                        .map_err(|error| self.locate_error(error))?
+                        .map_err(|error| self.error(error))?
                     {
                         functions.insert(name, (params, block));
                     }
@@ -120,31 +119,25 @@ impl Parser {
                 Kind::Test => {
                     let (name, block) = self
                         .parse_test_literal()
-                        .map_err(|error| self.locate_error(error))?;
+                        .map_err(|error| self.error(error))?;
                     tests.insert(name, block);
                 }
                 _ => exprs.push(
                     self.parse_expr(u8::MIN)
-                        .map_err(|error| self.locate_error(error))?,
+                        .map_err(|error| self.error(error))?,
                 ),
             }
-            if self.peek_is(Kind::Semi) {
+            if self.peek_equal(Kind::Semi) {
                 self.next();
             }
             self.next();
         }
         Ok(Source {
-            base: base.to_owned(),
             exprs,
             functions,
             clients,
             tests,
         })
-    }
-
-    fn locate_error(&self, error: String) -> String {
-        let token = self.current();
-        format!("{}:{}: {error}", token.span.start, token.span.end)
     }
 
     fn parse_expr(&mut self, mut rule: u8) -> Result<Expr, String> {
@@ -171,7 +164,7 @@ impl Parser {
             Kind::Lb => self.parse_map_literal()?,
             _ => Err(format!("parse expr error: {}", self.current()))?,
         };
-        while !self.peek_is(Kind::Semi) && rule < self.peek_rule() {
+        while !self.peek_equal(Kind::Semi) && rule < self.peek_rule() {
             left = match self.peek() {
                 Some(Token {
                     kind: Kind::Add, ..
@@ -276,7 +269,7 @@ impl Parser {
         self.peek_expect(Kind::Assign)?;
         self.next();
         let value = self.parse_expr(u8::MIN)?;
-        if self.peek_is(Kind::Semi) {
+        if self.peek_equal(Kind::Semi) {
             self.next();
         }
         Ok(Expr::Let(name, Box::new(value)))
@@ -315,7 +308,7 @@ impl Parser {
         self.peek_expect(Kind::Rp)?;
         let consequence = self.parse_block_expr()?;
         let mut alternative = Vec::new();
-        if self.peek_is(Kind::Else) {
+        if self.peek_equal(Kind::Else) {
             self.next();
             alternative = self.parse_block_expr()?;
         }
@@ -412,7 +405,7 @@ impl Parser {
     }
 
     fn peek_starts_range_end(&self) -> bool {
-        self.peek_starts_expr() && !self.peek_is(Kind::Lb)
+        self.peek_starts_expr() && !self.peek_equal(Kind::Lb)
     }
 
     fn parse_call_expr(&mut self, function: Expr) -> Result<Expr, String> {
@@ -422,10 +415,10 @@ impl Parser {
 
     fn parse_expr_list(&mut self, end: Kind) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
-        while !self.peek_is(end.clone()) {
+        while !self.peek_equal(end.clone()) {
             self.next();
             exprs.push(self.parse_expr(u8::MIN)?);
-            if !self.peek_is(end.clone()) {
+            if !self.peek_equal(end.clone()) {
                 self.peek_expect(Kind::Comma)?;
             }
         }
@@ -440,14 +433,14 @@ impl Parser {
 
     fn parse_map_literal(&mut self) -> Result<Expr, String> {
         let mut pairs = Vec::new();
-        while !self.peek_is(Kind::Rb) {
+        while !self.peek_equal(Kind::Rb) {
             self.next();
             let key = self.parse_expr(u8::MIN)?;
             self.peek_expect(Kind::Colon)?;
             self.next();
             let value = self.parse_expr(u8::MIN)?;
             pairs.push((key, value));
-            if !self.peek_is(Kind::Rb) {
+            if !self.peek_equal(Kind::Rb) {
                 self.peek_expect(Kind::Comma)?;
             }
         }
@@ -466,7 +459,7 @@ impl Parser {
         let mut port = None;
         let mut requests = None;
 
-        while !self.peek_is(Kind::Rb) {
+        while !self.peek_equal(Kind::Rb) {
             self.next();
             let field = self.parse_object_field_name("client")?;
             if !fields.insert(field.clone()) {
@@ -523,7 +516,7 @@ impl Parser {
             return Err("requests must be an object".to_string());
         }
         let mut requests = HashMap::new();
-        while !self.peek_is(Kind::Rb) {
+        while !self.peek_equal(Kind::Rb) {
             self.next();
             let name = self.parse_object_field_name("request")?;
             if requests.contains_key(&name) {
@@ -551,7 +544,7 @@ impl Parser {
         let mut body = None;
         let mut asserts = Vec::new();
 
-        while !self.peek_is(Kind::Rb) {
+        while !self.peek_equal(Kind::Rb) {
             self.next();
             let field = self.parse_object_field_name("request")?;
             if !fields.insert(field.clone()) {
@@ -626,7 +619,7 @@ impl Parser {
     }
 
     fn consume_object_separator(&mut self, end: Kind) -> Result<(), String> {
-        if !self.peek_is(end) {
+        if !self.peek_equal(end) {
             self.peek_expect(Kind::Comma)?;
         }
         Ok(())
@@ -648,10 +641,10 @@ impl Parser {
     fn parse_block_expr(&mut self) -> Result<Vec<Expr>, String> {
         let mut exprs = Vec::new();
         self.peek_expect(Kind::Lb)?;
-        while !self.peek_is(Kind::Rb) {
+        while !self.peek_equal(Kind::Rb) {
             self.next();
             exprs.push(self.parse_expr(u8::MIN)?);
-            if self.peek_is(Kind::Semi) {
+            if self.peek_equal(Kind::Semi) {
                 self.next();
             }
         }
@@ -664,10 +657,10 @@ impl Parser {
         let name = self.parse_current_string();
         self.peek_expect(Kind::Lp)?;
         let mut params = Vec::new();
-        while !self.peek_is(Kind::Rp) {
+        while !self.peek_equal(Kind::Rp) {
             self.peek_expect(Kind::Ident)?;
             params.push(self.parse_current_string());
-            if !self.peek_is(Kind::Rp) {
+            if !self.peek_equal(Kind::Rp) {
                 self.peek_expect(Kind::Comma)?;
             }
         }
