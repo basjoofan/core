@@ -129,11 +129,11 @@ impl Display for Expr {
                     join!(body, "{}", ";")
                 )
             }
-            Expr::Range(start, end, inclusive) => {
+            Expr::Range(start, end, half) => {
                 if let Some(start) = start {
                     write!(f, "{start}")?;
                 }
-                if *inclusive {
+                if *half {
                     write!(f, "..=")?;
                 } else {
                     write!(f, "..")?;

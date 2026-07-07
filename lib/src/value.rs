@@ -22,11 +22,7 @@ pub enum Value {
     String(String),
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
-    Range {
-        start: Option<i64>,
-        end: Option<i64>,
-        inclusive: bool,
-    },
+    Range(Option<i64>, Option<i64>, bool),
 }
 
 impl Value {
@@ -106,15 +102,11 @@ impl Display for Value {
             Value::String(string) => write!(f, "{string}"),
             Value::Array(items) => write!(f, "{items:?}"),
             Value::Map(pairs) => write!(f, "{pairs:?}"),
-            Value::Range {
-                start,
-                end,
-                inclusive,
-            } => {
+            Value::Range(start, end, half) => {
                 if let Some(start) = start {
                     write!(f, "{start}")?;
                 }
-                if *inclusive {
+                if *half {
                     write!(f, "..=")?;
                 } else {
                     write!(f, "..")?;
@@ -262,7 +254,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn encode_json_values() {
+    fn value_encode_json() {
         let value = Value::Map(HashMap::from([(
             "data".to_string(),
             Value::Array(vec![
@@ -280,16 +272,8 @@ mod tests {
     }
 
     #[test]
-    fn reject_values_that_json_cannot_represent() {
+    fn value_reject_that_json_cannot_represent() {
         assert!(Value::Float(f64::INFINITY).to_json().is_err());
-        assert!(
-            Value::Range {
-                start: Some(1),
-                end: Some(2),
-                inclusive: false,
-            }
-            .to_json()
-            .is_err()
-        );
+        assert!(Value::Range(Some(1), Some(2), false,).to_json().is_err());
     }
 }

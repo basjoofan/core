@@ -353,7 +353,7 @@ impl Parser {
     }
 
     fn parse_range_expr(&mut self, start: Option<Expr>) -> Result<Expr, String> {
-        let inclusive = self.current().kind == Kind::Close;
+        let half = self.current().kind == Kind::Close;
         let end = if self.peek_starts_range_end() {
             let rule = self.current_rule();
             self.next();
@@ -361,7 +361,7 @@ impl Parser {
         } else {
             None
         };
-        Ok(Expr::Range(start.map(Box::new), end, inclusive))
+        Ok(Expr::Range(start.map(Box::new), end, half))
     }
 
     fn peek_starts_expr(&self) -> bool {

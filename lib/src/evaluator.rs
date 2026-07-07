@@ -75,8 +75,8 @@ impl Source {
             Expr::Cursor(binding, iterator, body) => {
                 self.eval_for_expr(binding, iterator, body, context)
             }
-            Expr::Range(start, end, inclusive) => Ok(EvalFlow::Value(
-                self.eval_range_expr(start, end, *inclusive, context)?,
+            Expr::Range(start, end, half) => Ok(EvalFlow::Value(
+                self.eval_range_expr(start, end, *half, context)?,
             )),
         }
     }
@@ -267,7 +267,7 @@ impl Source {
         &self,
         start: &Option<Box<Expr>>,
         end: &Option<Box<Expr>>,
-        inclusive: bool,
+        half: bool,
         context: &mut Context,
     ) -> Result<Value, String> {
         let start = match start {
@@ -278,11 +278,7 @@ impl Source {
             Some(end) => Some(self.eval_range_endpoint(end, context)?),
             None => None,
         };
-        Ok(Value::Range {
-            start,
-            end,
-            inclusive,
-        })
+        Ok(Value::Range(start, end, half))
     }
 
     fn eval_range_endpoint(&self, expr: &Expr, context: &mut Context) -> Result<i64, String> {
@@ -341,12 +337,8 @@ impl Source {
                     }
                 }
             }
-            Value::Range {
-                start: Some(start),
-                end: Some(end),
-                inclusive,
-            } => {
-                if inclusive {
+            Value::Range(Some(start), Some(end), half) => {
+                if half {
                     for integer in start..=end {
                         if let Some(flow) = self.eval_for_iteration(
                             binding,
