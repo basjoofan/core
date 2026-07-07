@@ -343,13 +343,20 @@ impl Parser {
     }
 
     fn parse_for_expr(&mut self) -> Result<Expr, String> {
-        self.peek_expect(Kind::Ident)?;
-        let binding = self.parse_current_string();
+        let mut bindings = Vec::new();
+        loop {
+            self.peek_expect(Kind::Ident)?;
+            bindings.push(self.parse_current_string());
+            if self.peek_equal(Kind::In) {
+                break;
+            }
+            self.peek_expect(Kind::Comma)?;
+        }
         self.peek_expect(Kind::In)?;
         self.next();
         let iterator = self.parse_expr(u8::MIN)?;
         let body = self.parse_block_expr()?;
-        Ok(Expr::Cursor(binding, Box::new(iterator), body))
+        Ok(Expr::For(bindings, Box::new(iterator), body))
     }
 
     fn parse_range_expr(&mut self, start: Option<Expr>) -> Result<Expr, String> {
@@ -1362,6 +1369,18 @@ fn test_parse_loop_exprs() {
         ("loop { break 5 }", "loop { break 5 }"),
         ("while (true) { break 5 }", "while (true) { break 5 }"),
         ("for x in 1..3 { x }", "for x in 1..3 { x }"),
+        (
+            "for index, item in [1, 2] { item }",
+            "for index, item in [1, 2] { item }",
+        ),
+        (
+            "for key, value in {\"a\": 1} { value }",
+            "for key, value in {\"a\": 1} { value }",
+        ),
+        (
+            "for index, key, value in {\"a\": 1} { value }",
+            "for index, key, value in {\"a\": 1} { value }",
+        ),
     ];
     for (text, expected) in tests {
         let Source { exprs, .. } = Parser::new(text).parse().unwrap();

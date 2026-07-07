@@ -30,7 +30,7 @@ pub enum Expr {
     Continue,
     Loop(Vec<Expr>),
     While(Box<Expr>, Vec<Expr>),
-    Cursor(String, Box<Expr>, Vec<Expr>),
+    For(Vec<String>, Box<Expr>, Vec<Expr>),
     Range(Option<Box<Expr>>, Option<Box<Expr>>, bool),
 }
 
@@ -122,10 +122,11 @@ impl Display for Expr {
             Expr::While(condition, body) => {
                 write!(f, "while ({condition}) {{ {} }}", join!(body, "{}", ";"))
             }
-            Expr::Cursor(binding, iterator, body) => {
+            Expr::For(bindings, iterator, body) => {
                 write!(
                     f,
-                    "for {binding} in {iterator} {{ {} }}",
+                    "for {} in {iterator} {{ {} }}",
+                    bindings.join(", "),
                     join!(body, "{}", ";")
                 )
             }

@@ -72,8 +72,8 @@ impl Source {
             Expr::Continue => Ok(EvalFlow::Continue),
             Expr::Loop(body) => self.eval_loop_expr(body, context),
             Expr::While(condition, body) => self.eval_while_expr(condition, body, context),
-            Expr::Cursor(binding, iterator, body) => {
-                self.eval_for_expr(binding, iterator, body, context)
+            Expr::For(bindings, iterator, body) => {
+                self.eval_for_expr(bindings, iterator, body, context)
             }
             Expr::Range(start, end, half) => Ok(EvalFlow::Value(
                 self.eval_range_expr(start, end, *half, context)?,
@@ -320,7 +320,7 @@ impl Source {
 
     fn eval_for_expr(
         &self,
-        binding: &String,
+        bindings: &[String],
         iterator: &Expr,
         body: &[Expr],
         context: &mut Context,
@@ -329,20 +329,42 @@ impl Source {
         let mut result = Value::Null;
         match iterator {
             Value::Array(items) => {
-                for item in items {
+                for (index, item) in items.into_iter().enumerate() {
+                    let values = match bindings.len() {
+                        1 => vec![item],
+                        2 => vec![Value::Integer(index as i64), item],
+                        _ => return Err("array for loop expects 1 or 2 bindings".to_string()),
+                    };
                     if let Some(flow) =
-                        self.eval_for_iteration(binding, item, body, context, &mut result)?
+                        self.eval_for_iteration(bindings, values, body, context, &mut result)?
+                    {
+                        return Ok(flow);
+                    }
+                }
+            }
+            Value::Map(pairs) => {
+                for (index, (key, value)) in pairs.into_iter().enumerate() {
+                    let values = match bindings.len() {
+                        2 => vec![Value::String(key), value],
+                        3 => vec![Value::Integer(index as i64), Value::String(key), value],
+                        _ => return Err("map for loop expects 2 or 3 bindings".to_string()),
+                    };
+                    if let Some(flow) =
+                        self.eval_for_iteration(bindings, values, body, context, &mut result)?
                     {
                         return Ok(flow);
                     }
                 }
             }
             Value::Range(Some(start), Some(end), half) => {
+                if bindings.len() != 1 {
+                    return Err("range for loop expects 1 binding".to_string());
+                }
                 if half {
                     for integer in start..=end {
                         if let Some(flow) = self.eval_for_iteration(
-                            binding,
-                            Value::Integer(integer),
+                            bindings,
+                            vec![Value::Integer(integer)],
                             body,
                             context,
                             &mut result,
@@ -353,8 +375,8 @@ impl Source {
                 } else {
                     for integer in start..end {
                         if let Some(flow) = self.eval_for_iteration(
-                            binding,
-                            Value::Integer(integer),
+                            bindings,
+                            vec![Value::Integer(integer)],
                             body,
                             context,
                             &mut result,
@@ -374,13 +396,15 @@ impl Source {
 
     fn eval_for_iteration(
         &self,
-        binding: &String,
-        item: Value,
+        bindings: &[String],
+        values: Vec<Value>,
         body: &[Expr],
         context: &mut Context,
         result: &mut Value,
     ) -> Result<Option<EvalFlow>, String> {
-        context.set(binding.to_owned(), item);
+        for (binding, value) in bindings.iter().zip(values) {
+            context.set(binding.to_owned(), value);
+        }
         match self.eval_block_flow(body, context)? {
             EvalFlow::Value(value) => {
                 *result = value;
@@ -1241,12 +1265,24 @@ mod tests {
                 Value::Integer(6),
             ),
             (
+                "let sum = 0; for index, item in [10, 20] { let sum = sum + index + item }; sum",
+                Value::Integer(31),
+            ),
+            (
                 "let sum = 0; for x in 1..3 { let sum = sum + x }; sum",
                 Value::Integer(3),
             ),
             (
                 "let sum = 0; for x in 1..=3 { let sum = sum + x }; sum",
                 Value::Integer(6),
+            ),
+            (
+                "for key, value in {\"a\": 7} { if (key == \"a\" && value == 7) { 1 } else { 0 } }",
+                Value::Integer(1),
+            ),
+            (
+                "for index, key, value in {\"a\": 7} { if (index == 0 && key == \"a\" && value == 7) { 1 } else { 0 } }",
+                Value::Integer(1),
             ),
         ];
         run_eval_tests(tests);
@@ -1280,6 +1316,18 @@ mod tests {
             (
                 "for x in 1.. { x }",
                 "open-ended range cannot be used in for loop",
+            ),
+            (
+                "for index, item in 1..3 { item }",
+                "range for loop expects 1 binding",
+            ),
+            (
+                "for a, b, c in [1] { a }",
+                "array for loop expects 1 or 2 bindings",
+            ),
+            (
+                "for value in {\"a\": 1} { value }",
+                "map for loop expects 2 or 3 bindings",
             ),
         ];
         for (text, expected) in tests {
