@@ -315,11 +315,14 @@ impl Parser {
     }
 
     fn parse_break_expr(&mut self) -> Result<Expr, String> {
-        let value = if self.peek_starts_expr() {
+        let value = if matches!(
+            self.peek().map(|token| &token.kind),
+            None | Some(Kind::Semi | Kind::Rb)
+        ) {
+            None
+        } else {
             self.next();
             Some(Box::new(self.parse_expr(u8::MIN)?))
-        } else {
-            None
         };
         Ok(Expr::Break(value))
     }
@@ -361,46 +364,17 @@ impl Parser {
 
     fn parse_range_expr(&mut self, start: Option<Expr>) -> Result<Expr, String> {
         let half = self.current().kind == Kind::Close;
-        let end = if self.peek_starts_range_end() {
+        let end = if matches!(
+            self.peek().map(|token| &token.kind),
+            None | Some(Kind::Semi | Kind::Comma | Kind::Rp | Kind::Lb | Kind::Rb | Kind::Rs)
+        ) {
+            None
+        } else {
             let rule = self.current_rule();
             self.next();
             Some(Box::new(self.parse_expr(rule)?))
-        } else {
-            None
         };
         Ok(Expr::Range(start.map(Box::new), end, half))
-    }
-
-    fn peek_starts_expr(&self) -> bool {
-        matches!(
-            self.peek().map(|token| &token.kind),
-            Some(
-                Kind::Ident
-                    | Kind::Integer
-                    | Kind::Float
-                    | Kind::True
-                    | Kind::False
-                    | Kind::String
-                    | Kind::Let
-                    | Kind::Not
-                    | Kind::Sub
-                    | Kind::Lp
-                    | Kind::If
-                    | Kind::Break
-                    | Kind::Continue
-                    | Kind::Loop
-                    | Kind::While
-                    | Kind::For
-                    | Kind::Open
-                    | Kind::Close
-                    | Kind::Ls
-                    | Kind::Lb
-            )
-        )
-    }
-
-    fn peek_starts_range_end(&self) -> bool {
-        self.peek_starts_expr() && !self.peek_equal(Kind::Lb)
     }
 
     fn parse_call_expr(&mut self, function: Expr) -> Result<Expr, String> {
@@ -1365,6 +1339,8 @@ fn test_parse_loop_exprs() {
     let tests = vec![
         ("break;", "break"),
         ("break 5;", "break 5"),
+        ("loop { break; 1 }", "loop { break;1 }"),
+        ("loop { break {\"a\": 1} }", "loop { break {\"a\": 1} }"),
         ("continue;", "continue"),
         ("loop { break 5 }", "loop { break 5 }"),
         ("while (true) { break 5 }", "while (true) { break 5 }"),
@@ -1398,6 +1374,7 @@ fn test_parse_range_exprs() {
         ("1..=2", "1..=2"),
         ("..=2", "..=2"),
         ("1 + 1..4", "1 + 1..4"),
+        ("let r = 1..n;", "let r = 1..n"),
     ];
     for (text, expected) in tests {
         let Source { exprs, .. } = Parser::new(text).parse().unwrap();

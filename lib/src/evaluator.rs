@@ -1329,6 +1329,7 @@ mod tests {
                 "for value in {\"a\": 1} { value }",
                 "map for loop expects 2 or 3 bindings",
             ),
+            ("1..({\"a\": 1})", "range endpoint must be integer"),
         ];
         for (text, expected) in tests {
             let source = Parser::new(text).parse().unwrap();
