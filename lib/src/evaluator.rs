@@ -570,14 +570,14 @@ impl Source {
                 {
                     match value {
                         Value::String(value) => value,
-                        value => value.to_json()?,
+                        value => value.json(),
                     }
                 }
                 None => match value {
                     Value::String(value) => value,
                     value @ (Value::Map(_) | Value::Array(_)) => {
                         headers.push(("Content-Type".to_string(), "application/json".to_string()));
-                        value.to_json()?
+                        value.json()
                     }
                     value => {
                         return Err(format!(
@@ -1550,7 +1550,7 @@ mod tests {
         assert!(json_case.headers.iter().any(|header| {
             header.name == "Content-Type" && header.value == "Application/JSON; Charset=UTF-8"
         }));
-        assert_eq!(json_case.body.as_deref(), Some("{\"ok\":true}"));
+        assert_eq!(json_case.body.as_deref(), Some("{\"ok\": true}"));
 
         let form = source
             .eval_request_message(client, client.request("form").unwrap(), &mut context)

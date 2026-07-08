@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
@@ -13,7 +14,7 @@ use std::ops::Shl;
 use std::ops::Shr;
 use std::ops::Sub;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Value {
     Null,
     Integer(i64),
@@ -26,70 +27,9 @@ pub enum Value {
 }
 
 impl Value {
-    pub(crate) fn to_json(&self) -> std::result::Result<String, String> {
-        let mut output = String::new();
-        self.write_json(&mut output)?;
-        Ok(output)
+    pub fn json(&self) -> String {
+        format!("{:?}", &self)
     }
-
-    fn write_json(&self, output: &mut String) -> std::result::Result<(), String> {
-        match self {
-            Value::Null => output.push_str("null"),
-            Value::Integer(value) => output.push_str(&value.to_string()),
-            Value::Float(value) if value.is_finite() => output.push_str(&value.to_string()),
-            Value::Float(value) => {
-                return Err(format!("cannot encode non-finite float {value} as JSON"));
-            }
-            Value::Boolean(value) => output.push_str(if *value { "true" } else { "false" }),
-            Value::String(value) => write_json_string(value, output),
-            Value::Array(values) => {
-                output.push('[');
-                for (index, value) in values.iter().enumerate() {
-                    if index > 0 {
-                        output.push(',');
-                    }
-                    value.write_json(output)?;
-                }
-                output.push(']');
-            }
-            Value::Map(values) => {
-                output.push('{');
-                for (index, (key, value)) in values.iter().enumerate() {
-                    if index > 0 {
-                        output.push(',');
-                    }
-                    write_json_string(key, output);
-                    output.push(':');
-                    value.write_json(output)?;
-                }
-                output.push('}');
-            }
-            Value::Range { .. } => {
-                return Err("ranges cannot be encoded as JSON".to_string());
-            }
-        }
-        Ok(())
-    }
-}
-
-fn write_json_string(value: &str, output: &mut String) {
-    output.push('"');
-    for character in value.chars() {
-        match character {
-            '"' => output.push_str("\\\""),
-            '\\' => output.push_str("\\\\"),
-            '\u{08}' => output.push_str("\\b"),
-            '\u{0c}' => output.push_str("\\f"),
-            '\n' => output.push_str("\\n"),
-            '\r' => output.push_str("\\r"),
-            '\t' => output.push_str("\\t"),
-            character if character <= '\u{1f}' => {
-                output.push_str(&format!("\\u{:04x}", character as u32));
-            }
-            character => output.push(character),
-        }
-    }
-    output.push('"');
 }
 
 impl Display for Value {
@@ -116,6 +56,21 @@ impl Display for Value {
                 }
                 Ok(())
             }
+        }
+    }
+}
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            null @ Value::Null => write!(f, "{null}"),
+            Value::Integer(integer) => write!(f, "{integer}"),
+            Value::Float(float) => write!(f, "{float}"),
+            Value::Boolean(boolean) => write!(f, "{boolean}"),
+            Value::String(string) => write!(f, "\"{string}\""),
+            Value::Array(items) => write!(f, "{items:?}"),
+            Value::Map(pairs) => write!(f, "{pairs:?}"),
+            range @ Value::Range(..) => write!(f, "{range}"),
         }
     }
 }
@@ -254,7 +209,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn value_encode_json() {
+    fn value_display_string() {
+        let tests = vec![
+            (Value::Null, "null"),
+            (Value::Integer(1), "1"),
+            (Value::Float(1.5), "1.5"),
+            (Value::Boolean(true), "true"),
+            (
+                Value::String(String::from("say \"hi\"\\next\n")),
+                "say \"hi\"\\next\n",
+            ),
+            (
+                Value::Array(vec![
+                    Value::String(String::from("a")),
+                    Value::String(String::from("b")),
+                    Value::String(String::from("c")),
+                ]),
+                "[\"a\", \"b\", \"c\"]",
+            ),
+            (
+                Value::Map(HashMap::from([(
+                    String::from("key"),
+                    Value::String(String::from("value")),
+                )])),
+                "{\"key\": \"value\"}",
+            ),
+        ];
+        for (value, string) in tests {
+            assert_eq!(value.to_string(), string);
+        }
+    }
+
+    #[test]
+    fn value_display_json() {
         let value = Value::Map(HashMap::from([(
             "data".to_string(),
             Value::Array(vec![
@@ -266,14 +253,8 @@ mod tests {
             ]),
         )]));
         assert_eq!(
-            value.to_json().unwrap(),
-            r#"{"data":[null,1,1.5,true,"say \"hi\"\\next\n"]}"#
+            value.json(),
+            "{\"data\": [null, 1, 1.5, true, \"say \"hi\"\\next\n\"]}"
         );
-    }
-
-    #[test]
-    fn value_reject_that_json_cannot_represent() {
-        assert!(Value::Float(f64::INFINITY).to_json().is_err());
-        assert!(Value::Range(Some(1), Some(2), false,).to_json().is_err());
     }
 }
