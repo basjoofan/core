@@ -103,14 +103,13 @@ impl Source {
 
     fn eval_map_literal(
         &self,
-        pairs: &Vec<(Expr, Expr)>,
+        pairs: &Vec<(String, Expr)>,
         context: &mut Context,
     ) -> Result<Value, String> {
         let mut map = HashMap::new();
         for (key, value) in pairs {
-            let key = self.eval_expr(key, context)?;
             let value = self.eval_expr(value, context)?;
-            map.insert(key.to_string(), value);
+            map.insert(key.to_owned(), value);
         }
         Ok(Value::Map(map))
     }
@@ -518,7 +517,7 @@ impl Source {
         request: &crate::client::Request,
         context: &mut Context,
     ) -> Result<HttpRequest, String> {
-        let host = self.eval_request_string(&client.host, context, "host")?;
+        let host = client.host.clone();
         let path = self.eval_request_string(&request.path, context, "path")?;
         let mut url = format!("{}://{host}", client.scheme.as_ref());
         if let Some(port) = client.port {
@@ -1096,17 +1095,17 @@ mod tests {
         let tests = vec![
             ("{}", Value::Map(HashMap::new())),
             (
-                "{1: 2, 2: 3}",
+                "{one: 2, two: 3}",
                 Value::Map(HashMap::from_iter(vec![
-                    (String::from("1"), Value::Integer(2)),
-                    (String::from("2"), Value::Integer(3)),
+                    (String::from("one"), Value::Integer(2)),
+                    (String::from("two"), Value::Integer(3)),
                 ])),
             ),
             (
-                "{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
+                "{two: 2 * 2, six: 4 * 4}",
                 Value::Map(HashMap::from_iter(vec![
-                    (String::from("2"), Value::Integer(4)),
-                    (String::from("6"), Value::Integer(16)),
+                    (String::from("two"), Value::Integer(4)),
+                    (String::from("six"), Value::Integer(16)),
                 ])),
             ),
         ];
@@ -1122,9 +1121,9 @@ mod tests {
             ("[][0]", Value::Null),
             ("[1, 2, 3][99]", Value::Null),
             ("[1][-1]", Value::Null),
-            ("{1: 1, 2: 2}[1]", Value::Integer(1)),
-            ("{1: 1, 2: 2}[2]", Value::Integer(2)),
-            ("{1: 1}[0]", Value::Null),
+            (r#"{one: 1, two: 2}["one"]"#, Value::Integer(1)),
+            (r#"{one: 1, two: 2}["two"]"#, Value::Integer(2)),
+            (r#"{one: 1}["zero"]"#, Value::Null),
             ("{}[0]", Value::Null),
         ];
         run_eval_tests(tests);
@@ -1366,7 +1365,7 @@ mod tests {
                     getIp: {
                         path: "/get",
                         method: GET,
-                        headers: [["Connection", "close"]],
+                        headers: ["Connection": "close"],
                         asserts: [status == 200],
                     },
                 },
@@ -1495,7 +1494,7 @@ mod tests {
                     json: {
                         path: "/users/\(age + 1)",
                         method: POST,
-                        params: [["tag", "a"], ["tag", "b"]],
+	                        params: ["tag": "a", "tag": "b"],
                         body: {
                             name: "hello \(name)",
                             age: age + 1,
@@ -1505,20 +1504,20 @@ mod tests {
                     jsonCase: {
                         path: "/json-case",
                         method: POST,
-                        headers: [["Content-Type", "Application/JSON; Charset=UTF-8"]],
+	                        headers: ["Content-Type": "Application/JSON; Charset=UTF-8"],
                         body: {ok: true},
                     },
                     form: {
                         path: "/form",
                         method: POST,
-                        headers: [["Content-Type", "application/x-www-form-urlencoded"]],
-                        body: [["age", age + 1], ["enabled", enabled]],
+	                        headers: ["Content-Type": "application/x-www-form-urlencoded"],
+	                        body: ["age": age + 1, "enabled": enabled],
                     },
                     upload: {
                         path: "/upload",
                         method: POST,
-                        headers: [["Content-Type", "multipart/form-data"]],
-                        body: [["file", "@./avatar.png"], ["literal", "value"]],
+	                        headers: ["Content-Type": "multipart/form-data"],
+	                        body: ["file": "@./avatar.png", "literal": "value"],
                     },
                 },
             }

@@ -14,7 +14,7 @@ fn test_native_fixture_contains_all_migrated_requests() {
     let source = Parser::new(&input).parse().unwrap();
     assert_eq!(source.clients.inner.len(), 2);
     assert_eq!(source.clients.get("user").unwrap().requests.len(), 5);
-    assert_eq!(source.clients.get("testApi").unwrap().requests.len(), 2);
+    assert_eq!(source.clients.get("api").unwrap().requests.len(), 2);
 }
 
 #[tokio::test]
@@ -61,7 +61,7 @@ async fn test_command_repl_loads_client_then_evaluates_fan()
         hello: {
             path: "/hello",
             method: GET,
-            headers: [["Connection", "close"]],
+            headers: ["Connection": "close"],
             asserts: [status == 200],
         },
     },
@@ -198,7 +198,7 @@ async fn test_command_test() -> Result<(), Box<dyn std::error::Error>> {
             hello: {
                 path: "/hello",
                 method: GET,
-                headers: [["Connection", "close"]],
+                headers: ["Connection": "close"],
                 asserts: [status == 200],
             },
         },

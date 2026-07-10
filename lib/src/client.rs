@@ -32,7 +32,7 @@ impl Clients {
 pub struct Client {
     pub name: String,
     pub scheme: Scheme,
-    pub host: Expr,
+    pub host: String,
     pub port: Option<u16>,
     pub requests: HashMap<String, Request>,
 }

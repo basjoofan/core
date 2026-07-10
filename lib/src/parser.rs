@@ -13,25 +13,6 @@ pub struct Parser {
     index: usize,
 }
 
-fn normalize_object_keys(expr: Expr) -> Expr {
-    match expr {
-        Expr::Map(pairs) => Expr::Map(
-            pairs
-                .into_iter()
-                .map(|(key, value)| {
-                    let key = match key {
-                        Expr::Ident(name) => Expr::String(name),
-                        key => normalize_object_keys(key),
-                    };
-                    (key, normalize_object_keys(value))
-                })
-                .collect(),
-        ),
-        Expr::Array(values) => Expr::Array(values.into_iter().map(normalize_object_keys).collect()),
-        expr => expr,
-    }
-}
-
 impl Parser {
     pub fn new(text: &str) -> Parser {
         Parser {
@@ -69,14 +50,6 @@ impl Parser {
         }
     }
 
-    fn current_expect_ident(&self, field: &str) -> Result<String, String> {
-        if matches!(&self.current().kind, Kind::Ident) {
-            Ok(self.parse_current_string())
-        } else {
-            Err(format!("{field} must be an identifier"))
-        }
-    }
-
     fn current_rule(&self) -> u8 {
         self.current().rule()
     }
@@ -87,6 +60,10 @@ impl Parser {
         } else {
             u8::MIN
         }
+    }
+
+    fn peek_next_equal(&self, kind: Kind) -> bool {
+        matches!(self.tokens.get(self.index + 2), Some(peek) if peek.kind == kind)
     }
 
     fn error(&self, error: String) -> String {
@@ -402,9 +379,13 @@ impl Parser {
 
     fn parse_map_literal(&mut self) -> Result<Expr, String> {
         let mut pairs = Vec::new();
+        let mut keys = HashSet::new();
         while !self.peek_equal(Kind::Rb) {
             self.next();
-            let key = self.parse_expr(u8::MIN)?;
+            let key = self.parse_map_field()?;
+            if !keys.insert(key.clone()) {
+                return Err(format!("duplicate object key '{key}'"));
+            }
             self.peek_expect(Kind::Colon)?;
             self.next();
             let value = self.parse_expr(u8::MIN)?;
@@ -417,12 +398,26 @@ impl Parser {
         Ok(Expr::Map(pairs))
     }
 
+    fn parse_map_field(&self) -> Result<String, String> {
+        match self.current().kind {
+            Kind::Ident | Kind::String => Ok(self.parse_current_string()),
+            _ => Err(format!("field name must be an identifier or string")),
+        }
+    }
+
+    fn parse_current_static_string(&self, field: &str) -> Result<String, String> {
+        match self.current().kind {
+            Kind::String => Ok(self.parse_current_string()),
+            _ => Err(format!("{field} must be a string")),
+        }
+    }
+
     fn parse_client_literal(&mut self) -> Result<Client, String> {
         self.peek_expect(Kind::Ident)?;
         let name = self.parse_current_string();
         self.peek_expect(Kind::Lb)?;
 
-        let mut fields = HashSet::new();
+        let mut keys = HashSet::new();
         let mut scheme = None;
         let mut host = None;
         let mut port = None;
@@ -430,21 +425,18 @@ impl Parser {
 
         while !self.peek_equal(Kind::Rb) {
             self.next();
-            let field = self.parse_object_field_name("client")?;
-            if !fields.insert(field.clone()) {
-                return Err(format!("duplicate client field '{field}'"));
-            }
+            let key = self.parse_map_field()?;
             self.peek_expect(Kind::Colon)?;
             self.next();
-            match field.as_str() {
+            match key.as_str() {
                 "scheme" => {
-                    let value = self.current_expect_ident("scheme")?;
+                    let value = self.parse_map_field()?;
                     scheme = Some(match value.as_str() {
                         "http" | "https" => Scheme::from(value.as_str()),
                         _ => return Err(format!("unknown scheme '{value}'")),
                     });
                 }
-                "host" => host = Some(self.parse_expr(u8::MIN)?),
+                "host" => host = Some(self.parse_current_static_string("host")?),
                 "port" => {
                     let token = self.current();
                     if !matches!(&token.kind, Kind::Integer) {
@@ -454,13 +446,18 @@ impl Parser {
                         token
                             .lite
                             .parse::<u16>()
-                            .map_err(|_| format!("invalid port '{}'", token))?,
+                            .map_err(|_| format!("client '{name}' invalid port '{}'", token))?,
                     );
                 }
                 "requests" => requests = Some(self.parse_requests_literal()?),
-                _ => return Err(format!("unknown client field '{field}'")),
+                _ => return Err(format!("unknown client '{name}' key '{key}'")),
             }
-            self.consume_object_separator(Kind::Rb)?;
+            if !keys.insert(key.clone()) {
+                return Err(format!("client '{name}' duplicate key '{key}'"));
+            }
+            if !self.peek_equal(Kind::Rb) {
+                self.peek_expect(Kind::Comma)?;
+            }
         }
         self.peek_expect(Kind::Rb)?;
 
@@ -487,7 +484,7 @@ impl Parser {
         let mut requests = HashMap::new();
         while !self.peek_equal(Kind::Rb) {
             self.next();
-            let name = self.parse_object_field_name("request")?;
+            let name = self.parse_map_field()?;
             if requests.contains_key(&name) {
                 return Err(format!("duplicate request '{name}'"));
             }
@@ -495,15 +492,17 @@ impl Parser {
             self.next();
             let request = self.parse_request_literal(&name)?;
             requests.insert(name, request);
-            self.consume_object_separator(Kind::Rb)?;
+            if !self.peek_equal(Kind::Rb) {
+                self.peek_expect(Kind::Comma)?;
+            }
         }
         self.peek_expect(Kind::Rb)?;
         Ok(requests)
     }
 
-    fn parse_request_literal(&mut self, request_name: &str) -> Result<Request, String> {
+    fn parse_request_literal(&mut self, name: &str) -> Result<Request, String> {
         if self.current().kind != Kind::Lb {
-            return Err(format!("request '{request_name}' must be an object"));
+            return Err(format!("request '{name}' must be an object"));
         }
         let mut fields = HashSet::new();
         let mut path = None;
@@ -515,18 +514,16 @@ impl Parser {
 
         while !self.peek_equal(Kind::Rb) {
             self.next();
-            let field = self.parse_object_field_name("request")?;
+            let field = self.parse_map_field()?;
             if !fields.insert(field.clone()) {
-                return Err(format!(
-                    "duplicate field '{field}' in request '{request_name}'"
-                ));
+                return Err(format!("duplicate field '{field}' in request '{name}'"));
             }
             self.peek_expect(Kind::Colon)?;
             self.next();
             match field.as_str() {
                 "path" => path = Some(self.parse_expr(u8::MIN)?),
                 "method" => {
-                    let value = self.current_expect_ident("method")?;
+                    let value = self.parse_map_field()?;
                     method = Some(match value.as_str() {
                         "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD"
                         | "TRACE" | "CONNECT" => Method::from(value.as_str()),
@@ -535,7 +532,7 @@ impl Parser {
                 }
                 "headers" => headers = self.parse_pairs_literal("headers")?,
                 "params" => params = self.parse_pairs_literal("params")?,
-                "body" => body = Some(normalize_object_keys(self.parse_expr(u8::MIN)?)),
+                "body" => body = Some(self.parse_request_body_literal()?),
                 "asserts" => {
                     let Expr::Array(values) = self.parse_expr(u8::MIN)? else {
                         return Err("asserts must be an array".to_string());
@@ -544,14 +541,15 @@ impl Parser {
                 }
                 _ => return Err(format!("unknown request field '{field}'")),
             }
-            self.consume_object_separator(Kind::Rb)?;
+            if !self.peek_equal(Kind::Rb) {
+                self.peek_expect(Kind::Comma)?;
+            }
         }
         self.peek_expect(Kind::Rb)?;
 
         Ok(Request {
-            path: path.ok_or_else(|| format!("request '{request_name}' is missing 'path'"))?,
-            method: method
-                .ok_or_else(|| format!("request '{request_name}' is missing 'method'"))?,
+            path: path.ok_or_else(|| format!("request '{name}' is missing 'path'"))?,
+            method: method.ok_or_else(|| format!("request '{name}' is missing 'method'"))?,
             params,
             headers,
             body,
@@ -560,38 +558,40 @@ impl Parser {
     }
 
     fn parse_pairs_literal(&mut self, field: &str) -> Result<Vec<(Expr, Expr)>, String> {
-        let Expr::Array(entries) = self.parse_expr(u8::MIN)? else {
+        if self.current().kind != Kind::Ls {
             return Err(format!("{field} must be an array of key-value pairs"));
-        };
-        entries
-            .into_iter()
-            .map(|entry| match entry {
-                Expr::Array(mut pair) if pair.len() == 2 => {
-                    let value = pair.pop().unwrap();
-                    let key = pair.pop().unwrap();
-                    Ok((key, value))
-                }
-                _ => Err(format!(
-                    "each {field} entry must contain exactly two values"
-                )),
-            })
-            .collect()
+        }
+        let mut pairs = Vec::new();
+        while !self.peek_equal(Kind::Rs) {
+            self.next();
+            let key = self.parse_map_field()?;
+            self.peek_expect(Kind::Colon)?;
+            self.next();
+            let value = self.parse_expr(u8::MIN)?;
+            pairs.push((Expr::String(key), value));
+            if !self.peek_equal(Kind::Rs) {
+                self.peek_expect(Kind::Comma)?;
+            }
+        }
+        self.peek_expect(Kind::Rs)?;
+        Ok(pairs)
     }
 
-    fn parse_object_field_name(&self, object: &str) -> Result<String, String> {
-        match self.current().kind {
-            Kind::Ident | Kind::String => Ok(self.parse_current_string()),
-            _ => Err(format!(
-                "{object} field name must be an identifier or string"
-            )),
+    fn parse_request_body_literal(&mut self) -> Result<Expr, String> {
+        if self.current().kind == Kind::Ls
+            && matches!(self.peek().map(|token| &token.kind), Some(Kind::Ident | Kind::String))
+            && self.peek_next_equal(Kind::Colon)
+        {
+            let pairs = self.parse_pairs_literal("body")?;
+            Ok(Expr::Array(
+                pairs
+                    .into_iter()
+                    .map(|(key, value)| Expr::Array(vec![key, value]))
+                    .collect(),
+            ))
+        } else {
+            self.parse_expr(u8::MIN)
         }
-    }
-
-    fn consume_object_separator(&mut self, end: Kind) -> Result<(), String> {
-        if !self.peek_equal(end) {
-            self.peek_expect(Kind::Comma)?;
-        }
-        Ok(())
     }
 
     fn parse_index_expr(&mut self, left: Expr) -> Result<Expr, String> {
@@ -1068,7 +1068,7 @@ fn test_parse_map_literal_empty() {
 
 #[test]
 fn test_parse_map_literal_one_element() {
-    let text = "{1: true}";
+    let text = "{one: true}";
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
         if let Some(expr) = exprs.first() {
@@ -1080,7 +1080,7 @@ fn test_parse_map_literal_one_element() {
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect::<Vec<(String, String)>>()
-                        == [("1".to_string(), "true".to_string())]
+                        == [("one".to_string(), "true".to_string())]
                 );
             } else {
                 unreachable!("map literal parse failed")
@@ -1095,9 +1095,9 @@ fn test_parse_map_literal_one_element() {
 fn test_parse_map_literal_string_key() {
     let text = r#"{"one": 1, "two": 2, "three": 3}"#;
     let expected = vec![
-        (String::from("\"one\""), String::from("1")),
-        (String::from("\"two\""), String::from("2")),
-        (String::from("\"three\""), String::from("3")),
+        (String::from("one"), String::from("1")),
+        (String::from("two"), String::from("2")),
+        (String::from("three"), String::from("3")),
     ];
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
@@ -1121,59 +1121,18 @@ fn test_parse_map_literal_string_key() {
 }
 
 #[test]
-fn test_parse_map_literal_boolean_key() {
-    let text = r#"{true: 1, false: 2}"#;
-    let expected = vec![
-        (String::from("true"), String::from("1")),
-        (String::from("false"), String::from("2")),
+fn test_parse_map_literal_rejects_expression_keys_and_duplicates() {
+    let cases = [
+        (r#"{true: 1}"#, "field name must be an identifier or string"),
+        (r#"{1: 1}"#, "field name must be an identifier or string"),
+        (r#"{a: 1, a: 2}"#, "duplicate object key 'a'"),
     ];
-    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
-        assert!(exprs.len() == 1);
-        if let Some(expr) = exprs.first() {
-            println!("{expr}");
-            if let Expr::Map(pairs) = expr {
-                assert!(
-                    pairs
-                        .iter()
-                        .map(|(k, v)| (k.to_string(), v.to_string()))
-                        .collect::<Vec<(String, String)>>()
-                        == expected
-                );
-            } else {
-                unreachable!("map literal parse failed")
-            }
-        } else {
-            unreachable!("exprs expr none")
-        }
-    }
-}
-
-#[test]
-fn test_parse_map_literal_integer_key() {
-    let text = r#"{1: 1, 2: 2, 3: 3}"#;
-    let expected = vec![
-        (String::from("1"), String::from("1")),
-        (String::from("2"), String::from("2")),
-        (String::from("3"), String::from("3")),
-    ];
-    if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
-        assert!(exprs.len() == 1);
-        if let Some(expr) = exprs.first() {
-            println!("{expr}");
-            if let Expr::Map(pairs) = expr {
-                assert!(
-                    pairs
-                        .iter()
-                        .map(|(k, v)| (k.to_string(), v.to_string()))
-                        .collect::<Vec<(String, String)>>()
-                        == expected
-                );
-            } else {
-                unreachable!("map literal parse failed")
-            }
-        } else {
-            unreachable!("exprs expr none")
-        }
+    for (input, expected) in cases {
+        let error = match Parser::new(input).parse() {
+            Ok(_) => panic!("expected map literal to fail"),
+            Err(error) => error,
+        };
+        assert!(error.contains(expected), "{error} did not contain {expected}");
     }
 }
 
@@ -1181,9 +1140,9 @@ fn test_parse_map_literal_integer_key() {
 fn test_parse_map_literal_with_expr() {
     let text = r#"{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}"#;
     let expected = vec![
-        (String::from("\"one\""), String::from("0 + 1")),
-        (String::from("\"two\""), String::from("10 - 8")),
-        (String::from("\"three\""), String::from("15 / 5")),
+        (String::from("one"), String::from("0 + 1")),
+        (String::from("two"), String::from("10 - 8")),
+        (String::from("three"), String::from("15 / 5")),
     ];
     if let Ok(Source { exprs, .. }) = Parser::new(text).parse() {
         assert!(exprs.len() == 1);
@@ -1252,8 +1211,8 @@ fn test_parse_native_client_definition() {
                 get: {
                     path: "/get",
                     method: GET,
-                    headers: [["a", "b"]],
-                    params: [["tag", "a"], ["tag", "b"]],
+	                    headers: ["a": "b"],
+	                    params: ["tag": "a", "tag": "b"],
                     asserts: [status == 200],
                 },
             },
@@ -1283,8 +1242,12 @@ fn test_native_client_definition_validation() {
             "request 'get' is missing 'method'",
         ),
         (
-            r#"client user { scheme: https, host: "example.com", requests: { get: { path: "/", method: GET, headers: [["a"]] } } }"#,
-            "each headers entry must contain exactly two values",
+            r#"client user { scheme: https, host: "example.com", requests: { get: { path: "/", method: GET, headers: ["a"] } } }"#,
+            "token expect Colon",
+        ),
+        (
+            r#"client user { scheme: https, host: domain, requests: { get: { path: "/", method: GET } } }"#,
+            "host must be a string",
         ),
         (
             r#"client user { scheme: https, host: "a", requests: { get: { path: "/", method: GET } } } client user { scheme: https, host: "b", requests: { get: { path: "/", method: GET } } }"#,
@@ -1340,7 +1303,7 @@ fn test_parse_loop_exprs() {
         ("break;", "break"),
         ("break 5;", "break 5"),
         ("loop { break; 1 }", "loop { break;1 }"),
-        ("loop { break {\"a\": 1} }", "loop { break {\"a\": 1} }"),
+        ("loop { break {\"a\": 1} }", "loop { break {a: 1} }"),
         ("continue;", "continue"),
         ("loop { break 5 }", "loop { break 5 }"),
         ("while (true) { break 5 }", "while (true) { break 5 }"),
@@ -1351,11 +1314,11 @@ fn test_parse_loop_exprs() {
         ),
         (
             "for key, value in {\"a\": 1} { value }",
-            "for key, value in {\"a\": 1} { value }",
+            "for key, value in {a: 1} { value }",
         ),
         (
             "for index, key, value in {\"a\": 1} { value }",
-            "for index, key, value in {\"a\": 1} { value }",
+            "for index, key, value in {a: 1} { value }",
         ),
     ];
     for (text, expected) in tests {

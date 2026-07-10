@@ -14,7 +14,7 @@ pub enum Expr {
     Boolean(bool),
     String(String),
     Array(Vec<Expr>),
-    Map(Vec<(Expr, Expr)>),
+    Map(Vec<(String, Expr)>),
     Index(Box<Expr>, Box<Expr>),
     // Field Access of a named field (left.field)
     Field(Box<Expr>, String),
@@ -47,7 +47,7 @@ impl Expr {
             Expr::Map(pairs) => Value::Map(
                 pairs
                     .iter()
-                    .map(|(k, v)| (k.eval().to_string(), v.eval()))
+                    .map(|(k, v)| (k.to_owned(), v.eval()))
                     .collect::<HashMap<String, Value>>(),
             ),
             _ => Value::Null,

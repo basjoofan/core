@@ -5,50 +5,55 @@ client user {
         get: {
             path: "/get",
             method: GET,
-            headers: [["a", "b"]],
+            headers: [
+                "a": "b",
+                key: "this is \(variable)"
+            ],
             params: [
-                ["key", "value"],
-                ["variable", "hello \(variable)"],
-                ["expr", "hello \(a + b)"],
+                key: "value",
+                "variable": "hello \(variable)",
+                "expr": "hello \(a + b)",
             ],
             asserts: [status == 200],
         },
         post: {
             path: "/post",
             method: POST,
-            params: [["a", "b"]],
+            params: [
+                "a": "b"
+            ],
             asserts: [status == 200],
         },
         postForm: {
             path: "/post",
             method: POST,
             headers: [
-                ["a", "b"],
-                ["Content-Type", "application/x-www-form-urlencoded"],
+                "a": "b",
+                "Content-Type": "application/x-www-form-urlencoded"
             ],
-            params: [["key", "value"]],
-            body: [["c", "d"]],
+            params: ["key": "value"],
+            body: ["c": "d"],
             asserts: [status == 200],
         },
         postMultipart: {
             path: "/post",
             method: POST,
             headers: [
-                ["a", "b"],
-                ["Content-Type", "multipart/form-data"],
+                "a": "b",
+                "Content-Type": "multipart/form-data",
             ],
-            params: [["key", "value"]],
-            body: [["c", "d"], ["f", "lib.rs"]],
+            params: ["key": "value"],
+            body: ["c": "d", "f": "lib.rs"],
             asserts: [status == 200],
         },
         postJson: {
             path: "/post",
             method: POST,
             headers: [
-                ["a", "b"],
-                ["Content-Type", "application/json"],
+                "a": "b",
+                "Content-Type": "application/json",
             ],
-            params: [["key", "value"]],
+            params: ["key": "value"],
             body: {
                 name: "Gauss",
                 age: 6,
@@ -63,25 +68,25 @@ client user {
     },
 }
 
-client testApi {
+client api {
     scheme: https,
     host: "httpbin.org",
     requests: {
         getIp: {
             path: "/ip",
             method: GET,
-            headers: [["a", "b"]],
-            params: [["key", "value"]],
+            headers: ["a": "b"],
+            params: ["key": "value"],
             asserts: [status == 200],
         },
         postJsonUseLiteralStyle: {
             path: "/post",
             method: POST,
             headers: [
-                ["a", "b"],
-                ["Content-Type", "application/json"],
+                "a": "b",
+                "Content-Type": "application/json",
             ],
-            params: [["key", "value"]],
+            params: ["key": "value"],
             body: {
                 name: "Gauss",
                 age: 6,
