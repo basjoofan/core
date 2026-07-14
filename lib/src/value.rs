@@ -23,12 +23,45 @@ pub enum Value {
     String(String),
     Array(Vec<Value>),
     Map(HashMap<String, Value>),
-    Range(Option<i64>, Option<i64>, bool),
 }
 
 impl Value {
     pub fn json(&self) -> String {
-        format!("{:?}", &self)
+        self.to_json()
+    }
+
+    pub fn to_json(&self) -> String {
+        match self {
+            Self::Null => "null".into(),
+            Self::Integer(value) => value.to_string(),
+            Self::Float(value) => value.to_string(),
+            Self::Boolean(value) => value.to_string(),
+            Self::String(value) => format!("\"{}\"", escape_json(value)),
+            Self::Array(values) => format!(
+                "[{}]",
+                values
+                    .iter()
+                    .map(Self::to_json)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            Self::Map(values) => {
+                let mut values = values.iter().collect::<Vec<_>>();
+                values.sort_by_key(|(key, _)| *key);
+                format!(
+                    "{{{}}}",
+                    values
+                        .into_iter()
+                        .map(|(key, value)| format!("\"{}\":{}", escape_json(key), value.to_json()))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            }
+        }
+    }
+
+    pub fn from_json(text: &str) -> std::result::Result<Self, String> {
+        JsonParser::new(text).parse()
     }
 }
 
@@ -42,20 +75,6 @@ impl Display for Value {
             Value::String(string) => write!(f, "{string}"),
             Value::Array(items) => write!(f, "{items:?}"),
             Value::Map(pairs) => write!(f, "{pairs:?}"),
-            Value::Range(start, end, half) => {
-                if let Some(start) = start {
-                    write!(f, "{start}")?;
-                }
-                if *half {
-                    write!(f, "..=")?;
-                } else {
-                    write!(f, "..")?;
-                }
-                if let Some(end) = end {
-                    write!(f, "{end}")?;
-                }
-                Ok(())
-            }
         }
     }
 }
@@ -70,7 +89,6 @@ impl Debug for Value {
             Value::String(string) => write!(f, "\"{string}\""),
             Value::Array(items) => write!(f, "{items:?}"),
             Value::Map(pairs) => write!(f, "{pairs:?}"),
-            range @ Value::Range(..) => write!(f, "{range}"),
         }
     }
 }
@@ -204,6 +222,246 @@ impl PartialOrd for Value {
     }
 }
 
+fn escape_json(value: &str) -> String {
+    let mut output = String::new();
+    for character in value.chars() {
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            character if character.is_control() => {
+                output.push_str(&format!("\\u{:04X}", character as u32))
+            }
+            character => output.push(character),
+        }
+    }
+    output
+}
+
+struct JsonParser<'a> {
+    text: &'a str,
+    index: usize,
+}
+
+impl<'a> JsonParser<'a> {
+    fn new(text: &'a str) -> Self {
+        Self { text, index: 0 }
+    }
+
+    fn parse(mut self) -> std::result::Result<Value, String> {
+        let value = self.value()?;
+        self.space();
+        if self.index == self.text.len() {
+            Ok(value)
+        } else {
+            Err(self.error("unexpected trailing JSON"))
+        }
+    }
+
+    fn value(&mut self) -> std::result::Result<Value, String> {
+        self.space();
+        match self.peek() {
+            Some('n') => {
+                self.word("null")?;
+                Ok(Value::Null)
+            }
+            Some('t') => {
+                self.word("true")?;
+                Ok(Value::Boolean(true))
+            }
+            Some('f') => {
+                self.word("false")?;
+                Ok(Value::Boolean(false))
+            }
+            Some('"') => self.string().map(Value::String),
+            Some('[') => self.array(),
+            Some('{') => self.object(),
+            Some('-' | '0'..='9') => self.number(),
+            _ => Err(self.error("expected JSON value")),
+        }
+    }
+
+    fn array(&mut self) -> std::result::Result<Value, String> {
+        self.take('[')?;
+        let mut values = Vec::new();
+        self.space();
+        if self.consume(']') {
+            return Ok(Value::Array(values));
+        }
+        loop {
+            values.push(self.value()?);
+            self.space();
+            if self.consume(']') {
+                break;
+            }
+            self.take(',')?;
+        }
+        Ok(Value::Array(values))
+    }
+
+    fn object(&mut self) -> std::result::Result<Value, String> {
+        self.take('{')?;
+        let mut values = HashMap::new();
+        self.space();
+        if self.consume('}') {
+            return Ok(Value::Map(values));
+        }
+        loop {
+            self.space();
+            let key = self.string()?;
+            self.space();
+            self.take(':')?;
+            values.insert(key, self.value()?);
+            self.space();
+            if self.consume('}') {
+                break;
+            }
+            self.take(',')?;
+        }
+        Ok(Value::Map(values))
+    }
+
+    fn string(&mut self) -> std::result::Result<String, String> {
+        self.take('"')?;
+        let mut value = String::new();
+        loop {
+            match self.next() {
+                Some('"') => return Ok(value),
+                Some('\\') => match self.next() {
+                    Some('"') => value.push('"'),
+                    Some('\\') => value.push('\\'),
+                    Some('/') => value.push('/'),
+                    Some('b') => value.push('\u{8}'),
+                    Some('f') => value.push('\u{c}'),
+                    Some('n') => value.push('\n'),
+                    Some('r') => value.push('\r'),
+                    Some('t') => value.push('\t'),
+                    Some('u') => value.push(self.unicode()?),
+                    _ => return Err(self.error("invalid JSON escape")),
+                },
+                Some(character) if !character.is_control() => value.push(character),
+                Some(_) => return Err(self.error("control character in JSON string")),
+                None => return Err(self.error("unterminated JSON string")),
+            }
+        }
+    }
+
+    fn unicode(&mut self) -> std::result::Result<char, String> {
+        let high = self.unicode_unit()?;
+        let scalar = match high {
+            0xD800..=0xDBFF => {
+                if !self.text[self.index..].starts_with("\\u") {
+                    return Err(self.error("high surrogate must be followed by a low surrogate"));
+                }
+                self.index += 2;
+                let low = self.unicode_unit()?;
+                if !(0xDC00..=0xDFFF).contains(&low) {
+                    return Err(self.error("invalid low surrogate"));
+                }
+                0x10000 + (((high as u32 - 0xD800) << 10) | (low as u32 - 0xDC00))
+            }
+            0xDC00..=0xDFFF => return Err(self.error("unexpected low surrogate")),
+            value => value as u32,
+        };
+        char::from_u32(scalar).ok_or_else(|| self.error("invalid unicode scalar"))
+    }
+
+    fn unicode_unit(&mut self) -> std::result::Result<u16, String> {
+        let start = self.index;
+        let end = start + 4;
+        let digits = self
+            .text
+            .get(start..end)
+            .ok_or_else(|| self.error("invalid unicode escape"))?;
+        let value =
+            u16::from_str_radix(digits, 16).map_err(|_| self.error("invalid unicode escape"))?;
+        self.index = end;
+        Ok(value)
+    }
+
+    fn number(&mut self) -> std::result::Result<Value, String> {
+        let start = self.index;
+        self.consume('-');
+        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+            self.next();
+        }
+        let float = if self.consume('.') {
+            while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+                self.next();
+            }
+            true
+        } else {
+            false
+        };
+        let exponent = if matches!(self.peek(), Some('e' | 'E')) {
+            self.next();
+            if matches!(self.peek(), Some('+' | '-')) {
+                self.next();
+            }
+            while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+                self.next();
+            }
+            true
+        } else {
+            false
+        };
+        let number = &self.text[start..self.index];
+        if float || exponent {
+            number
+                .parse()
+                .map(Value::Float)
+                .map_err(|_| self.error("invalid JSON number"))
+        } else {
+            number
+                .parse()
+                .map(Value::Integer)
+                .map_err(|_| self.error("invalid JSON integer"))
+        }
+    }
+
+    fn word(&mut self, expected: &str) -> std::result::Result<(), String> {
+        if self.text[self.index..].starts_with(expected) {
+            self.index += expected.len();
+            Ok(())
+        } else {
+            Err(self.error("invalid JSON literal"))
+        }
+    }
+    fn space(&mut self) {
+        while self.peek().is_some_and(char::is_whitespace) {
+            self.next();
+        }
+    }
+    fn take(&mut self, expected: char) -> std::result::Result<(), String> {
+        if self.consume(expected) {
+            Ok(())
+        } else {
+            Err(self.error(&format!("expected '{expected}'")))
+        }
+    }
+    fn consume(&mut self, expected: char) -> bool {
+        if self.peek() == Some(expected) {
+            self.next();
+            true
+        } else {
+            false
+        }
+    }
+    fn peek(&self) -> Option<char> {
+        self.text[self.index..].chars().next()
+    }
+    fn next(&mut self) -> Option<char> {
+        let value = self.peek()?;
+        self.index += value.len_utf8();
+        Some(value)
+    }
+    fn error(&self, message: &str) -> String {
+        format!("JSON byte {}: {message}", self.index)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,7 +512,32 @@ mod tests {
         )]));
         assert_eq!(
             value.json(),
-            "{\"data\": [null, 1, 1.5, true, \"say \"hi\"\\next\n\"]}"
+            r#"{"data":[null,1,1.5,true,"say \"hi\"\\next\n"]}"#
         );
+    }
+
+    #[test]
+    fn value_parses_json_for_response_assertions() {
+        let value = Value::from_json(
+            r#"{"data":{"id":7},"tags":["rust","http"],"ok":true,"emoji":"\uD83D\uDE00"}"#,
+        )
+        .unwrap();
+        let Value::Map(root) = value else {
+            panic!("expected object")
+        };
+        let Value::Map(data) = &root["data"] else {
+            panic!("expected data object")
+        };
+        assert_eq!(data["id"], Value::Integer(7));
+        assert_eq!(root["ok"], Value::Boolean(true));
+        assert_eq!(root["emoji"], Value::String("😀".into()));
+    }
+
+    #[test]
+    fn value_rejects_invalid_json() {
+        assert!(Value::from_json(r#"{"id":}"#).is_err());
+        assert!(Value::from_json("[1] trailing").is_err());
+        assert!(Value::from_json(r#""\uD83D""#).is_err());
+        assert!(Value::from_json(r#""\uDE00""#).is_err());
     }
 }

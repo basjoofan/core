@@ -21,5 +21,5 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "
 [dev-dependencies]
 assert_fs.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["process"] }
+tokio = { workspace = true, features = ["process", "net"] }
 axum.workspace = true

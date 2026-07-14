@@ -1,8 +1,8 @@
 mod command;
-mod writer;
 use clap::{Parser, Subcommand};
 use lib::Source;
-use std::{path::PathBuf, time::Duration};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = env!("CARGO_BIN_NAME"), version)]
@@ -22,27 +22,15 @@ enum Commands {
     },
     /// Run tests
     Test {
-        /// Test name
+        /// Test name, or @tag to run tests carrying that tag
         #[command()]
-        name: Option<String>,
-        /// Task
-        #[arg(short, long, default_value_t = 1)]
-        task: u32,
-        /// Duration
-        #[arg(short, long, value_parser = parse_duration)]
-        duration: Option<Duration>,
-        /// Number
-        #[arg(short, long, default_value_t = 1)]
-        number: u32,
+        target: Option<String>,
+        /// Selected environment
+        #[arg(long)]
+        env: Option<String>,
         /// Path
         #[arg(short, long)]
         path: Option<PathBuf>,
-        /// Record
-        #[arg(short, long)]
-        record: Option<PathBuf>,
-        /// Stat
-        #[arg(short, long)]
-        stat: bool,
     },
 }
 
@@ -51,42 +39,15 @@ async fn main() {
     let interface = Interface::parse();
     match interface.command {
         Some(Commands::Eval { text }) => {
-            command::eval(text, &mut Source::new(), None).await;
+            let _ = command::eval(text, &mut Source::new(), HashMap::new()).await;
         }
-        Some(Commands::Test {
-            name,
-            task,
-            duration,
-            number,
-            path,
-            record,
-            stat,
-        }) => {
-            let (duration, number) = match duration {
-                Some(duration) => (duration, u32::MAX),
-                None => (Duration::MAX, number),
-            };
-            command::test(name, task, duration, number, path, record, stat).await;
+        Some(Commands::Test { target, env, path }) => {
+            if !command::test(target, env, path).await {
+                std::process::exit(1);
+            }
         }
         None => {
             command::repl().await;
         }
     }
-}
-
-fn parse_duration(s: &str) -> Result<Duration, String> {
-    let mut chars = s.chars();
-    let last = chars.next_back();
-    let value = match chars.as_str().parse::<u64>() {
-        Ok(value) => value,
-        Err(_) => return Err(format!("Invalid number: {}", chars.as_str())),
-    };
-    let duration = match last {
-        Some('s') => Duration::from_secs(value),
-        Some('m') => Duration::from_secs(value * 60),
-        Some('h') => Duration::from_secs(value * 3600),
-        Some(c) => return Err(format!("Unknown time unit: {c}, supported units: s, m, h")),
-        None => return Err("Time unit needed, for example 1s or 2m".to_string()),
-    };
-    Ok(duration)
 }

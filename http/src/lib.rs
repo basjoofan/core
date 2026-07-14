@@ -60,34 +60,71 @@ pub struct Response {
     pub body: String,
 }
 
-pub async fn send(request: lib::HttpRequest) -> lib::HttpResult {
+pub async fn send(request: lib::Request) -> lib::Result {
     let mut message = format!("{} {}\n", request.method, request.url);
     for header in &request.headers {
         message.push_str(&format!("{}: {}\n", header.name, header.value));
     }
-    if let Some(body) = &request.body {
+    if let Some(lib::Content::Text(body)) = &request.body {
         message.push('\n');
         message.push_str(body);
     }
-    let (sent, response, timing, error) = Client::new().send_message(&message).await;
+    let (mut parsed, mut content) = match Request::from(&message).await {
+        Ok(result) => result,
+        Err(error) => {
+            return lib::Result {
+                request,
+                error: error.to_string(),
+                ..Default::default()
+            };
+        }
+    };
+    if let Some(lib::Content::File(path)) = &request.body {
+        match tokio::fs::File::open(path).await {
+            Ok(file) => match file.metadata().await {
+                Ok(metadata) => {
+                    parsed
+                        .headers
+                        .replace("content-length", metadata.len().to_string());
+                    parsed.body = format!("@{path}");
+                    content = Content::Parts(vec![Part::File(file)]);
+                }
+                Err(error) => {
+                    return lib::Result {
+                        request,
+                        error: error.to_string(),
+                        ..Default::default()
+                    };
+                }
+            },
+            Err(error) => {
+                return lib::Result {
+                    request,
+                    error: error.to_string(),
+                    ..Default::default()
+                };
+            }
+        }
+    }
+    let (sent, response, timing, error) = Client::new().send_request(parsed, content).await;
     let _ = sent;
-    lib::HttpResult {
+    lib::Result {
         request,
-        response: lib::HttpResponse {
+        response: lib::Response {
             version: response.version,
             status: response.status,
             reason: response.reason,
             headers: response
                 .headers
                 .iter()
-                .map(|header| lib::HttpHeader {
+                .map(|header| lib::Header {
                     name: header.name.clone(),
                     value: header.value.clone(),
                 })
                 .collect(),
             body: response.body,
         },
-        timing: lib::HttpTiming {
+        timing: lib::Timing {
             start: timing.start,
             end: timing.end,
             total: timing.total,
@@ -104,6 +141,7 @@ pub async fn send(request: lib::HttpRequest) -> lib::HttpResult {
 #[cfg(test)]
 pub mod tests {
     use axum::Router;
+    use axum::body::Bytes;
     use axum::extract::{Form, Json, Multipart, Query};
     use axum::http::header::HeaderMap;
     use axum::routing::{get, post};
@@ -118,7 +156,8 @@ pub mod tests {
             .route("/text", post(handle_text))
             .route("/json", post(handle_json))
             .route("/form", post(handle_form))
-            .route("/multipart", post(handle_multipart));
+            .route("/multipart", post(handle_multipart))
+            .route("/file", post(handle_file));
         for addr in ("localhost", port).to_socket_addrs().unwrap() {
             let listener = TcpListener::bind(addr).await.unwrap();
             let router = router.clone();
@@ -180,6 +219,10 @@ pub mod tests {
             form.insert(name, data);
         }
         Json(json!({ "headers": headers(headers_), "params": params, "form": form }))
+    }
+
+    async fn handle_file(body: Bytes) -> Json<Value> {
+        Json(json!({ "length": body.len(), "bytes": body.to_vec() }))
     }
 }
 
@@ -258,6 +301,7 @@ http_type! {
     Head => "HEAD",
     Trace => "TRACE",
     Connect => "CONNECT"
+    ,Query => "QUERY"
 }
 
 http_type! {

@@ -1,7 +1,7 @@
 # Basjoofan
-Cloud Native API Testing and Performance Testing Service
+API test and performance test tool
 
-Basjoofan is a cloud-native interface and performance testing service. It enables rapid authoring and execution of interface test cases through a concise and intuitive scripting language, while supporting the complete testing workflow from local development to cloud deployment.
+Basjoofan is a  interface and performance test tool. It enables rapid authoring and execution of interface test cases through a concise and intuitive scripting language, while supporting the complete testing workflow from local development to cloud deployment.
 
 ## ✨ Features
 * Simple test script writing
@@ -12,28 +12,27 @@ Basjoofan is a cloud-native interface and performance testing service. It enable
 ## 🚀 Start
 Let's start with a simple GET request:
 ```fan
-client user {
-    scheme: https,
-    host: "httpbin.org",
-    requests: {
-        get: {
-            path: "/get",
-            method: GET,
-            asserts: [status == 200],
-        },
-    },
+env local { scheme: https, host: "httpbin.org" }
+
+api user {
+    scheme: env.scheme,
+    host: env.host,
+    get() { method: GET, path: "/get" }
 }
 
 test get {
     let response = user.get();
-    response.status
+    expect response.status == 200;
 }
 ```
-The `client` declaration defines requests alongside their tests. The CLI recursively loads `.fan` files from the test path.
-
-You can use the CLI tool with basjoofan test get to execute this test case. You can also add load testing parameters for performance testing, e.g., -t 100 -d 1m for 100 concurrent users running for 1 minute.
+The CLI recursively loads `.fan` files. Select the target environment explicitly:
 ```
-basjoofan test get -t 100 -d 1m
+basjoofan test get --env local
+```
+
+Use an `@`-prefixed selector to run every test carrying a tag:
+```
+basjoofan test @smoke --env local
 ```
 
 For VSCode users: test script files need to end with .fan extension. Once automatically recognized, executable test blocks will have a run button added. Click the run button to execute the test case.

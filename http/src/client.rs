@@ -9,9 +9,10 @@ use tokio::io::split;
 
 impl Client {
     /// Send this request and wait for the record.
+    #[cfg(test)]
     pub(crate) async fn send_message(&self, message: &str) -> (Request, Response, Time, String) {
-        let mut time = Time::default();
-        let (mut request, content) = match Request::from(message).await {
+        let time = Time::default();
+        let (request, content) = match Request::from(message).await {
             Ok((request, content)) => (request, content),
             Err(error) => {
                 return (
@@ -22,6 +23,15 @@ impl Client {
                 );
             }
         };
+        self.send_request(request, content).await
+    }
+
+    pub(crate) async fn send_request(
+        &self,
+        mut request: Request,
+        content: super::Content,
+    ) -> (Request, Response, Time, String) {
+        let mut time = Time::default();
         time.start = SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default();
@@ -176,5 +186,28 @@ pub mod tests {
         );
         println!("{:?}", time.total);
         println!("{:?}", response.body);
+    }
+
+    #[tokio::test]
+    async fn test_send_binary_file() {
+        crate::tests::start_server(30006).await;
+        let path = std::env::temp_dir().join(format!("basjoofan-{}-binary", std::process::id()));
+        tokio::fs::write(&path, [0, 159, 146, 150, 255])
+            .await
+            .unwrap();
+        let result = crate::send(lib::Request {
+            method: "POST".into(),
+            url: "http://127.0.0.1:30006/file".into(),
+            headers: vec![lib::Header {
+                name: "Content-Type".into(),
+                value: "application/octet-stream".into(),
+            }],
+            body: Some(lib::Content::File(path.to_string_lossy().into_owned())),
+        })
+        .await;
+        tokio::fs::remove_file(path).await.unwrap();
+        assert!(result.error.is_empty(), "{}", result.error);
+        assert_eq!(result.response.status, 200);
+        assert!(result.response.body.contains("\"length\":5"));
     }
 }

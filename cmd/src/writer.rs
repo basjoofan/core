@@ -116,16 +116,16 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
 #[cfg(test)]
 pub mod tests {
     use super::Writer;
-    use lib::{HttpHeader, HttpRequest, HttpResponse, HttpTiming, Record};
+    use lib::{Header, Request, Response, Timing, Record};
 
     #[tokio::test]
     async fn test_writer() {
         let mut writer = Writer::new(Vec::new());
         let record = Record {
             name: "test".to_string(),
-            time: HttpTiming::default(),
-            request: HttpRequest::default(),
-            response: HttpResponse::default(),
+            time: Timing::default(),
+            request: Request::default(),
+            response: Response::default(),
             asserts: Vec::new(),
             error: String::default(),
         };
@@ -139,39 +139,39 @@ pub mod tests {
 
         let mut writer = Writer::new(Vec::new());
         let request_headers = vec![
-            HttpHeader {
+            Header {
                 name: "a".into(),
                 value: "b".into(),
             },
-            HttpHeader {
+            Header {
                 name: "a".into(),
                 value: "c".into(),
             },
         ];
         let response_headers = vec![
-            HttpHeader {
+            Header {
                 name: "d".into(),
                 value: "e".into(),
             },
-            HttpHeader {
+            Header {
                 name: "d".into(),
                 value: "f".into(),
             },
-            HttpHeader {
+            Header {
                 name: "g".into(),
                 value: "h".into(),
             },
         ];
         let record = Record {
             name: "test".to_string(),
-            time: HttpTiming::default(),
-            request: HttpRequest {
+            time: Timing::default(),
+            request: Request {
                 method: "GET".into(),
                 url: "http://localhost:8080".into(),
                 headers: request_headers,
                 body: None,
             },
-            response: HttpResponse {
+            response: Response {
                 version: String::from("HTTP/1.1"),
                 status: 200,
                 reason: String::from("OK"),
